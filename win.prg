@@ -120,7 +120,7 @@ DISPBEGIN()
    Scroll( ::nTop+1, ::nLeft, ::nBottom, ::nRight )   
 DISPEND()
 oActiveWindow := self
-//::nIdle = hb_IdleAdd( { || ::MouseEvent( MRow(), MCol() ) } )
+::nIdle = hb_IdleAdd( { || ::MouseEvent( MRow(), MCol() ) } )
 return self
 
 METHOD Hide() CLASS Window
