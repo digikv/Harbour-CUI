@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * CGUI - Harbour Character GUI library source code:
+ * CUI - Harbour Character UI library source code:
  * Window class
  *
  * Copyright 2021 Srđan Dragojlović
