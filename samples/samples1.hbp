@@ -1,0 +1,5 @@
+-lhbwin
+-gui
+samples1.prg
+../win.prg
+xhb.hbc
