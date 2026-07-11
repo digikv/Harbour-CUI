@@ -1,2 +1,77 @@
 # Harbour-CUI
-CUI - Harbour Character UI library
+
+Character User Interface (CUI) library for the [Harbour](https://harbour.github.io/) compiler.
+
+## Origin
+
+**Osnova ovog projekta preuzeta je od [tfonrouge/HBTui](https://github.com/tfonrouge/HBTui).**
+
+The foundation of this project is taken from [tfonrouge/HBTui](https://github.com/tfonrouge/HBTui)
+(Teo. USA, S.A. / Francisco Garcia Rodriguez and contributors). This repository continues that
+work as **Harbour-CUI**, with a SaveScreen-based window layer (no `hbct` dependency), CUI-style
+chrome, and further widget/event improvements.
+
+Older standalone CUI helpers (`win.prg`, `cui.ch`) are kept under [`legacy/`](legacy/) for reference.
+
+## Features
+
+**25+ widgets** covering forms, data display, navigation, and feedback:
+
+| Category | Widgets |
+|----------|---------|
+| Windows | HTMainWindow, HTDesktop, HTDialog (modal + button bar + draggable), HTMessageBox |
+| Input | HTLineEdit (selection + clipboard), HTGet (full PICTURE/VALID/WHEN), HTTextEdit, HTSpinner, HTCheckList |
+| Buttons | HTPushButton, HTCheckBox, HTRadioButton |
+| Lists | HTListBox, HTComboBox (type-to-filter), HTBrowse (TBrowse wrapper, inline editing) |
+| Menus | HTMenuBar, HTMenu, HTContextMenu, HTAction |
+| Layout | HTVBoxLayout, HTHBoxLayout, HTGridLayout |
+| Display | HTLabel, HTFrame, HTProgressBar, HTStatusBar, HTSeparator, HTScrollBar, HTTabWidget, HTToolBar |
+| Feedback | HTToast (non-blocking notifications, auto-dismiss, stacking) |
+
+**Event system** — `HTEventLoop` with priority queue, mouse tracking, task scheduling. On Windows/gtwvt, mouse is driven by a Win32 WndProc subclass with coalesced `WM_MOUSEMOVE`. See [docs/EVENT_SYSTEM.md](docs/EVENT_SYSTEM.md).
+
+**Viewport system** — `wFormat()` / viewport remapping in `src/HTWindow/` so child widgets paint in local coordinates.
+
+**Theme system** — `HTTheme` singleton with multiple built-in themes (Default, Dark, High Contrast, Mono).
+
+## Quick Start
+
+```bash
+# Build the library
+hbmk2 hbtui.hbp
+
+# Build and run Hello World
+cd samples/hello && hbmk2 hello.prg hbmk.hbm && ./hello
+```
+
+## Samples
+
+| Sample | Description |
+|--------|-------------|
+| `hello` | Minimal HTMainWindow + HTLabel |
+| `dialog` | HTDialog + HTMessageBox + toast results |
+| `browse` | HTBrowse data grid with inline editing |
+| `controls` | Buttons, checkboxes, spinner, combo, list |
+| `get` | HTGet with PICTURE / VALID / WHEN |
+| `layout` / `hbox_layout` / `grid_layout` | Layout managers |
+| `editor` | HTLineEdit + HTTextEdit |
+| `menu` | HTMenuBar + HTMenu |
+| `progress` | Animated HTProgressBar |
+| `theme` | Theme switching |
+| `toast` | HTToast notifications |
+| `showcase` | Full controls demo |
+
+```bash
+cd samples/<name> && hbmk2 <name>.prg hbmk.hbm && ./<name>
+```
+
+## Requirements
+
+- Harbour compiler
+- GT driver: `gtxwc` on Linux, `gtwvt` on Windows (tests: `gttrm` / `-gtnul`)
+- Compiler flags: `-w3 -es2`
+
+## License / credits
+
+- Widget framework foundation: [tfonrouge/HBTui](https://github.com/tfonrouge/HBTui)
+- Harbour-CUI maintenance and CUI window evolution: [digikv/Harbour-CUI](https://github.com/digikv/Harbour-CUI)

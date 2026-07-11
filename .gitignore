@@ -1,0 +1,14 @@
+*
+!*.*
+!*/
+
+lib
+*.app
+*.ppo
+*.exe
+*.o
+*.obj
+.DS_Store
+.claude/
+.hbmk/
+deps/

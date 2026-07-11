@@ -1,0 +1,13 @@
+#
+#
+#
+description=Harbour library Text User Interface
+
+prgflags=-w3 -es2
+
+incpaths=include
+libpaths=lib/${hb_plat}/${hb_comp}
+libs=hbtui
+
+{unix|linux|darwin}gt=gtxwc
+{win}gt=gtwvt
