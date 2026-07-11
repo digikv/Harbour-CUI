@@ -2,14 +2,20 @@
 
 ## Overview
 
-Harbour-CUI (foundation: [tfonrouge/HBTui](https://github.com/tfonrouge/HBTui)) uses an event-driven architecture built on top of Harbour's `Inkey()` function and the SaveScreen-based window system in `src/HTWindow/`. The central component is `HTEventLoop`, a singleton that provides unified input polling, mouse tracking, and task scheduling.
+Harbour-CUI (foundation: [tfonrouge/HBTui](https://github.com/tfonrouge/HBTui)) uses an event-driven architecture built on Harbour's `Inkey()` and the SaveScreen window layer in `src/HTWindow/`. The central component is `HTEventLoop`, a singleton for unified input polling, mouse tracking, and task scheduling.
+
+On **Windows / gtwvt**, mouse input is driven by a C WndProc subclass (`src/HTWindow/ht_winmouse.c`), not by polling `mRow()`/`mCol()` every tick. That removes drag flicker and coalesces move events.
 
 ```
-User Input (keyboard/mouse)
+User Input (keyboard / mouse)
      │
-     ▼
-HTEventLoop:poll()         ← unified polling: Inkey + mouse movement + tasks
-     │
+     ├── Windows/gtwvt:  WndProc (ht_winmouse.c) → coalesced queue
+     │                        │
+     └── other GTs:      mRow/mCol poll + Inkey mouse codes
+                          │
+                          ▼
+                 HTEventLoop:poll()
+                          │
      ├── HTApplication:exec()      ← main window event routing
      │    ├── Mouse click → route to window under cursor
      │    ├── Keyboard    → route to active (focused) window
@@ -22,18 +28,48 @@ HTEventLoop:poll()         ← unified polling: Inkey + mouse movement + tasks
           └── HTEventLoop:poll() in DO WHILE
 ```
 
+## Win32 mouse bridge (`ht_winmouse.c`)
+
+Installed once from `HTApplication:exec()` after the desktop paints:
+
+```harbour
+ht_WinMouseInstall()
+RegisterHtOnEventMouseMove()
+RegisterHtOnEventMouseDown()
+RegisterHtOnEventLBDblClick()
+```
+
+| C API | Role |
+|-------|------|
+| `ht_WinMouseInstall()` | Subclass GT `HWND` (`HB_GTI_WINHANDLE`); receive `WM_MOUSEMOVE` / button / dblclick |
+| `ht_WinMouseUninstall()` | Restore previous WndProc |
+| `ht_WinMouseActive()` | `.T.` when the subclass is installed |
+| `ht_WinMouseNext(@nRow, @nCol)` | Pop next event → `nKey` (`K_MOUSEMOVE`, `K_LBUTTONDOWN`, …) or `0` |
+| `ht_WinMousePending()` | `.T.` if queue or coalesced move is waiting |
+| `RegisterHtOnEventMouseMove()` | Optional CAD-style hook → `HtOnEventMouseMove(nKey,nRow,nCol)` |
+| `RegisterHtOnEventMouseDown()` | Optional hook → `HtOnEventMouseDown(...)` |
+| `RegisterHtOnEventLBDblClick()` | Optional hook → `HtOnEventLBDblClick(...)` |
+
+**Coalescing:** every `WM_MOUSEMOVE` overwrites a single pending move slot. Button events go into a ring queue (size 64). Hooks run when the queue is drained from `poll()`, never from inside `WndProc` (avoids Harbour VM reentrancy).
+
+**Non-Windows / gtnul:** the same symbols exist as stubs; `ht_WinMouseActive()` is `.F.` and `poll()` uses the fallback path below.
+
 ## HTEventLoop (Singleton)
 
 ### poll( nTimeout ) → HTEvent or NIL
 
-Checks for input events in this order:
-1. Runs `HTToast():checkExpired()` to dismiss expired toasts
-2. Runs `runPendingTasks()` to execute scheduled callbacks
-3. Detects mouse movement by comparing `mRow(.T.)/mCol(.T.)` with stored position
-4. Calls `Inkey(nTimeout)` for keyboard and mouse click events
-5. Intercepts `HB_K_RESIZE` (terminal resize) — calls `handleResize()` which updates desktop dimensions, resets the window board, repaints all windows, and resets mouse tracking.
+Always runs `HTToast():checkExpired()` and `runPendingTasks()` first, then:
 
-Returns an `HTMouseEvent` or `HTKeyEvent`, or NIL if no input.
+**When `ht_WinMouseActive()` (Windows/gtwvt):**
+1. Drain `ht_WinMouseNext()` — return `HTMouseEvent` if a queued/coalesced mouse event exists
+2. `Inkey(nTimeout)` for keyboard (and GT mouse codes, which are **discarded** — already handled via WndProc)
+3. After `Inkey`, check the mouse queue again (messages may have arrived during the wait)
+4. Intercept `HB_K_RESIZE` → `handleResize()`
+
+**Fallback (tests / non-Windows):**
+1. Compare `mRow(.T.)` / `mCol(.T.)` with the last position → synthesize `K_MOUSEMOVE` if changed
+2. `Inkey(nTimeout)` for keyboard and native mouse click codes
+3. Intercept `HB_K_RESIZE` → `handleResize()`
 
 ```harbour
 LOCAL event := HTEventLoop():poll( 0.1 )  /* 100ms timeout */
@@ -182,7 +218,7 @@ mouseEvent(event) on top-level window
   ├── K_LBUTTONDOWN
   │    ├── Check if dropdown menu is open → route ALL clicks to menuBar:handleMouseClick()
   │    ├── Check menu bar click (content row 0) → menuBar:handleClick()
-  │    ├── Check system buttons (close ■, hide ■, maximize ■)
+  │    ├── Check system buttons (close `x`, optional hide/maximize)
   │    ├── Check title bar → start window drag (FwinSysBtnMove)
   │    ├── Hit-test children via childAt(row, col)
   │    │    └── Reverse order, recurses into layout containers
