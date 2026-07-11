@@ -66,10 +66,11 @@ Always runs `HTToast():checkExpired()` and `runPendingTasks()` first, then:
 3. After `Inkey`, check the mouse queue again (messages may have arrived during the wait)
 4. Intercept `HB_K_RESIZE` → `handleResize()`
 
-**Fallback (tests / non-Windows):**
-1. Compare `mRow(.T.)` / `mCol(.T.)` with the last position → synthesize `K_MOUSEMOVE` if changed
-2. `Inkey(nTimeout)` for keyboard and native mouse click codes
-3. Intercept `HB_K_RESIZE` → `handleResize()`
+**Fallback (tests / non-Windows / gtxwc):**
+1. `Inkey(nTimeout)` — keyboard and native mouse codes (`K_MOUSEMOVE`, clicks, …)
+2. If `K_MOUSEMOVE`: **coalesce** — drain further `Inkey(0)` moves, keep the last cell; if a click/key appears while draining, prefer it (same “clicks first” idea as the Win32 queue)
+3. If `Inkey` returned 0 but `mRow(.T.)`/`mCol(.T.)` changed vs last poll → synthesize `K_MOUSEMOVE`
+4. Intercept `HB_K_RESIZE` → `handleResize()`
 
 ```harbour
 LOCAL event := HTEventLoop():poll( 0.1 )  /* 100ms timeout */

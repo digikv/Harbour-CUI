@@ -59,6 +59,7 @@ METHOD FUNCTION poll( nTimeout ) CLASS HTEventLoop
 
     LOCAL nKey
     LOCAL nRow, nCol
+    LOCAL nNext
 
     DEFAULT nTimeout := 0.05
 
@@ -111,27 +112,59 @@ METHOD FUNCTION poll( nTimeout ) CLASS HTEventLoop
         RETURN HTKeyEvent():new( nKey )
     ENDIF
 
-    /* Fallback (gtnul / non-Windows): poll mouse position + Inkey */
+    /* Fallback (gtxwc / gtnul / non-Windows): Inkey + coalesce MOVE */
+    nKey := Inkey( nTimeout )
     nRow := mRow( .T. )
     nCol := mCol( .T. )
 
-    IF ::FmouseRow >= 0 .AND. ( nRow != ::FmouseRow .OR. nCol != ::FmouseCol )
-        ::FmouseRow := nRow
-        ::FmouseCol := nCol
-        RETURN HTMouseEvent():new( K_MOUSEMOVE )
+    IF nKey == K_MOUSEMOVE
+        /*
+         * gtxwc queues every MotionNotify. Drain the flood and keep the
+         * last cell position — same idea as ht_winmouse.c s_fHaveMove.
+         * If a click/key arrives while draining, prefer it (clicks first).
+         */
+        DO WHILE .T.
+            nNext := Inkey( 0 )
+            IF nNext == K_MOUSEMOVE
+                nRow := mRow( .T. )
+                nCol := mCol( .T. )
+            ELSEIF nNext != 0
+                nKey := nNext
+                nRow := mRow( .T. )
+                nCol := mCol( .T. )
+                EXIT
+            ELSE
+                EXIT
+            ENDIF
+        ENDDO
+
+        IF nKey == K_MOUSEMOVE
+            IF ::FmouseRow == nRow .AND. ::FmouseCol == nCol
+                RETURN NIL
+            ENDIF
+            ::FmouseRow := nRow
+            ::FmouseCol := nCol
+            RETURN HTMouseEvent():new( K_MOUSEMOVE, nRow, nCol )
+        ENDIF
+        /* nKey is now a button/key that superseded the move flood */
     ENDIF
 
-    ::FmouseRow := nRow
-    ::FmouseCol := nCol
-
-    nKey := Inkey( nTimeout )
-
     IF nKey = 0
+        /* some GTs update position without a MOVE key — synthesize one */
+        IF ::FmouseRow >= 0 .AND. ( nRow != ::FmouseRow .OR. nCol != ::FmouseCol )
+            ::FmouseRow := nRow
+            ::FmouseCol := nCol
+            RETURN HTMouseEvent():new( K_MOUSEMOVE, nRow, nCol )
+        ENDIF
+        ::FmouseRow := nRow
+        ::FmouseCol := nCol
         RETURN NIL
     ENDIF
 
     IF nKey >= K_MINMOUSE .AND. nKey <= K_MAXMOUSE
-        RETURN HTMouseEvent():new( nKey )
+        ::FmouseRow := nRow
+        ::FmouseCol := nCol
+        RETURN HTMouseEvent():new( nKey, nRow, nCol )
     ENDIF
 
     IF nKey = HB_K_RESIZE
