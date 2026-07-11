@@ -19,8 +19,14 @@ STATIC oStatusBar
 PROCEDURE Main()
 
     LOCAL app, w1, brw, oCtxMenu
+    LOCAL nW, nH, nCW, nCH
 
-    SetMode( 25, 70 )
+    ht_cuiSetupDisplay( 40, 131 )
+
+    nW := MaxCol() + 1
+    nH := MaxRow() + 1
+    nCW := nW
+    nCH := Max( 20, nH - 1 )
 
     aData := { ;
         { "PRJ-01", "Harbour",    "Language",  85000.00 }, ;
@@ -36,13 +42,11 @@ PROCEDURE Main()
     app := HTApplication():new()
 
     w1 := HTMainWindow():new()
-    w1:setWindowTitle( " Browse Demo " )
-    w1:move( 1, 1 )
-    w1:resize( 68, 23 )
+    w1:setWindowTitle( "Browse Demo" )
 
     brw := HTBrowse():new( w1 )
     brw:move( 1, 1 )
-    brw:resize( 65, 16 )
+    brw:resize( Max( 40, nCW - 2 ), Max( 10, nCH - 4 ) )
     brw:setGoTopBlock( {|| nRecNo := 1 } )
     brw:setGoBottomBlock( {|| nRecNo := Len( aData ) } )
     brw:setSkipBlock( {|n| ArraySkip( n ) } )
@@ -70,7 +74,8 @@ PROCEDURE Main()
     brw:contextMenu := oCtxMenu
 
     oStatusBar := HTStatusBar():new( w1 )
-    oStatusBar:move( 1, 21 )
+    oStatusBar:move( 1, nCH - 1 )
+    oStatusBar:resize( nCW - 2, 1 )
     oStatusBar:addSection( "Ready" )
     oStatusBar:addSection( "F2=edit  Enter=accept  Esc=cancel  Right-click=menu" )
 

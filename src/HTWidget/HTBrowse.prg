@@ -107,13 +107,56 @@ METHOD new( ... ) CLASS HTBrowse
 
 RETURN self
 
-/** Configures TBrowse to absolute screen coords matching the current viewport. */
+/** Configures TBrowse to absolute screen coords for the widget's rectangle.
+ * TBrowse paints via Harbour core (hb_gtWriteAt), bypassing the viewport
+ * DispOutAt remap — coords must be screen-absolute, never viewport-relative.
+ * Prefer window geometry over ht_ViewTop/Left so a deactivated viewport
+ * cannot leave a ghost cell at (0,0) on the desktop.
+ */
 METHOD PROCEDURE configureBrowse() CLASS HTBrowse
 
-    ::FoBrowse:nTop    := ht_ViewTop()
-    ::FoBrowse:nLeft   := ht_ViewLeft()
-    ::FoBrowse:nBottom := ht_ViewTop() + ht_MaxRow()
-    ::FoBrowse:nRight  := ht_ViewLeft() + ht_MaxCol()
+    LOCAL oWin, oAnc
+    LOCAL nTop, nLeft, nBottom, nRight
+    LOCAL nRelRow, nRelCol
+
+    /* find top-level CT window ancestor */
+    oWin := NIL
+    oAnc := Self
+    DO WHILE oAnc != NIL
+        IF oAnc:isDerivedFrom( "HTWidget" ) .AND. oAnc:FwindowId != NIL
+            oWin := oAnc
+            EXIT
+        ENDIF
+        oAnc := oAnc:parent()
+    ENDDO
+
+    IF oWin != NIL
+        wSelect( oWin:FwindowId, .F. )
+        /* accumulate child offsets up to the window; +1 row for CUI title */
+        nRelRow := 1
+        nRelCol := 0
+        oAnc := Self
+        DO WHILE oAnc != NIL .AND. ! ( oAnc == oWin )
+            nRelRow += oAnc:y
+            nRelCol += oAnc:x
+            oAnc := oAnc:parent()
+        ENDDO
+        nTop    := wRow() + nRelRow
+        nLeft   := wCol() + nRelCol
+        nBottom := nTop + Max( ::Fheight - 1, 0 )
+        nRight  := nLeft + Max( ::Fwidth - 1, 0 )
+    ELSE
+        /* fallback: active viewport (paintChild path) */
+        nTop    := ht_ViewTop()
+        nLeft   := ht_ViewLeft()
+        nBottom := nTop + ht_MaxRow()
+        nRight  := nLeft + ht_MaxCol()
+    ENDIF
+
+    ::FoBrowse:nTop    := nTop
+    ::FoBrowse:nLeft   := nLeft
+    ::FoBrowse:nBottom := nBottom
+    ::FoBrowse:nRight  := nRight
 
     ::FoBrowse:configure()
 
@@ -188,27 +231,35 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS HTBrowse
 
     SWITCH keyEvent:key
     CASE K_UP
+        ::configureBrowse()
         ::FoBrowse:up()
         EXIT
     CASE K_DOWN
+        ::configureBrowse()
         ::FoBrowse:down()
         EXIT
     CASE K_PGUP
+        ::configureBrowse()
         ::FoBrowse:pageUp()
         EXIT
     CASE K_PGDN
+        ::configureBrowse()
         ::FoBrowse:pageDown()
         EXIT
     CASE K_HOME
+        ::configureBrowse()
         ::FoBrowse:home()
         EXIT
     CASE K_END
+        ::configureBrowse()
         ::FoBrowse:end()
         EXIT
     CASE K_LEFT
+        ::configureBrowse()
         ::FoBrowse:left()
         EXIT
     CASE K_RIGHT
+        ::configureBrowse()
         ::FoBrowse:right()
         EXIT
     CASE K_ENTER
@@ -218,21 +269,27 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS HTBrowse
         keyEvent:accept()
         RETURN
     CASE K_CTRL_HOME
+        ::configureBrowse()
         ::FoBrowse:goTop()
         EXIT
     CASE K_CTRL_END
+        ::configureBrowse()
         ::FoBrowse:goBottom()
         EXIT
     CASE K_CTRL_PGUP
+        ::configureBrowse()
         ::FoBrowse:panHome()
         EXIT
     CASE K_CTRL_PGDN
+        ::configureBrowse()
         ::FoBrowse:panEnd()
         EXIT
     CASE K_CTRL_LEFT
+        ::configureBrowse()
         ::FoBrowse:panLeft()
         EXIT
     CASE K_CTRL_RIGHT
+        ::configureBrowse()
         ::FoBrowse:panRight()
         EXIT
     CASE K_F2
@@ -310,11 +367,13 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTBrowse
         nSkip := nClickRow - ::FoBrowse:rowPos
 
         IF nSkip > 0
+            ::configureBrowse()
             DO WHILE nSkip > 0
                 ::FoBrowse:down()
                 nSkip--
             ENDDO
         ELSEIF nSkip < 0
+            ::configureBrowse()
             DO WHILE nSkip < 0
                 ::FoBrowse:up()
                 nSkip++
@@ -324,6 +383,7 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTBrowse
         /* use TBrowse:hitTest to determine the clicked column —
            it accounts for centering offset, frozen columns, separators */
         nHitResult := ::FoBrowse:hitTest( nMouseRow, nMouseCol )
+        HB_SYMBOL_UNUSED( nHitResult )
         nTargetCol := ::FoBrowse:mColPos
         IF nTargetCol < 1
             nTargetCol := ::FoBrowse:colPos
@@ -351,6 +411,7 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTBrowse
         EXIT
 
     CASE K_MWFORWARD
+        ::configureBrowse()
         ::FoBrowse:up()
         parent := ::parent()
         IF parent != NIL .AND. parent:isDerivedFrom( "HTWidget" )
@@ -359,6 +420,7 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTBrowse
         EXIT
 
     CASE K_MWBACKWARD
+        ::configureBrowse()
         ::FoBrowse:down()
         parent := ::parent()
         IF parent != NIL .AND. parent:isDerivedFrom( "HTWidget" )

@@ -10,7 +10,7 @@
 
 #define _DESKTOP_CHAR   e"\xB1"
 #define _WIDGET_CHAR    e"\x20"
-#define _WIDGET_SHADOW  HT_SHADOW_ATTR   /* secondary windows; HTMainWindow forces -1 */
+#define _WIDGET_SHADOW  -1   /* popups enable HT_SHADOW_ATTR explicitly */
 
 CLASS HTWidget FROM HTObject
 
@@ -646,6 +646,7 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTWidget
     LOCAL oHitChild
     LOCAL oOldWidget
     LOCAL nContentRow, nContentCol
+    LOCAL aPos
 
     SWITCH eventMouse:nKey
     CASE K_LBUTTONDOWN
@@ -662,7 +663,13 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTWidget
         ::FwinSysBtnResize := ::FbtnResizePos != NIL .AND. ::FposDown:y = ( ::Fheight - 1 ) .AND. ::FposDown:x >= ::FbtnResizePos[ 1 ] .AND. ::FposDown:x <= ::FbtnResizePos[ 2 ]
 
         IF ::FposDown:y = 0 .AND. ! ::FwinSysBtnClose .AND. ! ::FwinSysBtnHide .AND. ! ::FwinSysBtnMaximize .AND. ! ::FwinSysBtnResize
-            ::FwinSysBtnMove := .T.
+            /* blocking Digi drag with screen-stack compose */
+            IF ::FwindowId != NIL
+                aPos := ht_winDrag( ::FwindowId, eventMouse:mouseAbsRow, eventMouse:mouseAbsCol )
+                ::Fx := aPos[ 1 ]
+                ::Fy := aPos[ 2 ]
+            ENDIF
+            EXIT
         ENDIF
 
         IF HTApplication():activeWindow() = NIL .OR. HTApplication():activeWindow():windowId != ::windowId
@@ -749,22 +756,8 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTWidget
 
     CASE K_MOUSEMOVE
 
-        IF ::FposDown != NIL
-
-            IF ::FwinSysBtnMove
-                /* drag window: use screen-absolute coords for stable positioning.
-                   new window pos = mouse screen pos - click offset within window */
-                IF ::FwindowId != NIL
-                    wSelect( ::FwindowId, .F. )
-                    wMove( eventMouse:mouseAbsRow - ::FposDown:y, ;
-                           eventMouse:mouseAbsCol - ::FposDown:x )
-                    ::Fy := wRow()
-                    ::Fx := wCol()
-                ENDIF
-            ELSEIF ::FwinSysBtnResize
-                ::addEvent( HTResizeEvent():new() )
-            ENDIF
-
+        IF ::FposDown != NIL .AND. ::FwinSysBtnResize
+            ::addEvent( HTResizeEvent():new() )
         ENDIF
 
         EXIT
@@ -957,9 +950,10 @@ METHOD PROCEDURE paintTopLevelWindow() CLASS HTWidget
         wSetShadow( ::Fshadow )
         /* deactivate viewport so SaveScreen in wOpen is truly absolute */
         HT_SETVIEWPORT( 0, 0, -1, 0 )
+        SetClearA( ::color )
+        SetClearB( _WIDGET_CHAR )
         ::setWindowId( wOpen( ::Fy, ::Fx, ::Fy + ::Fheight - 1, ::Fx + ::Fwidth - 1, .T. ) )
 
-        SetClearB( _WIDGET_CHAR )
         ::drawCuiChrome()
         wFormat()
 

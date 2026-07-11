@@ -78,15 +78,15 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTFrame
 
     HB_SYMBOL_UNUSED( paintEvent )
 
-    /* draw a light single-line group box (CUI/Windows panel, not heavy CT look) */
-    DispBox( 0, 0, nMaxRow, nMaxCol, , ::color )
+    /* draw a light single-line group box with theme frame color */
+    DispBox( 0, 0, nMaxRow, nMaxCol, , HTTheme():getColor( HT_CLR_FRAME ) )
 
     /* draw title in the top-left if provided */
     IF Len( cTitle ) > 0
         IF Len( cTitle ) > nMaxCol - 3
             cTitle := Left( cTitle, nMaxCol - 3 )
         ENDIF
-        DispOutAt( 0, 2, cTitle, ::color )
+        DispOutAt( 0, 2, " " + cTitle + " ", HTTheme():getColor( HT_CLR_FRAME ) )
     ENDIF
 
 RETURN

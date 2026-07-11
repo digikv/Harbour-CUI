@@ -51,11 +51,12 @@ METHOD PROCEDURE setColor( nCategory, cColor ) CLASS HTTheme
     ENDIF
 RETURN
 
-/** Loads the standard light theme (Windows/CUI palette indices 9-11). */
+/** Loads the standard light theme (Windows/CUI palette indices 8-12). */
 METHOD PROCEDURE loadDefault() CLASS HTTheme
-    /* CUI/Windows-like: panel on gray(9), title on blue(11), menus on light(10) */
+    /* Panel on gray(9); desktop on dark-gray(8) so floating window edges
+     * read clearly (9 vs 12 was only ~11 RGB — nearly invisible). */
     ::FaColors[ HT_CLR_WINDOW           ] := "0/9"
-    ::FaColors[ HT_CLR_DESKTOP          ] := "0/9"
+    ::FaColors[ HT_CLR_DESKTOP          ] := "0/8"
     ::FaColors[ HT_CLR_LABEL            ] := "0/9"
     ::FaColors[ HT_CLR_GET_NORMAL       ] := "0/15"
     ::FaColors[ HT_CLR_GET_FOCUSED      ] := "0/14"
@@ -76,7 +77,7 @@ METHOD PROCEDURE loadDefault() CLASS HTTheme
     ::FaColors[ HT_CLR_MENU_ITEM_SEL    ] := "15/1"
     ::FaColors[ HT_CLR_STATUSBAR        ] := "0/7"
     ::FaColors[ HT_CLR_PROGRESS_FILL    ] := "15/1"
-    ::FaColors[ HT_CLR_PROGRESS_EMPTY   ] := "8/7"
+    ::FaColors[ HT_CLR_PROGRESS_EMPTY   ] := "0/7"
     ::FaColors[ HT_CLR_FRAME            ] := "0/9"
     ::FaColors[ HT_CLR_LINEEDIT_NORMAL  ] := "0/15"
     ::FaColors[ HT_CLR_LINEEDIT_FOCUSED ] := "0/14"
@@ -100,7 +101,7 @@ METHOD PROCEDURE loadDefault() CLASS HTTheme
     ::FaColors[ HT_CLR_MSGBOX_WARN      ] := "0/14"
     ::FaColors[ HT_CLR_MSGBOX_QUEST     ] := "15/5"
     ::FaColors[ HT_CLR_MENU_SEP         ] := "0/10"
-    ::FaColors[ HT_CLR_SCROLLBAR        ] := "8/7"
+    ::FaColors[ HT_CLR_SCROLLBAR        ] := "0/7"
     ::FaColors[ HT_CLR_CTXMENU_NORMAL  ] := "0/10"
     ::FaColors[ HT_CLR_CTXMENU_SELECTED ] := "15/1"
     ::FaColors[ HT_CLR_CTXMENU_SEP     ] := "0/10"

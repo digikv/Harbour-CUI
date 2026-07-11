@@ -49,7 +49,9 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTProgressBar
     LOCAL nBarWidth := nMaxCol + 1
     LOCAL nRange
     LOCAL nFilled
-    LOCAL cBar
+    LOCAL n
+    LOCAL cFill  := HTTheme():getColor( HT_CLR_PROGRESS_FILL )
+    LOCAL cEmpty := HTTheme():getColor( HT_CLR_PROGRESS_EMPTY )
 
     HB_SYMBOL_UNUSED( paintEvent )
 
@@ -65,9 +67,10 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTProgressBar
         ENDIF
     ENDIF
 
-    cBar := Replicate( e"\xDB", nFilled ) + Replicate( e"\xB0", nBarWidth - nFilled )
-
-    DispOutAt( 0, 0, cBar, ::color )
+    /* ASCII-safe bar: spaces with fill/empty theme colors (no CP437 blocks) */
+    FOR n := 0 TO nBarWidth - 1
+        DispOutAt( 0, n, " ", IIF( n < nFilled, cFill, cEmpty ) )
+    NEXT
 
 RETURN
 

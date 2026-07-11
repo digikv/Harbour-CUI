@@ -173,19 +173,26 @@ HB_FUNC( HT_DISPBOX )
 
    if( pTop && pLeft && pBottom && pRight )
    {
-      const char * pszBox   = hb_parc( 5 );
-      int          iColor   = ht_color_param( 6, -1 );
+      /* CP437 single-line box + space fill (same as HTWinApi _HT_BOX_SINGLE) */
+      static const char s_szBoxSingle[] = "\xDA\xC4\xBF\xB3\xD9\xC4\xC0\xB3 ";
+      static const char s_szBoxDouble[] = "\xC9\xCD\xBB\xBA\xBC\xCD\xC8\xBA ";
+      const char * pszBox = hb_parc( 5 );
+      int          iColor = ht_color_param( 6, -1 );
       int          iTop     = ht_abs_row( hb_itemGetNI( pTop ) );
       int          iLeft    = ht_abs_col( hb_itemGetNI( pLeft ) );
       int          iBottom  = ht_abs_row( hb_itemGetNI( pBottom ) );
       int          iRight   = ht_abs_col( hb_itemGetNI( pRight ) );
 
-      if( pszBox )
-         hb_gtDrawBox( iTop, iLeft, iBottom, iRight, pszBox, iColor );
-      else if( hb_parni( 5 ) == 2 )
-         hb_gtBoxD( iTop, iLeft, iBottom, iRight );
-      else
-         hb_gtBoxS( iTop, iLeft, iBottom, iRight );
+      if( pszBox == NULL || pszBox[ 0 ] == '\0' )
+      {
+         if( hb_parni( 5 ) == 2 )
+            pszBox = s_szBoxDouble;
+         else
+            pszBox = s_szBoxSingle;
+      }
+
+      /* always apply color — bare hb_gtBoxS uses current GT color (often N/N = black) */
+      hb_gtDrawBox( iTop, iLeft, iBottom, iRight, pszBox, iColor );
    }
 }
 
@@ -198,19 +205,22 @@ HB_FUNC( HT_RAWDISPBOX )
 
    if( pTop && pLeft && pBottom && pRight )
    {
+      static const char s_szBoxSingle[] = "\xDA\xC4\xBF\xB3\xD9\xC4\xC0\xB3 ";
+      static const char s_szBoxDouble[] = "\xC9\xCD\xBB\xBA\xBC\xCD\xC8\xBA ";
       const char * pszBox = hb_parc( 5 );
       int          iColor = ht_color_param( 6, -1 );
 
-      if( pszBox )
-         hb_gtDrawBox( hb_itemGetNI( pTop ), hb_itemGetNI( pLeft ),
-                       hb_itemGetNI( pBottom ), hb_itemGetNI( pRight ),
-                       pszBox, iColor );
-      else if( hb_parni( 5 ) == 2 )
-         hb_gtBoxD( hb_itemGetNI( pTop ), hb_itemGetNI( pLeft ),
-                    hb_itemGetNI( pBottom ), hb_itemGetNI( pRight ) );
-      else
-         hb_gtBoxS( hb_itemGetNI( pTop ), hb_itemGetNI( pLeft ),
-                    hb_itemGetNI( pBottom ), hb_itemGetNI( pRight ) );
+      if( pszBox == NULL || pszBox[ 0 ] == '\0' )
+      {
+         if( hb_parni( 5 ) == 2 )
+            pszBox = s_szBoxDouble;
+         else
+            pszBox = s_szBoxSingle;
+      }
+
+      hb_gtDrawBox( hb_itemGetNI( pTop ), hb_itemGetNI( pLeft ),
+                    hb_itemGetNI( pBottom ), hb_itemGetNI( pRight ),
+                    pszBox, iColor );
    }
 }
 

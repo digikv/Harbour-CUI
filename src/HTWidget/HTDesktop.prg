@@ -61,4 +61,7 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTDesktop
 
     ::paintWidget()
 
+    /* bottom of the window stack — everything under floating windows */
+    ht_winSaveDesktop()
+
 RETURN

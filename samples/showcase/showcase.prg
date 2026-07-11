@@ -1,6 +1,8 @@
 /** @file showcase.prg
  * HBTui Showcase - Comprehensive demo of all controls and features
  *
+ * Layout fills the fullscreen character grid (3 columns + bottom bar).
+ *
  * Demonstrates:
  *   - HTToolBar with clickable buttons (top bar)
  *   - MenuBar with theme switching and context menu
@@ -56,8 +58,37 @@ PROCEDURE Main()
     LOCAL oTab
     LOCAL oTextEdit, oScrollBar
     LOCAL oTaskList, oPermList
+    /* responsive layout (character cells) */
+    LOCAL nW, nH, nCW, nCH
+    LOCAL nYTool, nYBody, nYBtn, nYStat, nBodyH, nTopH, nBotH
+    LOCAL nX1, nX2, nX3, nW1, nW2, nW3, nGap
+    LOCAL nGetW, nY, nInnerH
 
-    SetMode( 44, 106 )
+    /* awin-style before any widgets — so MaxCol()/MaxRow() are final */
+    ht_cuiSetupDisplay( 40, 131 )
+
+    nW := MaxCol() + 1
+    nH := MaxRow() + 1
+    /* content under CUI title row */
+    nCW := nW
+    nCH := Max( 20, nH - 1 )
+
+    nYTool := 1
+    nYStat := nCH - 1
+    nYBtn  := nYStat - 2
+    nYBody := 2
+    nBodyH := Max( 14, nYBtn - nYBody - 1 )
+    nTopH  := Max( 8, Int( nBodyH * 0.42 ) )
+    nBotH  := Max( 6, nBodyH - nTopH - 1 )
+
+    nGap := 1
+    nW1  := Max( 28, Int( ( nCW - 2 - 2 * nGap ) * 0.24 ) )
+    nW3  := Max( 26, Int( ( nCW - 2 - 2 * nGap ) * 0.26 ) )
+    nW2  := Max( 36, nCW - 2 - 2 * nGap - nW1 - nW3 )
+    nX1  := 1
+    nX2  := nX1 + nW1 + nGap
+    nX3  := nX2 + nW2 + nGap
+    nGetW := Max( 18, nW1 - 4 )
 
     /* sample data for browse */
     aData := { ;
@@ -76,24 +107,23 @@ PROCEDURE Main()
     }
 
     app := HTApplication():new()
+    app:setDisplaySize( 40, 131 )
 
     w1 := HTMainWindow():new()
-    w1:setWindowTitle( " HBTui Showcase " )
-    w1:move( 1, 1 )
-    w1:resize( 104, 42 )
+    w1:setWindowTitle( "HBTui Showcase" )
     oWindow := w1
 
     /* ================================================================
-       TOOLBAR (row 1 - below menu bar)
+       TOOLBAR (content row 1 — below menu bar at row 0)
        ================================================================ */
     oToolBar := HTToolBar():new( w1 )
-    oToolBar:move( 1, 1 )
+    oToolBar:move( 0, nYTool )
     oToolBar:addButton( "New",     {|| UpdateStatus( "File > New" ) } )
     oToolBar:addButton( "Open",    {|| UpdateStatus( "File > Open" ) } )
     oToolBar:addButton( "Save",    {|| UpdateStatus( "Saved!" ), AdvanceProgress() } )
     oToolBar:addButton( "Refresh", {|| oWindow:repaint(), UpdateStatus( "Refreshed" ) } )
     oToolBar:addButton( "Quit",    {|| HTApplication():quit() } )
-    oToolBar:resize( 102, 1 )
+    oToolBar:resize( nCW, 1 )
 
     /* ================================================================
        MENU BAR
@@ -122,7 +152,6 @@ PROCEDURE Main()
     act:onTriggered := {|| UpdateStatus( "Refreshed" ), oWindow:repaint() }
     menu:addSeparator()
 
-    /* theme switching submenu */
     submenu := menu:addMenu( "Themes" )
     act := submenu:addAction( "Default (Light)  F1" )
     act:onTriggered := {|| SwitchTheme( "Default" ) }
@@ -137,96 +166,88 @@ PROCEDURE Main()
     act := menu:addAction( "About" )
     act:onTriggered := {|| HTMessageBox():information( "About", "HBTui Showcase v0.3 - All Controls Demo" ) }
 
-    /* F-key theme shortcuts */
     w1:onKey( K_F1, {|| SwitchTheme( "Default" ) } )
     w1:onKey( K_F2, {|| SwitchTheme( "Dark" ) } )
     w1:onKey( K_F3, {|| SwitchTheme( "HighContrast" ) } )
     w1:onKey( K_F4, {|| SwitchTheme( "Mono" ) } )
 
     /* ================================================================
-       LEFT PANEL - Form with TGet-backed fields (cols 1-37)
+       LEFT — Employee form + options (fills column height)
        ================================================================ */
-
     frm := HTFrame():new( "Employee Form", w1 )
-    frm:move( 1, 2 )
-    frm:resize( 36, 9 )
+    frm:move( nX1, nYBody )
+    frm:resize( nW1, nTopH )
 
-    /* String GET with @! uppercase */
+    nY := nYBody + 1
     oGet := HTGet():new( w1 )
     oGet:setup( {|x| IIF( x == NIL, cName, cName := x ) }, ;
-                "Name:", "@!", NIL, NIL, "Employee name (auto uppercase)", ;
-                {|v| UpdateStatus( "Name: " + AllTrim( v ) ) }, .F., .F., 35 )
-    oGet:move( 2, 3 )
+                PadR( "Name:", 7 ), "@!", NIL, NIL, "Employee name (auto uppercase)", ;
+                {|v| UpdateStatus( "Name: " + AllTrim( v ) ) }, .F., .F., nGetW )
+    oGet:move( nX1 + 2, nY )
+    nY += 2
 
-    /* String GET for email */
     oGet := HTGet():new( w1 )
     oGet:setup( {|x| IIF( x == NIL, cEmail, cEmail := x ) }, ;
-                "Email:", "@S25", NIL, NIL, "Email address", NIL, .F., .F., 35 )
-    oGet:move( 2, 5 )
+                PadR( "Email:", 7 ), "@S16", NIL, NIL, "Email address", NIL, .F., .F., nGetW )
+    oGet:move( nX1 + 2, nY )
+    nY += 2
 
-    /* Numeric GET with decimal */
     oGet := HTGet():new( w1 )
     oGet:setup( {|x| IIF( x == NIL, nSalary, nSalary := x ) }, ;
-                "Salary:", "999,999.99", ;
+                PadR( "Salary:", 7 ), "999,999.99", ;
                 {|v| IIF( v > 0, .T., ( UpdateStatus( "Salary must be > 0" ), .F. ) ) }, ;
                 NIL, "Annual salary (VALID > 0)", ;
-                {|v| UpdateStatus( "Salary: " + LTrim( Str( v, 12, 2 ) ) ) }, .F., .F., 35 )
-    oGet:move( 2, 7 )
+                {|v| UpdateStatus( "Salary: " + LTrim( Str( v, 12, 2 ) ) ) }, .F., .F., nGetW )
+    oGet:move( nX1 + 2, nY )
+    nY += 2
 
-    /* Date GET */
     oGet := HTGet():new( w1 )
     oGet:setup( {|x| IIF( x == NIL, dHired, dHired := x ) }, ;
-                "Hired:", "@D", NIL, NIL, "Hire date", ;
-                {|v| UpdateStatus( "Hired: " + DToC( v ) ) }, .F., .F., 35 )
-    oGet:move( 2, 9 )
+                PadR( "Hired:", 7 ), "@D", NIL, NIL, "Hire date", ;
+                {|v| UpdateStatus( "Hired: " + DToC( v ) ) }, .F., .F., nGetW )
+    oGet:move( nX1 + 2, nY )
 
-    /* --- Options --- */
+    nY := nYBody + nTopH + 1
     sep := HTSeparator():new( w1 )
-    sep:move( 1, 11 )
-    sep:resize( 36, 1 )
+    sep:move( nX1, nY )
+    sep:resize( nW1, 1 )
+    nY++
 
-    HTLabel():new( "Options:", w1 ):move( 1, 12 )
-
+    HTLabel():new( "Options:", w1 ):move( nX1, nY )
+    nY++
     chk := HTCheckBox():new( "Auto-save", w1 )
-    chk:move( 1, 13 )
+    chk:move( nX1, nY )
     chk:onToggled := {|l| UpdateStatus( "Auto-save: " + IIF( l, "ON", "OFF" ) ) }
-
+    nY++
     chk := HTCheckBox():new( "Dark mode", w1 )
-    chk:move( 1, 14 )
+    chk:move( nX1, nY )
     chk:onToggled := {|l| ;
         IIF( l, HTTheme():loadDark(), HTTheme():loadDefault() ), ;
         oWindow:repaint(), ;
         UpdateStatus( "Dark mode: " + IIF( l, "ON", "OFF" ) ) ;
     }
-
+    nY++
     chk := HTCheckBox():new( "Notifications", w1 )
-    chk:move( 1, 15 )
+    chk:move( nX1, nY )
+    nY += 2
 
-    sep := HTSeparator():new( w1 )
-    sep:move( 1, 16 )
-    sep:resize( 36, 1 )
-
-    /* --- Priority Radio Buttons --- */
-    HTLabel():new( "Priority:", w1 ):move( 1, 17 )
-
+    HTLabel():new( "Priority:", w1 ):move( nX1, nY )
+    nY++
     rdo := HTRadioButton():new( "High", w1 )
-    rdo:move( 1, 18 )
-
+    rdo:move( nX1, nY )
+    nY++
     rdo := HTRadioButton():new( "Normal", w1 )
-    rdo:move( 1, 19 )
-
+    rdo:move( nX1, nY )
+    nY++
     rdo := HTRadioButton():new( "Low", w1 )
-    rdo:move( 1, 20 )
+    rdo:move( nX1, nY )
+    nY += 2
 
-    sep := HTSeparator():new( w1 )
-    sep:move( 1, 21 )
-    sep:resize( 36, 1 )
-
-    /* --- Category ComboBox --- */
-    HTLabel():new( "Category:", w1 ):move( 1, 22 )
-
+    HTLabel():new( "Category:", w1 ):move( nX1, nY )
+    nY++
     cmb := HTComboBox():new( w1 )
-    cmb:move( 1, 23 )
+    cmb:move( nX1, nY )
+    cmb:resize( Min( nW1, 22 ), 1 )
     cmb:addItem( "Language" )
     cmb:addItem( "Framework" )
     cmb:addItem( "Library" )
@@ -235,37 +256,36 @@ PROCEDURE Main()
     cmb:addItem( "Build Tool" )
     cmb:addItem( "Contrib" )
     cmb:onChanged := {|| UpdateStatus( "Category: " + cmb:currentText() ) }
+    nY += 2
 
-    /* --- Rating Spinner --- */
     spn := HTSpinner():new( w1 )
     spn:setup( "Rating", 0, 10, 1, 5 )
-    spn:move( 1, 25 )
+    spn:move( nX1, nY )
     spn:onChanged := {|n| UpdateStatus( "Rating: " + hb_ntos( n ) ) }
 
     /* ================================================================
-       CENTER TOP - Data Browse with context menu (cols 38-79)
+       CENTER — browse (top) + editor/tasks tabs (bottom)
        ================================================================ */
-    HTLabel():new( "Project Database:", w1 ):move( 38, 2 )
+    HTLabel():new( "Project Database:", w1 ):move( nX2, nYBody )
 
     brw := HTBrowse():new( w1 )
-    brw:move( 38, 3 )
-    brw:resize( 42, 9 )
+    brw:move( nX2, nYBody + 1 )
+    brw:resize( nW2, Max( 6, nTopH - 1 ) )
 
     brw:setGoTopBlock( {|| nRecNo := 1 } )
     brw:setGoBottomBlock( {|| nRecNo := Len( aData ) } )
     brw:setSkipBlock( {|n| ArraySkip( n ) } )
 
-    brw:addColumn( "Code",   {|| aData[ nRecNo, 1 ] }, 7 )
-    brw:addColumn( "Name",   {|| aData[ nRecNo, 2 ] }, 12 )
-    brw:addColumn( "Type",   {|| aData[ nRecNo, 3 ] }, 10 )
-    brw:addColumn( "Budget", {|| aData[ nRecNo, 4 ] }, 9, "999,999.99" )
+    brw:addColumn( "Code",   {|| aData[ nRecNo, 1 ] }, 8 )
+    brw:addColumn( "Name",   {|| aData[ nRecNo, 2 ] }, Max( 12, Int( nW2 * 0.28 ) ) )
+    brw:addColumn( "Type",   {|| aData[ nRecNo, 3 ] }, Max( 10, Int( nW2 * 0.22 ) ) )
+    brw:addColumn( "Budget", {|| aData[ nRecNo, 4 ] }, 9, "999,999" )
 
-    brw:setHeadSep( e"\xC4" )
-    brw:setColSep( e"\xB3" )
+    brw:setHeadSep( "-" )
+    brw:setColSep( " " )
 
     brw:onActivated := {|r| UpdateStatus( "Activated: " + aData[ nRecNo, 2 ] + " (row " + hb_ntos( r ) + ")" ) }
 
-    /* context menu for browse */
     oCtxMenu := HTContextMenu():new()
     oCtxMenu:addAction( "View Details" ):onTriggered := {|| UpdateStatus( "View: " + aData[ nRecNo, 2 ] ) }
     oCtxMenu:addAction( "Edit Record"  ):onTriggered := {|| UpdateStatus( "Edit: " + aData[ nRecNo, 2 ] ) }
@@ -277,43 +297,42 @@ PROCEDURE Main()
     }
     brw:contextMenu := oCtxMenu
 
-    HTLabel():new( "Editor / Tasks:", w1 ):move( 38, 13 )
+    nY := nYBody + nTopH + 1
+    HTLabel():new( "Editor / Tasks:", w1 ):move( nX2, nY )
 
     oTab := HTTabWidget():new( w1 )
-    oTab:move( 38, 14 )
-    oTab:resize( 42, 14 )
+    oTab:move( nX2, nY + 1 )
+    oTab:resize( nW2, Max( 6, nBotH - 1 ) )
     oTab:onTabChanged := {|n| UpdateStatus( "Tab: " + IIF( n = 1, "Editor", "Tasks" ) ) }
 
     oTab:addTab( "Editor" )
     oTab:addTab( "Tasks" )
 
-    /* Tab 1: HTTextEdit + HTScrollBar */
+    nInnerH := Max( 4, oTab:height - 2 )
+
     oTextEdit := HTTextEdit():new()
     oTextEdit:move( 0, 0 )
-    oTextEdit:resize( 40, 12 )
+    oTextEdit:resize( Max( 10, nW2 - 2 ), nInnerH )
     oTextEdit:text := "HBTui multi-line text editor." + hb_eol() + ;
-                      "Supports cursor navigation, insert/delete," + hb_eol() + ;
-                      "Ctrl+C/X/V clipboard, Home/End, PgUp/PgDn." + hb_eol() + ;
+                      "Arrows, Insert/Delete, Home/End." + hb_eol() + ;
+                      "Ctrl+C/X/V clipboard, PgUp/PgDn." + hb_eol() + ;
                       "" + hb_eol() + ;
-                      "Click here or Tab to the tab widget," + hb_eol() + ;
-                      "then click this area to focus the editor." + hb_eol() + ;
-                      "Use arrow keys, type to edit," + hb_eol() + ;
-                      "Del/Backspace to delete characters."
+                      "Tab here, then click to focus." + hb_eol() + ;
+                      "Type to edit; Del/BS to delete."
     oTextEdit:onChanged := {|| UpdateStatus( "Text modified" ) }
     oTab:addWidgetToTab( 1, oTextEdit )
 
     oScrollBar := HTScrollBar():new()
-    oScrollBar:move( 41, 0 )
-    oScrollBar:resize( 1, 12 )
+    oScrollBar:move( Max( 1, nW2 - 1 ), 0 )
+    oScrollBar:resize( 1, nInnerH )
     oScrollBar:minimum := 0
     oScrollBar:maximum := 100
     oScrollBar:value := 0
     oTab:addWidgetToTab( 1, oScrollBar )
 
-    /* Tab 2: HTCheckList */
     oTaskList := HTCheckList():new()
     oTaskList:move( 0, 0 )
-    oTaskList:resize( 42, 12 )
+    oTaskList:resize( nW2, nInnerH )
     oTaskList:addItem( "Add toolbar support",    .T. )
     oTaskList:addItem( "Add context menu",       .T. )
     oTaskList:addItem( "Add tab widget",         .T. )
@@ -330,13 +349,13 @@ PROCEDURE Main()
     oTab:addWidgetToTab( 2, oTaskList )
 
     /* ================================================================
-       RIGHT PANEL - ListBox + Progress + CheckList (cols 80-103)
+       RIGHT — activity, progress, permissions (stretch to edge)
        ================================================================ */
-    HTLabel():new( "Recent Activity:", w1 ):move( 80, 2 )
+    HTLabel():new( "Recent Activity:", w1 ):move( nX3, nYBody )
 
     lst := HTListBox():new( w1 )
-    lst:move( 80, 3 )
-    lst:resize( 24, 8 )
+    lst:move( nX3, nYBody + 1 )
+    lst:resize( nW3, Max( 6, nTopH - 1 ) )
     lst:addItem( "Compiled project" )
     lst:addItem( "Ran tests" )
     lst:addItem( "Fixed bug #42" )
@@ -351,19 +370,20 @@ PROCEDURE Main()
     lst:addItem( "Security audit" )
     lst:onChanged := {|nIdx| UpdateStatus( "Recent: " + lst:itemText( nIdx ) ) }
 
-    /* --- Build Progress --- */
-    HTLabel():new( "Build Progress:", w1 ):move( 80, 12 )
-
+    nY := nYBody + nTopH + 1
+    HTLabel():new( "Build Progress:", w1 ):move( nX3, nY )
+    nY++
     oProgressBar := HTProgressBar():new( w1 )
-    oProgressBar:move( 80, 13 )
-    oProgressBar:resize( 24, 1 )
+    oProgressBar:move( nX3, nY )
+    oProgressBar:resize( nW3, 1 )
+    oProgressBar:setValue( 35 )
+    nY += 2
 
-    /* --- Permissions CheckList --- */
-    HTLabel():new( "Permissions:", w1 ):move( 80, 15 )
-
+    HTLabel():new( "Permissions:", w1 ):move( nX3, nY )
+    nY++
     oPermList := HTCheckList():new( w1 )
-    oPermList:move( 80, 16 )
-    oPermList:resize( 24, 11 )
+    oPermList:move( nX3, nY )
+    oPermList:resize( nW3, Max( 5, nYBtn - nY - 1 ) )
     oPermList:addItem( "Read files",    .T. )
     oPermList:addItem( "Write files",   .T. )
     oPermList:addItem( "Execute",       .F. )
@@ -377,21 +397,22 @@ PROCEDURE Main()
     }
 
     /* ================================================================
-       BOTTOM - Buttons
+       BOTTOM — action buttons + full-width status
        ================================================================ */
     sep := HTSeparator():new( w1 )
-    sep:move( 1, 28 )
+    sep:move( 1, nYBtn - 1 )
+    sep:resize( nCW - 2, 1 )
 
     btn := HTPushButton():new( "Save", w1 )
-    btn:move( 1, 30 )
+    btn:move( nX1, nYBtn )
     btn:onClicked := {|| UpdateStatus( "Saved!" ), AdvanceProgress() }
 
     btn := HTPushButton():new( "Reset", w1 )
-    btn:move( 10, 30 )
+    btn:move( nX1 + 9, nYBtn )
     btn:onClicked := {|| UpdateStatus( "Reset." ), ResetProgress() }
 
     btn := HTPushButton():new( "Delete", w1 )
-    btn:move( 20, 30 )
+    btn:move( nX1 + 19, nYBtn )
     btn:onClicked := {|| ;
         IIF( HTMessageBox():question( "Confirm", "Are you sure you want to delete?" ) = 1, ;
             UpdateStatus( "Deleted." ), ;
@@ -399,22 +420,26 @@ PROCEDURE Main()
     }
 
     btn := HTPushButton():new( "Quit", w1 )
-    btn:move( 31, 30 )
+    btn:move( nX1 + 30, nYBtn )
     btn:onClicked := {|| HTApplication():quit() }
 
-    /* ================================================================
-       STATUS BAR
-       ================================================================ */
     oStatusBar := HTStatusBar():new( w1 )
-    oStatusBar:move( 1, 32 )
     oStatusBar:addSection( "Ready" )
     oStatusBar:addSection( "F1-F4: themes" )
     oStatusBar:addSection( "HBTui v0.3" )
+    oStatusBar:move( 0, nYStat )
+    oStatusBar:resize( nCW, 1 )
 
     /* ================================================================
        SHOW
        ================================================================ */
     w1:show()
+    /* re-assert chrome sizes after fitToScreen (same grid, safe) */
+    oToolBar:resize( Max( 10, w1:width ), 1 )
+    oStatusBar:move( 0, Max( 2, w1:height - 2 ) )
+    oStatusBar:resize( Max( 10, w1:width ), 1 )
+    w1:repaint()
+
     app:exec()
 
 RETURN

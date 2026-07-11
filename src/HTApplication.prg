@@ -18,6 +18,8 @@ PROTECTED:
     DATA FeventStack        INIT { {}, {}, {} }
     DATA FeventStackLen     INIT { 0, 0, 0 }
     DATA Fdesktop           INIT NIL  /* explicit: avoids READONLY keyword clash in PROPERTY macro */
+    DATA FnRows             INIT 40
+    DATA FnCols             INIT 131  /* Digi/awin default — fits maximized Consolas */
 
 PUBLIC:
 
@@ -31,8 +33,11 @@ PUBLIC:
     METHOD queueEvent( event, priority )
     METHOD quit() INLINE ::Fexecute := .F.
     METHOD setDebug( lEnable )
+    METHOD setDisplaySize( nRows, nCols )
 
     METHOD desktop()   INLINE ::Fdesktop  /* explicit INLINE: avoids BLOCK getter scope issue */
+    METHOD rows()      INLINE ::FnRows
+    METHOD cols()      INLINE ::FnCols
     PROPERTY topLevelWindows INIT { => }
     
 ENDCLASS
@@ -49,6 +54,19 @@ METHOD new() CLASS HTApplication
     ENDIF
 
 RETURN self
+
+/** Sets character grid size used by ht_cuiSetupDisplay (call before :new()
+ * on a fresh process, or call ht_cuiSetupDisplay() directly).
+ * Digi default is 40 x 131.
+ */
+METHOD PROCEDURE setDisplaySize( nRows, nCols ) CLASS HTApplication
+    IF nRows != NIL
+        ::FnRows := nRows
+    ENDIF
+    IF nCols != NIL
+        ::FnCols := nCols
+    ENDIF
+RETURN
 
 /** Returns the currently active (focused) top-level window.
  * @return HTWidget or NIL
@@ -88,6 +106,9 @@ METHOD FUNCTION exec() CLASS HTApplication
     LOCAL priority
 
     IF !::Fexecute
+
+        /* awin-style grid + font fit — before any window paint */
+        ht_cuiSetupDisplay( ::FnRows, ::FnCols )
 
         //set( _SET_EVENTMASK, INKEY_ALL + HB_INKEY_RAW + HB_INKEY_EXT + HB_INKEY_GTEVENT )
         Set( _SET_EVENTMASK, INKEY_ALL )

@@ -7,6 +7,7 @@
  */
 
 #include "hbgtinfo.ch"
+#include "inkey.ch"
 
 #define _HT_BOX_SINGLE  e"\xDA\xC4\xBF\xB3\xD9\xC4\xC0\xB3"
 
@@ -17,6 +18,7 @@ STATIC s_nNextId    := 1
 STATIC s_nShadow    := -1   /* off until a secondary window enables HT_SHADOW_ATTR */
 STATIC s_aBoard     := { 0, 0, 0, 0 }
 STATIC s_lInit      := .F.
+STATIC s_cDesktop   := NIL  /* full-screen base layer (stack bottom) */
 
 STATIC FUNCTION ht_winNew( nId, nTop, nLeft, nBottom, nRight )
     LOCAL hWin
@@ -35,7 +37,11 @@ STATIC FUNCTION ht_winNew( nId, nTop, nLeft, nBottom, nRight )
         "fmtLeft"    => 0, ;
         "fmtBottom"  => 0, ;
         "fmtRight"   => 0, ;
-        "color"      => NIL ;
+        "color"      => NIL, ;
+        "shadow"     => s_nShadow, ;
+        "moveImage"  => NIL, ;
+        "layerImage" => NIL, ;
+        "dragging"   => .F. ;
         }
 
     s_aWindows[ nId ] := hWin
@@ -46,7 +52,9 @@ STATIC FUNCTION ht_winGet( nId )
 RETURN IIF( nId != NIL .AND. hb_hHasKey( s_aWindows, nId ), s_aWindows[ nId ], NIL )
 
 STATIC FUNCTION ht_winShadowExtents( hWin )
-    IF s_nShadow >= 0
+    LOCAL nShadow := IIF( hb_hHasKey( hWin, "shadow" ), hWin[ "shadow" ], s_nShadow )
+
+    IF nShadow >= 0
         hWin[ "shadBottom" ] := hWin[ "bottom" ] + 1
         hWin[ "shadRight"  ] := hWin[ "right"  ] + 2
     ELSE
@@ -165,6 +173,87 @@ RETURN NIL
 FUNCTION ht_rgb( nR, nG, nB )
 RETURN nR + nG * 256 + nB * 65536
 
+/** Configures GT display like digikv awin.prg:
+ * fullscreen (no OS chrome), SetMode, then scale Consolas to the desktop.
+ * A second SetMode to DESKTOPCOLS/ROWS removes the large black side margins
+ * that gtwvt leaves when Consolas metrics are narrower than the requested
+ * FONTWIDTH (FitSize centers the leftover as MarginLeft/Right).
+ * @param nRows  Preferred rows (default 40); final size may grow to fill screen
+ * @param nCols  Preferred cols (default 131); final size may grow to fill screen
+ */
+FUNCTION ht_cuiSetupDisplay( nRows, nCols )
+    LOCAL nWidth, nHeight, nFontW, nFontH
+    LOCAL nDeskCols, nDeskRows
+
+    IF nRows == NIL
+        nRows := 40
+    ENDIF
+    IF nCols == NIL
+        nCols := 131
+    ENDIF
+
+#ifdef __PLATFORM__WINDOWS
+    hb_gtInfo( HB_GTI_FONTNAME, "Consolas" )
+    hb_gtInfo( HB_GTI_SELECTCOPY, "Select and Copy" )
+#else
+    hb_gtInfo( HB_GTI_FONTNAME, "Consolas" )
+#endif
+    hb_gtInfo( HB_GTI_RESIZEMODE, HB_GTI_RESIZEMODE_FONT )
+    hb_gtInfo( HB_GTI_FONTQUALITY, HB_GTI_FONTQ_HIGH )
+    hb_gtInfo( HB_GTI_FONTWEIGHT, HB_GTI_FONTW_NORMAL )
+    hb_gtInfo( HB_GTI_CLOSABLE, .T. )
+    hb_gtInfo( HB_GTI_MAXIMIZED, .T. )
+    hb_gtInfo( HB_GTI_RESIZABLE, .T. )
+    /* Digi/awin: borderless client = full desktop (no OS title-bar frame) */
+    hb_gtInfo( HB_GTI_ISFULLSCREEN, .T. )
+    hb_gtInfo( HB_GTI_ALTENTER, .T. )
+    hb_gtInfo( HB_GTI_COMPATBUFFER, .T. )
+
+    SetMode( nRows, nCols )
+
+    nWidth  := hb_gtInfo( HB_GTI_DESKTOPWIDTH )
+    nHeight := hb_gtInfo( HB_GTI_DESKTOPHEIGHT )
+    IF HB_ISNUMERIC( nWidth ) .AND. nWidth > 0 .AND. ;
+       HB_ISNUMERIC( nHeight ) .AND. nHeight > 0 .AND. ;
+       MaxCol() >= 0 .AND. MaxRow() >= 0
+        nFontW := Int( nWidth / ( MaxCol() + 1 ) )
+        nFontH := Int( nHeight / ( MaxRow() + 1 ) )
+        IF nFontW < 4
+            nFontW := 4
+        ENDIF
+        IF nFontH < 8
+            nFontH := 8
+        ENDIF
+        hb_gtInfo( HB_GTI_FONTWIDTH, nFontW )
+        hb_gtInfo( HB_GTI_FONTSIZE, nFontH )
+
+        /* Grow the character grid to what actually fits at the real cell size.
+         * Without this, Consolas often renders narrower than FONTWIDTH and
+         * gtwvt paints large black margins on both sides. */
+        nDeskCols := hb_gtInfo( HB_GTI_DESKTOPCOLS )
+        nDeskRows := hb_gtInfo( HB_GTI_DESKTOPROWS )
+        IF HB_ISNUMERIC( nDeskCols ) .AND. nDeskCols >= 40 .AND. ;
+           HB_ISNUMERIC( nDeskRows ) .AND. nDeskRows >= 20
+            IF nDeskCols != MaxCol() + 1 .OR. nDeskRows != MaxRow() + 1
+                SetMode( nDeskRows, nDeskCols )
+                nFontW := Int( nWidth / ( MaxCol() + 1 ) )
+                nFontH := Int( nHeight / ( MaxRow() + 1 ) )
+                IF nFontW < 4
+                    nFontW := 4
+                ENDIF
+                IF nFontH < 8
+                    nFontH := 8
+                ENDIF
+                hb_gtInfo( HB_GTI_FONTWIDTH, nFontW )
+                hb_gtInfo( HB_GTI_FONTSIZE, nFontH )
+            ENDIF
+        ENDIF
+    ENDIF
+
+    ht_cuiApplyPalette()
+
+RETURN NIL
+
 /** Initializes the window system and virtual desktop (window 0). */
 FUNCTION ctWInit()
     IF ! s_lInit
@@ -202,8 +291,9 @@ FUNCTION wOpen( nTop, nLeft, nBottom, nRight, lClear )
     ENDIF
 
     IF lClear
-        Scroll( hWin[ "top" ] + 1, hWin[ "left" ] + 1, ;
-                hWin[ "bottom" ] - 1, hWin[ "right" ] - 1 )
+        /* full window clear — CUI chrome has no 1-char CT border ring */
+        Scroll( hWin[ "top" ], hWin[ "left" ], ;
+                hWin[ "bottom" ], hWin[ "right" ] )
     ENDIF
 
     AAdd( s_aZOrder, nId )
@@ -243,6 +333,9 @@ FUNCTION wClose( nId )
     IF i > 0
         hb_ADel( s_aZOrder, i, .T. )
     ENDIF
+
+    /* recomposite remaining stack so holes under the closed window are filled */
+    ht_winCompose( 0 )
 
     nPrev := 0
     IF s_nCurrent == nId
@@ -351,60 +444,259 @@ FUNCTION wBox( xBox, cColor )
 
 RETURN 0
 
-/** Moves the current window to an absolute screen position. */
-FUNCTION wMove( nRow, nCol )
-    LOCAL hWin
-    LOCAL aArea
-    LOCAL nDeltaRow, nDeltaCol
-    LOCAL nHeight, nWidth
+/** Snapshot the full screen as the desktop base layer (bottom of the stack). */
+FUNCTION ht_winSaveDesktop()
+    HT_SETVIEWPORT( 0, 0, -1, 0 )
+    s_cDesktop := SaveScreen( 0, 0, ht_ScreenMaxRow(), ht_ScreenMaxCol() )
+    ht_SyncViewport()
+RETURN NIL
 
-    hWin := ht_winGet( s_nCurrent )
+/** Blit one window layer (chrome) onto the physical screen; shadow applied after. */
+STATIC PROCEDURE ht_winBlitLayer( hWin )
+    LOCAL cImg
 
-    IF hWin == NIL .OR. s_nCurrent == 0
-        RETURN -1
+    IF hWin == NIL
+        RETURN
     ENDIF
 
-    nDeltaRow := nRow - hWin[ "top"  ]
-    nDeltaCol := nCol - hWin[ "left" ]
+    cImg := hWin[ "winImage" ]
+    IF cImg == NIL
+        cImg := hWin[ "layerImage" ]
+    ENDIF
+    IF cImg == NIL
+        RETURN
+    ENDIF
 
-    IF nDeltaRow == 0 .AND. nDeltaCol == 0
-        RETURN 0
+    RestScreen( hWin[ "top" ], hWin[ "left" ], ;
+        hWin[ "bottom" ], hWin[ "right" ], cImg )
+    IF hb_hHasKey( hWin, "shadow" ) .AND. hWin[ "shadow" ] >= 0
+        hb_Shadow( hWin[ "top" ], hWin[ "left" ], hWin[ "bottom" ], hWin[ "right" ] )
+    ENDIF
+RETURN
+
+/** Recompose screen from desktop stack base + windows in z-order.
+ * @param nSkipId  Window id to omit (0 = omit none); use while dragging that window
+ */
+FUNCTION ht_winCompose( nSkipId )
+    LOCAL i, nId
+
+    IF nSkipId == NIL
+        nSkipId := 0
     ENDIF
 
     HT_SETVIEWPORT( 0, 0, -1, 0 )
 
-    DispBegin()
+    IF s_cDesktop != NIL
+        RestScreen( 0, 0, ht_ScreenMaxRow(), ht_ScreenMaxCol(), s_cDesktop )
+    ENDIF
 
+    FOR i := 1 TO Len( s_aZOrder )
+        nId := s_aZOrder[ i ]
+        IF nId == 0 .OR. nId == nSkipId
+            LOOP
+        ENDIF
+        ht_winBlitLayer( ht_winGet( nId ) )
+    NEXT
+
+RETURN NIL
+
+/** Digi/win.prg blocking drag with screen stack compose.
+ * Desktop + other windows are the stack under the dragged layer.
+ */
+FUNCTION ht_winDrag( nId, nGrabAbsRow, nGrabAbsCol )
+    LOCAL hWin
+    LOCAL cImage
+    LOCAL nOffR, nOffC
+    LOCAL nH, nW, nShadH, nShadW
+    LOCAL nMaxR, nMaxC
+    LOCAL nNewR, nNewC
+    LOCAL nKey
+    LOCAL aArea
+    LOCAL lShadow
+
+    hWin := ht_winGet( nId )
+    IF hWin == NIL .OR. nId == 0
+        RETURN { 0, 0 }
+    ENDIF
+
+    /* ensure we have a desktop base */
+    IF s_cDesktop == NIL
+        ht_winSaveDesktop()
+    ENDIF
+
+    wSelect( nId, .T. )
+    HT_SETVIEWPORT( 0, 0, -1, 0 )
+
+    nOffR := nGrabAbsRow - hWin[ "top" ]
+    nOffC := nGrabAbsCol - hWin[ "left" ]
+    nH := hWin[ "bottom" ] - hWin[ "top" ] + 1
+    nW := hWin[ "right"  ] - hWin[ "left" ] + 1
+
+    lShadow := hb_hHasKey( hWin, "shadow" ) .AND. hWin[ "shadow" ] >= 0
+    IF lShadow
+        nShadH := 1
+        nShadW := 2
+    ELSE
+        nShadH := 0
+        nShadW := 0
+    ENDIF
+
+    nMaxR := ht_ScreenMaxRow()
+    nMaxC := ht_ScreenMaxCol()
+
+    /* freeze window chrome only; shadow is recomputed each frame over the stack */
+    IF hWin[ "winImage" ] != NIL
+        cImage := hWin[ "winImage" ]
+    ELSE
+        cImage := SaveScreen( hWin[ "top" ], hWin[ "left" ], ;
+            hWin[ "bottom" ], hWin[ "right" ] )
+        hWin[ "winImage" ] := cImage
+    ENDIF
+    hWin[ "layerImage" ] := cImage
+    hWin[ "dragging" ] := .T.
+
+    DO WHILE MLeftDown()
+        nKey := Inkey( 0.01 )
+        HB_SYMBOL_UNUSED( nKey )
+
+        nNewR := MRow( .T. ) - nOffR
+        nNewC := MCol( .T. ) - nOffC
+
+        IF nNewR < 0 .OR. nNewC < 0
+            LOOP
+        ENDIF
+        IF nNewR + nH - 1 + nShadH > nMaxR
+            LOOP
+        ENDIF
+        IF nNewC + nW - 1 + nShadW > nMaxC
+            LOOP
+        ENDIF
+        IF nNewR == hWin[ "top" ] .AND. nNewC == hWin[ "left" ]
+            LOOP
+        ENDIF
+
+        DispBegin()
+        /* stack: desktop + all other windows */
+        ht_winCompose( nId )
+        hWin[ "top"    ] := nNewR
+        hWin[ "left"   ] := nNewC
+        hWin[ "bottom" ] := nNewR + nH - 1
+        hWin[ "right"  ] := nNewC + nW - 1
+        hWin[ "shadBottom" ] := hWin[ "bottom" ] + nShadH
+        hWin[ "shadRight"  ] := hWin[ "right"  ] + nShadW
+        /* top of stack: dragged window + live shadow */
+        RestScreen( hWin[ "top" ], hWin[ "left" ], ;
+            hWin[ "bottom" ], hWin[ "right" ], cImage )
+        IF lShadow
+            hb_Shadow( hWin[ "top" ], hWin[ "left" ], hWin[ "bottom" ], hWin[ "right" ] )
+        ENDIF
+        DispEnd()
+    ENDDO
+
+    hWin[ "dragging" ] := .F.
+    /* refresh under-image for wClose + keep layer in stack */
     aArea := ht_winArea( hWin )
-    RestScreen( aArea[ 1 ], aArea[ 2 ], aArea[ 3 ], aArea[ 4 ], hWin[ "backImage" ] )
+    ht_winCompose( nId )
+    hWin[ "backImage" ] := SaveScreen( aArea[ 1 ], aArea[ 2 ], aArea[ 3 ], aArea[ 4 ] )
+    RestScreen( hWin[ "top" ], hWin[ "left" ], ;
+        hWin[ "bottom" ], hWin[ "right" ], cImage )
+    IF lShadow
+        hb_Shadow( hWin[ "top" ], hWin[ "left" ], hWin[ "bottom" ], hWin[ "right" ] )
+    ENDIF
+    hWin[ "layerImage" ] := cImage
+    hWin[ "winImage" ] := cImage
+    hWin[ "moveImage" ] := NIL
+    ht_SyncViewport()
 
+RETURN { hWin[ "left" ], hWin[ "top" ] }
+
+/** Compatibility stubs — drag uses ht_winDrag(). */
+FUNCTION ht_winDragBegin( nId )
+    HB_SYMBOL_UNUSED( nId )
+RETURN .T.
+
+FUNCTION ht_winDragEnd( nId )
+    HB_SYMBOL_UNUSED( nId )
+RETURN NIL
+
+/** Programmatic move via compose stack + DispBegin. */
+FUNCTION wMove( nRow, nCol )
+    LOCAL hWin
+    LOCAL nHeight, nWidth
+    LOCAL nShadH, nShadW
+    LOCAL nMaxRow, nMaxCol
+    LOCAL cImage
+    LOCAL aArea
+    LOCAL nId
+
+    hWin := ht_winGet( s_nCurrent )
+    IF hWin == NIL .OR. s_nCurrent == 0
+        RETURN -1
+    ENDIF
+    IF nRow == hWin[ "top" ] .AND. nCol == hWin[ "left" ]
+        RETURN 0
+    ENDIF
+
+    nId := s_nCurrent
+    nMaxRow := ht_ScreenMaxRow()
+    nMaxCol := ht_ScreenMaxCol()
     nHeight := hWin[ "bottom" ] - hWin[ "top" ] + 1
     nWidth  := hWin[ "right"  ] - hWin[ "left" ] + 1
 
-    hWin[ "top"    ] += nDeltaRow
-    hWin[ "left"   ] += nDeltaCol
-    hWin[ "bottom" ] := hWin[ "top" ] + nHeight - 1
-    hWin[ "right"  ] := hWin[ "left" ] + nWidth - 1
-
-    ht_winShadowExtents( hWin )
-
-    aArea := ht_winArea( hWin )
-    hWin[ "backImage" ] := SaveScreen( aArea[ 1 ], aArea[ 2 ], aArea[ 3 ], aArea[ 4 ] )
-
-    IF hWin[ "winImage" ] != NIL
-        RestScreen( hWin[ "top" ], hWin[ "left" ], hWin[ "bottom" ], hWin[ "right" ], hWin[ "winImage" ] )
-        IF s_nShadow >= 0
-            hb_Shadow( hWin[ "top" ], hWin[ "left" ], hWin[ "bottom" ], hWin[ "right" ] )
-        ENDIF
+    IF hb_hHasKey( hWin, "shadow" ) .AND. hWin[ "shadow" ] >= 0
+        nShadH := 1
+        nShadW := 2
     ELSE
-        ht_drawBoxAbs( hWin[ "top" ], hWin[ "left" ], hWin[ "bottom" ], hWin[ "right" ], ;
-            NIL, hWin[ "color" ] )
-        IF s_nShadow >= 0
-            hb_Shadow( hWin[ "top" ], hWin[ "left" ], hWin[ "bottom" ], hWin[ "right" ] )
-        ENDIF
+        nShadH := 0
+        nShadW := 0
     ENDIF
 
+    IF nRow < 0 .OR. nCol < 0
+        RETURN 0
+    ENDIF
+    IF nRow + nHeight - 1 + nShadH > nMaxRow .OR. nCol + nWidth - 1 + nShadW > nMaxCol
+        RETURN 0
+    ENDIF
+
+    IF s_cDesktop == NIL
+        ht_winSaveDesktop()
+    ENDIF
+
+    HT_SETVIEWPORT( 0, 0, -1, 0 )
+    IF hWin[ "winImage" ] != NIL
+        cImage := hWin[ "winImage" ]
+    ELSEIF hWin[ "layerImage" ] != NIL
+        cImage := hWin[ "layerImage" ]
+    ELSE
+        cImage := SaveScreen( hWin[ "top" ], hWin[ "left" ], ;
+            hWin[ "bottom" ], hWin[ "right" ] )
+    ENDIF
+    hWin[ "winImage" ] := cImage
+    hWin[ "layerImage" ] := cImage
+
+    DispBegin()
+    ht_winCompose( nId )
+    hWin[ "top"    ] := nRow
+    hWin[ "left"   ] := nCol
+    hWin[ "bottom" ] := nRow + nHeight - 1
+    hWin[ "right"  ] := nCol + nWidth - 1
+    hWin[ "shadBottom" ] := hWin[ "bottom" ] + nShadH
+    hWin[ "shadRight"  ] := hWin[ "right"  ] + nShadW
+    RestScreen( hWin[ "top" ], hWin[ "left" ], ;
+        hWin[ "bottom" ], hWin[ "right" ], cImage )
+    IF nShadH > 0
+        hb_Shadow( hWin[ "top" ], hWin[ "left" ], hWin[ "bottom" ], hWin[ "right" ] )
+    ENDIF
     DispEnd()
+
+    aArea := ht_winArea( hWin )
+    ht_winCompose( nId )
+    hWin[ "backImage" ] := SaveScreen( aArea[ 1 ], aArea[ 2 ], aArea[ 3 ], aArea[ 4 ] )
+    RestScreen( hWin[ "top" ], hWin[ "left" ], ;
+        hWin[ "bottom" ], hWin[ "right" ], cImage )
+    IF nShadH > 0
+        hb_Shadow( hWin[ "top" ], hWin[ "left" ], hWin[ "bottom" ], hWin[ "right" ] )
+    ENDIF
 
     ht_SyncViewport()
 
@@ -477,7 +769,7 @@ RETURN NIL
 FUNCTION GetClearB()
 RETURN HT_GETCLEARB()
 
-/** Captures current window content for wMove drag (optional). */
+/** Captures window chrome for the compose stack (winImage only; shadow is live). */
 FUNCTION ht_winCapture( nId )
     LOCAL hWin
 
@@ -491,6 +783,7 @@ FUNCTION ht_winCapture( nId )
         HT_SETVIEWPORT( 0, 0, -1, 0 )
         hWin[ "winImage" ] := SaveScreen( hWin[ "top" ], hWin[ "left" ], ;
             hWin[ "bottom" ], hWin[ "right" ] )
+        hWin[ "layerImage" ] := hWin[ "winImage" ]
         ht_SyncViewport()
     ENDIF
 

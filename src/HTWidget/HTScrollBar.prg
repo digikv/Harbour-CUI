@@ -10,8 +10,8 @@
 #define _SB_ORIENT_VERTICAL     0
 #define _SB_ORIENT_HORIZONTAL   1
 
-#define _SB_CHAR_TRACK   e"\xB0"
-#define _SB_CHAR_THUMB   e"\xDB"
+#define _SB_CHAR_TRACK   "|"
+#define _SB_CHAR_THUMB   "#"
 
 CLASS HTScrollBar FROM HTWidget
 

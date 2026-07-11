@@ -62,7 +62,7 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTStatusBar
     cBar := ""
     FOR i := 1 TO nCount
         IF i > 1
-            cBar += e"\xB3"
+            cBar += "|"
         ENDIF
         cBar += ::Fsections[ i ]
     NEXT

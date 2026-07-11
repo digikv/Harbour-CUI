@@ -107,7 +107,7 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTListBox
 
         /* proportional scrollbar on right edge */
         IF nItemCount > nVisibleRows .AND. nMaxCol >= 0
-            cScrollChar := IIF( nRow >= nThumbPos .AND. nRow < nThumbPos + nThumbSize, e"\xDB", e"\xB0" )
+            cScrollChar := IIF( nRow >= nThumbPos .AND. nRow < nThumbPos + nThumbSize, "#", "|" )
             cText += cScrollChar
         ELSE
             cText += " "
