@@ -1,6 +1,7 @@
 /*
- * Floating top-level windows on the desktop — drag by the title bar.
- * Demonstrates SaveScreen/RestScreen move and the window/desktop edge.
+ * Floating top-level windows on the desktop.
+ * Title bar: drag to move, [_]=hide, [#]=maximize, [x]=close.
+ * Bottom-right "/" = resize.
  */
 
 #include "hbtui.ch"
@@ -23,11 +24,11 @@ PROCEDURE Main()
         win:resize( 42, 12 )
         win:setWindowTitle( "Window " + hb_ntos( i ) )
 
-        lbl := HTLabel():new( "Drag the title bar to move.", win )
+        lbl := HTLabel():new( "Drag title bar to move.", win )
         lbl:move( 2, 2 )
-        lbl := HTLabel():new( "Watch the edge vs desktop.", win )
+        lbl := HTLabel():new( "/ = resize   # = maximize", win )
         lbl:move( 2, 4 )
-        lbl := HTLabel():new( "Click [x] to close.", win )
+        lbl := HTLabel():new( "_ = minimize  x = close", win )
         lbl:move( 2, 6 )
 
         win:show()

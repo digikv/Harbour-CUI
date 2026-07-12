@@ -136,16 +136,16 @@ METHOD FUNCTION addButtonBar( ... ) CLASS HTDialog
         RETURN aButtons
     ENDIF
 
-    /* position: 2 rows from bottom of content area */
-    nBarRow := ::Fheight - 4
+    /* position: leave room for Digi 2-row button + shadow */
+    nBarRow := ::Fheight - 5
 
     /* right-align buttons */
     nBtnX := ::Fwidth - 3
     FOR i := Len( aLabels ) TO 1 STEP -1
-        nBtnWidth := Max( Len( aLabels[ i ] ) + 4, 8 )
-        nBtnX -= nBtnWidth + 1
+        nBtnWidth := Max( Len( aLabels[ i ] ) + 5, 9 )
+        nBtnX -= nBtnWidth + 2
         oBtn := HTPushButton():new( aLabels[ i ], self )
-        oBtn:setGeometry( Max( 1, nBtnX ), nBarRow, nBtnWidth, 1 )
+        oBtn:setGeometry( Max( 1, nBtnX ), nBarRow, nBtnWidth, 2 )
         AAdd( aButtons, oBtn )
     NEXT
 

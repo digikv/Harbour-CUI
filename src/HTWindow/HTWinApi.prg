@@ -41,7 +41,8 @@ STATIC FUNCTION ht_winNew( nId, nTop, nLeft, nBottom, nRight )
         "shadow"     => s_nShadow, ;
         "moveImage"  => NIL, ;
         "layerImage" => NIL, ;
-        "dragging"   => .F. ;
+        "dragging"   => .F., ;
+        "hidden"     => .F. ;
         }
 
     s_aWindows[ nId ] := hWin
@@ -478,7 +479,7 @@ RETURN
  * @param nSkipId  Window id to omit (0 = omit none); use while dragging that window
  */
 FUNCTION ht_winCompose( nSkipId )
-    LOCAL i, nId
+    LOCAL i, nId, hWin
 
     IF nSkipId == NIL
         nSkipId := 0
@@ -495,7 +496,11 @@ FUNCTION ht_winCompose( nSkipId )
         IF nId == 0 .OR. nId == nSkipId
             LOOP
         ENDIF
-        ht_winBlitLayer( ht_winGet( nId ) )
+        hWin := ht_winGet( nId )
+        IF hWin != NIL .AND. hb_hHasKey( hWin, "hidden" ) .AND. hWin[ "hidden" ]
+            LOOP
+        ENDIF
+        ht_winBlitLayer( hWin )
     NEXT
 
 RETURN NIL
@@ -609,6 +614,248 @@ FUNCTION ht_winDrag( nId, nGrabAbsRow, nGrabAbsCol )
     ht_SyncViewport()
 
 RETURN { hWin[ "left" ], hWin[ "top" ] }
+
+/** Blocking bottom-right resize with screen-stack compose.
+ * Preview is a filled chrome frame; caller must full-repaint on return.
+ * @return { left, top, width, height }
+ */
+FUNCTION ht_winResize( nId, nMinW, nMinH )
+    LOCAL hWin
+    LOCAL nTop, nLeft
+    LOCAL nNewBottom, nNewRight
+    LOCAL nShadH, nShadW
+    LOCAL nMaxR, nMaxC
+    LOCAL nKey
+    LOCAL aArea
+    LOCAL lShadow
+    LOCAL nOldBottom, nOldRight
+    LOCAL nRow, nW
+    LOCAL cWin, cTitle
+
+    IF nMinW == NIL
+        nMinW := 20
+    ENDIF
+    IF nMinH == NIL
+        nMinH := 5
+    ENDIF
+
+    hWin := ht_winGet( nId )
+    IF hWin == NIL .OR. nId == 0
+        RETURN { 0, 0, 0, 0 }
+    ENDIF
+
+    IF s_cDesktop == NIL
+        ht_winSaveDesktop()
+    ENDIF
+
+    wSelect( nId, .T. )
+    HT_SETVIEWPORT( 0, 0, -1, 0 )
+
+    nTop  := hWin[ "top" ]
+    nLeft := hWin[ "left" ]
+    nOldBottom := hWin[ "bottom" ]
+    nOldRight  := hWin[ "right" ]
+
+    lShadow := hb_hHasKey( hWin, "shadow" ) .AND. hWin[ "shadow" ] >= 0
+    IF lShadow
+        nShadH := 1
+        nShadW := 2
+    ELSE
+        nShadH := 0
+        nShadW := 0
+    ENDIF
+
+    nMaxR := ht_ScreenMaxRow()
+    nMaxC := ht_ScreenMaxCol()
+
+    /* size change invalidates frozen chrome */
+    hWin[ "winImage" ]   := NIL
+    hWin[ "layerImage" ] := NIL
+    hWin[ "dragging" ]   := .T.
+
+    cWin   := "0/9"
+    cTitle := "0/11"
+    IF hb_hHasKey( hWin, "color" ) .AND. hWin[ "color" ] != NIL
+        cWin := hWin[ "color" ]
+    ENDIF
+
+    DO WHILE MLeftDown()
+        nKey := Inkey( 0.01 )
+        HB_SYMBOL_UNUSED( nKey )
+
+        nNewBottom := MRow( .T. )
+        nNewRight  := MCol( .T. )
+
+        IF nNewBottom < nTop + nMinH - 1
+            nNewBottom := nTop + nMinH - 1
+        ENDIF
+        IF nNewRight < nLeft + nMinW - 1
+            nNewRight := nLeft + nMinW - 1
+        ENDIF
+        IF nNewBottom + nShadH > nMaxR
+            nNewBottom := nMaxR - nShadH
+        ENDIF
+        IF nNewRight + nShadW > nMaxC
+            nNewRight := nMaxC - nShadW
+        ENDIF
+        IF nNewBottom == nOldBottom .AND. nNewRight == nOldRight
+            LOOP
+        ENDIF
+
+        nOldBottom := nNewBottom
+        nOldRight  := nNewRight
+
+        DispBegin()
+        ht_winCompose( nId )
+        hWin[ "bottom" ] := nNewBottom
+        hWin[ "right"  ] := nNewRight
+        hWin[ "shadBottom" ] := hWin[ "bottom" ] + nShadH
+        hWin[ "shadRight"  ] := hWin[ "right"  ] + nShadW
+
+        /* lightweight preview frame (absolute coords; viewport off) */
+        HT_SETVIEWPORT( 0, 0, -1, 0 )
+        nW := nNewRight - nLeft + 1
+        FOR nRow := nTop TO nNewBottom
+            hb_DispOutAt( nRow, nLeft, Space( nW ), cWin )
+        NEXT
+        hb_DispOutAt( nTop, nLeft, Space( nW ), cTitle )
+        hb_DispOutAt( nNewBottom, nNewRight, "/", cWin )
+        IF lShadow
+            hb_Shadow( nTop, nLeft, nNewBottom, nNewRight )
+        ENDIF
+        DispEnd()
+    ENDDO
+
+    hWin[ "dragging" ] := .F.
+    aArea := ht_winArea( hWin )
+    ht_winCompose( nId )
+    hWin[ "backImage" ] := SaveScreen( aArea[ 1 ], aArea[ 2 ], aArea[ 3 ], aArea[ 4 ] )
+    ht_SyncViewport()
+
+RETURN { hWin[ "left" ], hWin[ "top" ], ;
+         hWin[ "right" ] - hWin[ "left" ] + 1, ;
+         hWin[ "bottom" ] - hWin[ "top" ] + 1 }
+
+/** Apply geometry to the window hash without composing (paint will redraw). */
+FUNCTION ht_winApplyRect( nId, nTop, nLeft, nBottom, nRight )
+    LOCAL hWin
+
+    hWin := ht_winGet( nId )
+    IF hWin == NIL .OR. nId == 0
+        RETURN -1
+    ENDIF
+
+    IF hWin[ "top" ] == nTop .AND. hWin[ "left" ] == nLeft .AND. ;
+       hWin[ "bottom" ] == nBottom .AND. hWin[ "right" ] == nRight
+        RETURN 0
+    ENDIF
+
+    hWin[ "top"    ] := nTop
+    hWin[ "left"   ] := nLeft
+    hWin[ "bottom" ] := nBottom
+    hWin[ "right"  ] := nRight
+    ht_winShadowExtents( hWin )
+    hWin[ "winImage" ]   := NIL
+    hWin[ "layerImage" ] := NIL
+    ht_SyncViewport()
+
+RETURN 0
+
+/** Reposition/resize a window in the stack (no content paint — caller repaints). */
+FUNCTION ht_winSetRect( nId, nTop, nLeft, nBottom, nRight )
+    LOCAL hWin
+    LOCAL aArea
+
+    hWin := ht_winGet( nId )
+    IF hWin == NIL .OR. nId == 0
+        RETURN -1
+    ENDIF
+
+    IF s_cDesktop == NIL
+        ht_winSaveDesktop()
+    ENDIF
+
+    HT_SETVIEWPORT( 0, 0, -1, 0 )
+    DispBegin()
+    ht_winCompose( nId )
+    hWin[ "top"    ] := nTop
+    hWin[ "left"   ] := nLeft
+    hWin[ "bottom" ] := nBottom
+    hWin[ "right"  ] := nRight
+    ht_winShadowExtents( hWin )
+    hWin[ "winImage" ]   := NIL
+    hWin[ "layerImage" ] := NIL
+    aArea := ht_winArea( hWin )
+    hWin[ "backImage" ] := SaveScreen( aArea[ 1 ], aArea[ 2 ], aArea[ 3 ], aArea[ 4 ] )
+    DispEnd()
+    ht_SyncViewport()
+
+RETURN 0
+
+/** Next free column on the bottom row for a minimized title strip. */
+FUNCTION ht_winMinimizeSlot( nExcludeId, nWidth )
+    LOCAL nCol := 0
+    LOCAL nMaxC := ht_ScreenMaxCol()
+    LOCAL nRow := ht_ScreenMaxRow()
+    LOCAL i, nId, hWin
+
+    IF nWidth == NIL .OR. nWidth < 1
+        nWidth := 16
+    ENDIF
+
+    FOR i := 1 TO Len( s_aZOrder )
+        nId := s_aZOrder[ i ]
+        IF nId == 0 .OR. nId == nExcludeId
+            LOOP
+        ENDIF
+        hWin := ht_winGet( nId )
+        IF hWin == NIL
+            LOOP
+        ENDIF
+        /* already docked icon strips live on the last row with height 1 */
+        IF hWin[ "top" ] == nRow .AND. hWin[ "bottom" ] == nRow
+            nCol := Max( nCol, hWin[ "right" ] + 2 )
+        ENDIF
+    NEXT
+
+    IF nCol + nWidth - 1 > nMaxC
+        nCol := Max( 0, nMaxC - nWidth + 1 )
+    ENDIF
+
+RETURN nCol
+
+/** Hide window in the compose stack (keeps handle for later show). */
+FUNCTION ht_winHide( nId )
+    LOCAL hWin
+
+    hWin := ht_winGet( nId )
+    IF hWin == NIL .OR. nId == 0
+        RETURN -1
+    ENDIF
+
+    hWin[ "hidden" ] := .T.
+    hWin[ "winImage" ] := NIL
+    HT_SETVIEWPORT( 0, 0, -1, 0 )
+    DispBegin()
+    ht_winCompose( 0 )
+    DispEnd()
+    ht_SyncViewport()
+
+RETURN 0
+
+/** Unhide window; caller must repaint content and ht_winCapture. */
+FUNCTION ht_winShow( nId )
+    LOCAL hWin
+
+    hWin := ht_winGet( nId )
+    IF hWin == NIL .OR. nId == 0
+        RETURN -1
+    ENDIF
+
+    hWin[ "hidden" ] := .F.
+    ht_SyncViewport()
+
+RETURN 0
 
 /** Compatibility stubs — drag uses ht_winDrag(). */
 FUNCTION ht_winDragBegin( nId )

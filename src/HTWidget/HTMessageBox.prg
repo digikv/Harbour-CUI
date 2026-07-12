@@ -83,7 +83,7 @@ METHOD FUNCTION showDialog( cTitle, cMessage, cColor, lQuestion ) CLASS HTMessag
     nMsgWidth  := Max( Len( cMessage ), Len( cTitle ) + 4 )
     nMsgWidth  := Max( nMsgWidth, IIF( lQuestion, 20, 10 ) )
     nWinWidth  := nMsgWidth + 4
-    nWinHeight := 5   /* title + pad + message + pad + buttons */
+    nWinHeight := 6   /* title + pad + message + pad + Digi button (2 rows) */
 
     /* center on screen */
     nTop  := Int( ( ht_ScreenMaxRow() + 1 - nWinHeight ) / 2 )
@@ -102,13 +102,14 @@ METHOD FUNCTION showDialog( cTitle, cMessage, cColor, lQuestion ) CLASS HTMessag
 
     DispOutAt( 2, 1, PadR( cMessage, nWinWidth - 2 ), cColor )
 
+    /* Digi-style buttons (buttons.prg): padded face + ▀/▄ shadow */
     IF lQuestion
-        nBtnCol := Int( ( nWinWidth - 17 ) / 2 )
-        DispOutAt( 4, nBtnCol, "[ OK ]", "15/01" )
-        DispOutAt( 4, nBtnCol + 10, "[ Cancel ]", "00/07" )
+        nBtnCol := Int( ( nWinWidth - 22 ) / 2 )
+        ht_paintDigiButton( 4, nBtnCol, "OK", .T. )
+        ht_paintDigiButton( 4, nBtnCol + 11, "Cancel", .F. )
     ELSE
-        nBtnCol := Int( ( nWinWidth - 6 ) / 2 )
-        DispOutAt( 4, nBtnCol, "[ OK ]", "15/01" )
+        nBtnCol := Int( ( nWinWidth - 8 ) / 2 )
+        ht_paintDigiButton( 4, nBtnCol, "OK", .T. )
     ENDIF
 
     nResult := HT_DIALOG_ACCEPTED
@@ -131,12 +132,12 @@ METHOD FUNCTION showDialog( cTitle, cMessage, cColor, lQuestion ) CLASS HTMessag
             ENDIF
         ELSEIF event:className() == "HTMOUSEEVENT" .AND. event:nKey = K_LBUTTONDOWN
             wSelect( nWinId, .T. )
-            IF mRow() = 4
+            IF mRow() = 4 .OR. mRow() = 5
                 IF lQuestion
                     IF mCol() >= nBtnCol .AND. mCol() < nBtnCol + 6
                         nResult := HT_DIALOG_ACCEPTED
                         EXIT
-                    ELSEIF mCol() >= nBtnCol + 10 .AND. mCol() < nBtnCol + 20
+                    ELSEIF mCol() >= nBtnCol + 11 .AND. mCol() < nBtnCol + 21
                         nResult := HT_DIALOG_REJECTED
                         EXIT
                     ENDIF

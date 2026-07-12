@@ -96,7 +96,8 @@ STATIC PROCEDURE TestDefaultTheme()
     /* spot-check a few well-known values */
     Assert( "Default:WINDOW", oTheme:getColor( HT_CLR_WINDOW ) == "0/9" )
     Assert( "Default:DESKTOP", oTheme:getColor( HT_CLR_DESKTOP ) == "0/8" )
-    Assert( "Default:BUTTON_NORMAL", oTheme:getColor( HT_CLR_BUTTON_NORMAL ) == "0/7" )
+    Assert( "Default:BUTTON_NORMAL", oTheme:getColor( HT_CLR_BUTTON_NORMAL ) == "15/8" )
+    Assert( "Default:BUTTON_FOCUSED", oTheme:getColor( HT_CLR_BUTTON_FOCUSED ) == "0/7" )
     Assert( "Default:STATUSBAR", oTheme:getColor( HT_CLR_STATUSBAR ) == "0/7" )
     Assert( "Default:TITLEBAR", oTheme:getColor( HT_CLR_TITLEBAR ) == "0/11" )
 

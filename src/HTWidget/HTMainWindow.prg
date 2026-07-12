@@ -27,6 +27,10 @@ METHOD new( ... ) CLASS HTMainWindow
     ::FlPosSet := .T.
     ::Fx := 0
     ::Fy := 0
+    /* fullscreen app shell — no floating chrome controls */
+    ::FcharWidgetResize   := NIL
+    ::FcharWidgetMaximize := NIL
+    ::FcharWidgetHide     := NIL
 RETURN self
 
 /** Sizes this window to the full character grid (0,0)..(MaxCol,MaxRow). */

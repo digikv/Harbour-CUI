@@ -38,6 +38,9 @@ PROTECTED:
     DATA FwinSysBtnHide     INIT .F.
     DATA FwinSysBtnMaximize INIT .F.
     DATA FwinSysBtnResize   INIT .F.
+    DATA FlMaximized        INIT .F.
+    DATA FlMinimized        INIT .F.
+    DATA FrestoreRect       INIT NIL   /* { x, y, width, height } before max/min */
 
     METHOD childAt( nRow, nCol )
     METHOD displayLayout()
@@ -72,7 +75,9 @@ PUBLIC:
     METHOD event( event )
     METHOD focusInEvent( eventFocus )
     METHOD focusOutEvent( eventFocus )
+    METHOD hideEvent( hideEvent )
     METHOD keyEvent( keyEvent )
+    METHOD maximizeEvent( maximizeEvent )
     METHOD mouseEvent( eventMouse )
     METHOD move( ... )
     METHOD moveEvent( moveEvent )
@@ -103,9 +108,9 @@ PUBLIC:
 
     PROPERTY backgroundColor WRITE setBackgroundColor
     PROPERTY charWidgetClose    INIT "x"    /* CUI close */
-    PROPERTY charWidgetHide     INIT NIL    /* off — set "_" if needed */
-    PROPERTY charWidgetMaximize INIT NIL    /* off — set Chr(254) if needed */
-    PROPERTY charWidgetResize   INIT NIL
+    PROPERTY charWidgetHide     INIT "_"    /* floating windows; MainWindow clears */
+    PROPERTY charWidgetMaximize INIT "#"    /* maximize toggle; MainWindow clears */
+    PROPERTY charWidgetResize   INIT "/"    /* bottom-right grip; MainWindow clears */
     PROPERTY clearA READ getClearA WRITE setClearA
     PROPERTY clearB READ getClearB WRITE setClearB
     PROPERTY color READ getColor WRITE SetColor
@@ -236,6 +241,104 @@ METHOD PROCEDURE closeEvent( closeEvent ) CLASS HTWidget
     ::destroy()
 RETURN
 
+/** Minimizes to a title-bar strip on the last screen row, or restores.
+ * "_" is a toggle — header stays visible like a taskbar icon.
+ */
+METHOD PROCEDURE hideEvent( hideEvent ) CLASS HTWidget
+
+    LOCAL nIconW
+    LOCAL nSlotCol
+    LOCAL nBot
+
+    IF hideEvent != NIL
+        hideEvent:accept()
+    ENDIF
+
+    IF ::FwindowId == NIL .OR. ::FwindowId == 0
+        RETURN
+    ENDIF
+
+    IF ::FlMinimized .AND. HB_IsArray( ::FrestoreRect )
+        /* restore previous size */
+        ::Fx      := ::FrestoreRect[ 1 ]
+        ::Fy      := ::FrestoreRect[ 2 ]
+        ::Fwidth  := ::FrestoreRect[ 3 ]
+        ::Fheight := ::FrestoreRect[ 4 ]
+        ::FlMinimized  := .F.
+        ::FrestoreRect := NIL
+        ::FisVisible   := .T.
+        ht_winSetRect( ::FwindowId, ::Fy, ::Fx, ::Fy + ::Fheight - 1, ::Fx + ::Fwidth - 1 )
+        ::paintEvent()
+        RETURN
+    ENDIF
+
+    /* shrink to title-bar strip docked on the last screen row */
+    IF ! ::FlMinimized
+        IF ! HB_IsArray( ::FrestoreRect )
+            ::FrestoreRect := { ::Fx, ::Fy, ::Fwidth, ::Fheight }
+        ENDIF
+        nBot   := ht_ScreenMaxRow()
+        nIconW := Min( Max( ::Fwidth, 12 ), 28 )
+        nSlotCol := ht_winMinimizeSlot( ::FwindowId, nIconW )
+        ::FlMinimized := .T.
+        ::FlMaximized := .F.
+        ::Fx          := nSlotCol
+        ::Fy          := nBot
+        ::Fwidth      := nIconW
+        ::Fheight     := 1
+        ::FisVisible  := .T.
+        ht_winSetRect( ::FwindowId, ::Fy, ::Fx, ::Fy, ::Fx + ::Fwidth - 1 )
+        ::paintEvent()
+    ENDIF
+
+RETURN
+
+/** Toggles maximized geometry for a floating top-level window. */
+METHOD PROCEDURE maximizeEvent( maximizeEvent ) CLASS HTWidget
+
+    LOCAL nMaxW, nMaxH
+
+    IF maximizeEvent != NIL
+        maximizeEvent:accept()
+    ENDIF
+
+    IF ::FwindowId == NIL .OR. ::FwindowId == 0
+        RETURN
+    ENDIF
+
+    nMaxW := ht_ScreenMaxCol() + 1
+    nMaxH := ht_ScreenMaxRow() + 1
+
+    IF ::FlMaximized .AND. HB_IsArray( ::FrestoreRect )
+        ::Fx      := ::FrestoreRect[ 1 ]
+        ::Fy      := ::FrestoreRect[ 2 ]
+        ::Fwidth  := ::FrestoreRect[ 3 ]
+        ::Fheight := ::FrestoreRect[ 4 ]
+        ::FlMaximized  := .F.
+        ::FlMinimized  := .F.
+        ::FrestoreRect := NIL
+    ELSE
+        IF ! ::FlMinimized
+            ::FrestoreRect := { ::Fx, ::Fy, ::Fwidth, ::Fheight }
+        ENDIF
+        /* if minimized, expand from saved normal size then maximize */
+        IF ::FlMinimized .AND. HB_IsArray( ::FrestoreRect )
+            ::Fx := ::FrestoreRect[ 1 ]
+            ::Fy := ::FrestoreRect[ 2 ]
+        ENDIF
+        ::Fx      := 0
+        ::Fy      := 0
+        ::Fwidth  := nMaxW
+        ::Fheight := nMaxH
+        ::FlMaximized := .T.
+        ::FlMinimized := .F.
+    ENDIF
+
+    ht_winSetRect( ::FwindowId, ::Fy, ::Fx, ::Fy + ::Fheight - 1, ::Fx + ::Fwidth - 1 )
+    ::paintEvent()
+
+RETURN
+
 /** Finds the child widget at content-area coordinates.
  * Coordinates are relative to the content area (inside border).
  * @param nRow Row position within content area
@@ -339,6 +442,12 @@ METHOD FUNCTION event( event ) CLASS HTWidget
         EXIT
     CASE HT_EVENT_TYPE_SHOW
         ::showEvent( event )
+        EXIT
+    CASE HT_EVENT_TYPE_HIDE
+        ::hideEvent( event )
+        EXIT
+    CASE HT_EVENT_TYPE_MAXIMIZE
+        ::maximizeEvent( event )
         EXIT
     OTHERWISE
         RETURN ::super:event( event )
@@ -662,7 +771,21 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTWidget
 
         ::FwinSysBtnResize := ::FbtnResizePos != NIL .AND. ::FposDown:y = ( ::Fheight - 1 ) .AND. ::FposDown:x >= ::FbtnResizePos[ 1 ] .AND. ::FposDown:x <= ::FbtnResizePos[ 2 ]
 
-        IF ::FposDown:y = 0 .AND. ! ::FwinSysBtnClose .AND. ! ::FwinSysBtnHide .AND. ! ::FwinSysBtnMaximize .AND. ! ::FwinSysBtnResize
+        IF ::FwinSysBtnResize
+            /* blocking Digi-style resize with screen-stack compose */
+            IF ::FwindowId != NIL
+                aPos := ht_winResize( ::FwindowId, ;
+                    Max( ::minimumWidth, 20 ), Max( ::minimumHeight, 5 ) )
+                ::Fx      := aPos[ 1 ]
+                ::Fy      := aPos[ 2 ]
+                ::Fwidth  := aPos[ 3 ]
+                ::Fheight := aPos[ 4 ]
+                ::paintEvent()
+            ENDIF
+            EXIT
+        ENDIF
+
+        IF ::FposDown:y = 0 .AND. ! ::FwinSysBtnClose .AND. ! ::FwinSysBtnHide .AND. ! ::FwinSysBtnMaximize
             /* blocking Digi drag with screen-stack compose */
             IF ::FwindowId != NIL
                 aPos := ht_winDrag( ::FwindowId, eventMouse:mouseAbsRow, eventMouse:mouseAbsCol )
@@ -751,15 +874,12 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTWidget
         ::FwinSysBtnClose    := .F.
         ::FwinSysBtnHide     := .F.
         ::FwinSysBtnMaximize := .F.
+        ::FwinSysBtnResize   := .F.
 
         EXIT
 
     CASE K_MOUSEMOVE
-
-        IF ::FposDown != NIL .AND. ::FwinSysBtnResize
-            ::addEvent( HTResizeEvent():new() )
-        ENDIF
-
+        /* title-bar drag and corner resize are blocking (ht_winDrag / ht_winResize) */
         EXIT
 
     CASE K_RBUTTONDOWN
@@ -852,7 +972,10 @@ METHOD PROCEDURE paintEvent( event ) CLASS HTWidget
         ::paintTopLevelWindow()
     ENDIF
 
-    ::paintWidget()
+    /* minimized = title bar only — skip children */
+    IF ! ::FlMinimized
+        ::paintWidget()
+    ENDIF
 
     IF ::FwindowId != NIL .AND. ::FwindowId > 0
         ht_winCapture( ::FwindowId )
@@ -909,7 +1032,7 @@ METHOD PROCEDURE drawCuiChrome() CLASS HTWidget
         NEXT
     ENDIF
 
-    IF ::charWidgetResize != NIL
+    IF ::charWidgetResize != NIL .AND. ::Fheight > 1
         nRight := Len( ::charWidgetResize )
         ::FbtnResizePos := { ::Fwidth - nRight, ::Fwidth - 1 }
         DispOutAt( ::Fheight - 1, ::FbtnResizePos[ 1 ], ::charWidgetResize, ::color )
@@ -960,6 +1083,7 @@ METHOD PROCEDURE paintTopLevelWindow() CLASS HTWidget
     ELSE
         /* repaint: select the existing window and redraw chrome */
         wSelect( ::FwindowId, .F. )
+        ht_winApplyRect( ::FwindowId, ::Fy, ::Fx, ::Fy + ::Fheight - 1, ::Fx + ::Fwidth - 1 )
         wFormat()
         ::drawCuiChrome()
         wFormat()

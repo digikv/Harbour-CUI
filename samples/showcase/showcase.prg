@@ -75,8 +75,8 @@ PROCEDURE Main()
 
     nYTool := 1
     nYStat := nCH - 1
-    nYBtn  := nYStat - 2
-    nYBody := 2
+    nYBtn  := nYStat - 3
+    nYBody := nYTool + 1
     nBodyH := Max( 14, nYBtn - nYBody - 1 )
     nTopH  := Max( 8, Int( nBodyH * 0.42 ) )
     nBotH  := Max( 6, nBodyH - nTopH - 1 )

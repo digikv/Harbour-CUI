@@ -1,11 +1,10 @@
 /** @class HTToolBar
- * Horizontal toolbar with clickable buttons and optional shortcut keys.
+ * Horizontal toolbar with padded text buttons (no Digi ▀/▄ shadow).
  * @extends HTWidget
  */
 
 #include "hbtui.ch"
 #include "inkey.ch"
-
 
 CLASS HTToolBar FROM HTWidget
 
@@ -24,6 +23,8 @@ PUBLIC:
 
     METHOD addButton( cText, bAction, nShortcutKey )
     METHOD buttonCount() INLINE Len( ::FaButtons )
+    METHOD buttonWidth( nIndex )
+    METHOD buttonCol( nIndex )
 
 HIDDEN:
 
@@ -54,6 +55,24 @@ METHOD new( ... ) CLASS HTToolBar
 
 RETURN self
 
+/** Face width: "  text  " (no right-shadow column). */
+METHOD FUNCTION buttonWidth( nIndex ) CLASS HTToolBar
+    IF nIndex < 1 .OR. nIndex > Len( ::FaButtons )
+        RETURN 0
+    ENDIF
+RETURN Len( ::FaButtons[ nIndex ][ 1 ] ) + 4
+
+/** Left column of button nIndex within the toolbar. */
+METHOD FUNCTION buttonCol( nIndex ) CLASS HTToolBar
+
+    LOCAL i, nCol := 0
+
+    FOR i := 1 TO nIndex - 1
+        nCol += ::buttonWidth( i ) + 1
+    NEXT
+
+RETURN nCol
+
 /** Adds a button to the toolbar.
  * @param cText Button label text
  * @param bAction Code block invoked on activation
@@ -71,61 +90,61 @@ METHOD addButton( cText, bAction, nShortcutKey ) CLASS HTToolBar
         ::FnActiveButton := 1
     ENDIF
 
-    /* recalculate width: each button is "[ text ] " */
     ::recalcWidth()
 
 RETURN nIndex
 
-/** Recalculates total widget width from button labels and separators. */
+/** Recalculates total widget width from button faces + gaps. */
 METHOD PROCEDURE recalcWidth() CLASS HTToolBar
 
     LOCAL i, nTotal := 0
 
     FOR i := 1 TO Len( ::FaButtons )
-        nTotal += Len( ::FaButtons[ i ][ 1 ] ) + 4
+        nTotal += ::buttonWidth( i )
         IF i < Len( ::FaButtons )
-            nTotal += 1   /* separator space */
+            nTotal += 1
         ENDIF
     NEXT
 
     ::Fwidth := Max( 1, nTotal )
+    ::Fheight := 1
 
 RETURN
 
-/** Renders buttons with active-button highlighting when focused.
+/** Renders flat padded toolbar buttons (no shadow).
  * @param event HTPaintEvent (unused)
  */
 METHOD PROCEDURE paintEvent( event ) CLASS HTToolBar
 
-    LOCAL i, cDisplay, cBtnText, cColor, cBtnColor
-    LOCAL nMaxCol := MaxCol()
+    LOCAL i, nCol, nMaxCol, cFace, cFaceClr, cLetClr, cBg, nAt
     LOCAL lFocused := ::hasFocus()
+    LOCAL cBarClr := IIF( lFocused, ;
+        HTTheme():getColor( HT_CLR_TOOLBAR_FOCUSED ), ;
+        HTTheme():getColor( HT_CLR_TOOLBAR_NORMAL ) )
 
     HB_SYMBOL_UNUSED( event )
 
-    cColor := IIF( lFocused, HTTheme():getColor( HT_CLR_TOOLBAR_FOCUSED ), HTTheme():getColor( HT_CLR_TOOLBAR_NORMAL ) )
-    cDisplay := ""
+    nMaxCol := MaxCol()
+    DispOutAt( 0, 0, Space( nMaxCol + 1 ), cBarClr )
 
+    nCol := 0
     FOR i := 1 TO Len( ::FaButtons )
-        cBtnText := "[ " + ::FaButtons[ i ][ 1 ] + " ]"
-        IF i < Len( ::FaButtons )
-            cBtnText += " "
-        ENDIF
-
+        cFace := "  " + ::FaButtons[ i ][ 1 ] + "  "
         IF lFocused .AND. i = ::FnActiveButton
-            cBtnColor := HTTheme():getColor( HT_CLR_TOOLBAR_ACTIVE )
+            cFaceClr := HTTheme():getColor( HT_CLR_BUTTON_FOCUSED )
         ELSE
-            cBtnColor := cColor
+            cFaceClr := HTTheme():getColor( HT_CLR_BUTTON_NORMAL )
         ENDIF
+        nAt := At( "/", cFaceClr )
+        cBg := IIF( nAt > 0, SubStr( cFaceClr, nAt ), "/8" )
+        cLetClr := IIF( lFocused .AND. i = ::FnActiveButton, "15" + cBg, "14" + cBg )
 
-        DispOutAt( 0, Len( cDisplay ), cBtnText, cBtnColor )
-        cDisplay += cBtnText
+        DispOutAt( 0, nCol, cFace, cFaceClr )
+        IF ! Empty( ::FaButtons[ i ][ 1 ] )
+            DispOutAt( 0, nCol + 2, Left( ::FaButtons[ i ][ 1 ], 1 ), cLetClr )
+        ENDIF
+        nCol += ::buttonWidth( i ) + 1
     NEXT
-
-    /* pad remaining space */
-    IF Len( cDisplay ) <= nMaxCol
-        DispOutAt( 0, Len( cDisplay ), Space( nMaxCol + 1 - Len( cDisplay ) ), cColor )
-    ENDIF
 
 RETURN
 
@@ -159,7 +178,6 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS HTToolBar
         keyEvent:accept()
         RETURN
     OTHERWISE
-        /* check shortcut keys */
         FOR i := 1 TO Len( ::FaButtons )
             IF ::FaButtons[ i ][ 3 ] != NIL .AND. ::FaButtons[ i ][ 3 ] = keyEvent:key
                 ::FnActiveButton := i
@@ -189,17 +207,16 @@ RETURN
  */
 METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTToolBar
 
-    LOCAL nClickCol, nCol, i, nBtnStart, nBtnEnd
+    LOCAL nClickCol, i, nStart, nEnd
     LOCAL parent
 
     IF eventMouse:nKey = K_LBUTTONDOWN
         nClickCol := eventMouse:mouseCol
         IF nClickCol >= 0
-            nCol := 0
             FOR i := 1 TO Len( ::FaButtons )
-                nBtnStart := nCol
-                nBtnEnd := nCol + Len( ::FaButtons[ i ][ 1 ] ) + 3
-                IF nClickCol >= nBtnStart .AND. nClickCol <= nBtnEnd
+                nStart := ::buttonCol( i )
+                nEnd   := nStart + ::buttonWidth( i ) - 1
+                IF nClickCol >= nStart .AND. nClickCol <= nEnd
                     ::FnActiveButton := i
                     IF ::FaButtons[ i ][ 2 ] != NIL
                         Eval( ::FaButtons[ i ][ 2 ] )
@@ -210,7 +227,6 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTToolBar
                     ENDIF
                     RETURN
                 ENDIF
-                nCol := nBtnEnd + 2   /* "] " separator */
             NEXT
         ENDIF
     ENDIF
