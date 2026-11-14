@@ -31,6 +31,7 @@ PROCEDURE Main()
     TestScrollBar()
     TestTextEdit()
     TestContextMenu()
+    TestMenuItems()
 
     nTotal := nPass + nFail
     QOut( "" )
@@ -405,5 +406,32 @@ STATIC PROCEDURE TestContextMenu()
     /* trigger without callback is a no-op */
     a2:trigger()   /* no callback set — must not crash */
     Assert( "HTContextMenu:trigger no-op safe", .T. )
+
+RETURN
+
+/*----------------------------------------------------------------*/
+
+STATIC PROCEDURE TestMenuItems()
+
+    LOCAL oView, oThemes
+    LOCAL aRefresh, aSep, aDark
+    LOCAL aItems
+
+    oView := HTMenu():new( "View" )
+    aRefresh := oView:addAction( "Refresh" )
+    aSep     := oView:addSeparator()
+    oThemes  := oView:addMenu( "Themes" )
+    aDark    := oThemes:addAction( "Dark" )
+
+    aItems := oView:items()
+    Assert( "HTMenu:items count (action, separator, submenu)", Len( aItems ) == 3 )
+    Assert( "HTMenu:items[1] is the action",     Len( aItems ) >= 1 .AND. aItems[ 1 ] == aRefresh )
+    Assert( "HTMenu:items[2] is the separator",  Len( aItems ) >= 2 .AND. aItems[ 2 ] == aSep )
+    Assert( "HTMenu:items[3] is the submenu",    Len( aItems ) >= 3 .AND. aItems[ 3 ] == oThemes )
+    Assert( "HTMenu:submenu title",              oThemes:title == "Themes" )
+    Assert( "HTMenu:actions() excludes submenu", Len( oView:actions() ) == 2 )
+
+    aItems := oThemes:items()
+    Assert( "HTMenu:submenu items",              Len( aItems ) == 1 .AND. aItems[ 1 ] == aDark )
 
 RETURN

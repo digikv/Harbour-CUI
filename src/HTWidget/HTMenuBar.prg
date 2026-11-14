@@ -16,10 +16,21 @@ PROTECTED:
     DATA FactiveItem     INIT 0
     DATA FmenuOpen       INIT .F.
     DATA FdropWinId      INIT NIL
+    DATA FdropRect       INIT NIL   /* { top, left, bottom, right } screen-absolute */
+
+    /* open submenu (an HTMenu entry of the dropdown) */
+    DATA FsubMenu        INIT NIL
+    DATA FsubItem        INIT 0
+    DATA FsubWinId       INIT NIL
+    DATA FsubRect        INIT NIL
 
     METHOD openMenu( nIndex )
     METHOD closeMenu()
+    METHOD openSubMenu( lSelectFirst )
+    METHOD closeSubMenu()
     METHOD paintDropdown( oMenu )
+    METHOD paintMenuWindow( oMenu, nWinId, nActive )
+    METHOD reselectParent()
     METHOD getMenus()
 
 PUBLIC:
@@ -219,7 +230,7 @@ METHOD FUNCTION handleKey( nKey ) CLASS HTMenuBar
     LOCAL nMenuCount := Len( aMenus )
     LOCAL i
     LOCAL parent
-    LOCAL aActions, nActionCount
+    LOCAL aItems, nItemCount, oItem
 
     IF nMenuCount = 0
         RETURN .F.
@@ -261,13 +272,61 @@ METHOD FUNCTION handleKey( nKey ) CLASS HTMenuBar
         RETURN .F.
     ENDIF
 
+    /* an open submenu owns the arrows, Enter and Esc */
+    IF ::FsubWinId != NIL
+        aItems := ::FsubMenu:items()
+
+        SWITCH nKey
+        CASE K_DOWN
+            ::FsubItem := ht_menuStep( aItems, ::FsubItem, 1 )
+            ::paintMenuWindow( ::FsubMenu, ::FsubWinId, ::FsubItem )
+            ::reselectParent()
+            EXIT
+        CASE K_UP
+            ::FsubItem := ht_menuStep( aItems, ::FsubItem, -1 )
+            ::paintMenuWindow( ::FsubMenu, ::FsubWinId, ::FsubItem )
+            ::reselectParent()
+            EXIT
+        CASE K_ENTER
+            IF ::FsubItem >= 1 .AND. ::FsubItem <= Len( aItems ) .AND. ;
+               ! ht_menuIsSub( aItems[ ::FsubItem ] )
+                oItem := aItems[ ::FsubItem ]
+                ::closeMenu()
+                ::FactiveMenu := 0
+                ::FactiveItem := 0
+                oItem:trigger()
+            ENDIF
+            EXIT
+        CASE K_LEFT
+        CASE K_ESC
+            /* back to the parent dropdown */
+            ::closeSubMenu()
+            EXIT
+        CASE K_RIGHT
+            EXIT
+        OTHERWISE
+            RETURN .F.
+        ENDSWITCH
+
+        parent := ::parent()
+        IF parent != NIL
+            parent:repaint()
+        ENDIF
+        RETURN .T.
+    ENDIF
+
     /* menu bar is active: handle navigation */
     IF ::FmenuOpen .AND. ::FactiveMenu >= 1 .AND. ::FactiveMenu <= nMenuCount
-        aActions := aMenus[ ::FactiveMenu ]:actions()
-        nActionCount := Len( aActions )
+        aItems := aMenus[ ::FactiveMenu ]:items()
+        nItemCount := Len( aItems )
     ELSE
-        aActions := {}
-        nActionCount := 0
+        aItems := {}
+        nItemCount := 0
+    ENDIF
+
+    /* the highlighted dropdown entry, if any */
+    IF ::FactiveItem >= 1 .AND. ::FactiveItem <= nItemCount
+        oItem := aItems[ ::FactiveItem ]
     ENDIF
 
     SWITCH nKey
@@ -279,6 +338,10 @@ METHOD FUNCTION handleKey( nKey ) CLASS HTMenuBar
         ENDIF
         EXIT
     CASE K_RIGHT
+        IF oItem != NIL .AND. ht_menuIsSub( oItem )
+            ::openSubMenu( .T. )
+            EXIT
+        ENDIF
         ::FactiveMenu := IIF( ::FactiveMenu >= nMenuCount, 1, ::FactiveMenu + 1 )
         IF ::FmenuOpen
             ::FactiveItem := 0
@@ -288,52 +351,31 @@ METHOD FUNCTION handleKey( nKey ) CLASS HTMenuBar
     CASE K_DOWN
         IF ::FmenuOpen
             /* navigate down in dropdown, skip separators */
-            ::FactiveItem++
-            DO WHILE ::FactiveItem <= nActionCount .AND. aActions[ ::FactiveItem ]:isSeparator
-                ::FactiveItem++
-            ENDDO
-            IF ::FactiveItem > nActionCount
-                ::FactiveItem := 1
-                DO WHILE ::FactiveItem <= nActionCount .AND. aActions[ ::FactiveItem ]:isSeparator
-                    ::FactiveItem++
-                ENDDO
-            ENDIF
+            ::FactiveItem := ht_menuStep( aItems, ::FactiveItem, 1 )
             ::paintDropdown( aMenus[ ::FactiveMenu ] )
-            /* reselect parent window */
-            parent := ::parent()
-            IF parent != NIL
-                wSelect( parent:windowId, .F. )
-            ENDIF
+            ::reselectParent()
         ELSE
             ::openMenu( ::FactiveMenu )
         ENDIF
         EXIT
     CASE K_UP
-        IF ::FmenuOpen .AND. nActionCount > 0
-            ::FactiveItem--
-            DO WHILE ::FactiveItem >= 1 .AND. aActions[ ::FactiveItem ]:isSeparator
-                ::FactiveItem--
-            ENDDO
-            IF ::FactiveItem < 1
-                ::FactiveItem := nActionCount
-                DO WHILE ::FactiveItem >= 1 .AND. aActions[ ::FactiveItem ]:isSeparator
-                    ::FactiveItem--
-                ENDDO
-            ENDIF
+        IF ::FmenuOpen .AND. nItemCount > 0
+            ::FactiveItem := ht_menuStep( aItems, ::FactiveItem, -1 )
             ::paintDropdown( aMenus[ ::FactiveMenu ] )
-            parent := ::parent()
-            IF parent != NIL
-                wSelect( parent:windowId, .F. )
-            ENDIF
+            ::reselectParent()
         ENDIF
         EXIT
     CASE K_ENTER
-        IF ::FmenuOpen .AND. ::FactiveItem >= 1 .AND. ::FactiveItem <= nActionCount
-            /* trigger the selected action */
-            aActions[ ::FactiveItem ]:trigger()
-            ::closeMenu()
-            ::FactiveMenu := 0
-            ::FactiveItem := 0
+        IF ::FmenuOpen .AND. oItem != NIL
+            IF ht_menuIsSub( oItem )
+                ::openSubMenu( .T. )
+            ELSE
+                /* close first, so the action runs on a clean screen */
+                ::closeMenu()
+                ::FactiveMenu := 0
+                ::FactiveItem := 0
+                oItem:trigger()
+            ENDIF
         ELSEIF ! ::FmenuOpen
             ::openMenu( ::FactiveMenu )
         ELSE
@@ -364,7 +406,7 @@ METHOD PROCEDURE openMenu( nIndex ) CLASS HTMenuBar
 
     LOCAL aMenus := ::getMenus()
     LOCAL oMenu
-    LOCAL nActions, nMaxWidth
+    LOCAL aItems, nMaxWidth
     LOCAL nDropTop, nDropLeft, nDropBottom, nDropRight
     LOCAL itm, nMenuLeft
     LOCAL nOldShadow
@@ -379,17 +421,11 @@ METHOD PROCEDURE openMenu( nIndex ) CLASS HTMenuBar
     oMenu := aMenus[ nIndex ]
     ::FmenuOpen := .T.
 
-    /* calculate dropdown position */
-    nActions := 0
-    nMaxWidth := 10
-    FOR EACH itm IN oMenu:actions()
-        nActions++
-        IF itm:text != NIL
-            nMaxWidth := Max( nMaxWidth, Len( itm:text ) + 4 )
-        ENDIF
-    NEXT
+    /* calculate dropdown size: actions, separators and submenus */
+    aItems := oMenu:items()
+    nMaxWidth := ht_menuWidth( aItems )
 
-    IF nActions = 0
+    IF Len( aItems ) = 0
         RETURN
     ENDIF
 
@@ -402,7 +438,7 @@ METHOD PROCEDURE openMenu( nIndex ) CLASS HTMenuBar
 
     nDropTop    := wRow() + 2
     nDropLeft   := wCol() + nMenuLeft
-    nDropBottom := nDropTop + nActions + 1
+    nDropBottom := nDropTop + Len( aItems ) + 1
     nDropRight  := nDropLeft + nMaxWidth
 
     nOldShadow := wSetShadow( HT_SHADOW_ATTR )
@@ -410,63 +446,173 @@ METHOD PROCEDURE openMenu( nIndex ) CLASS HTMenuBar
     wSetShadow( nOldShadow )
     wBox( NIL, HTTheme():getColor( HT_CLR_MENU_ITEM ) )
     wFormat()
+    ::FdropRect := { nDropTop, nDropLeft, nDropBottom, nDropRight }
 
     ::paintDropdown( oMenu )
 
 RETURN
 
-/** Closes the currently open dropdown menu and restores the parent window. */
+/** Closes the open dropdown (and its submenu) and restores the parent window. */
 METHOD PROCEDURE closeMenu() CLASS HTMenuBar
 
-    LOCAL parent
+    ::closeSubMenu()
 
     IF ::FdropWinId != NIL
         wClose( ::FdropWinId )
         ::FdropWinId := NIL
+        ::FdropRect  := NIL
     ENDIF
 
     ::FmenuOpen := .F.
 
-    parent := ::parent()
-    IF parent != NIL .AND. parent:isDerivedFrom( "HTWidget" )
-        wSelect( parent:windowId, .F. )
+    ::reselectParent()
+
+RETURN
+
+/** Opens the submenu of the highlighted dropdown entry beside the dropdown
+ * (left of it when there is no room on the right).
+ * @param lSelectFirst .T. highlights the first entry (keyboard opening)
+ */
+METHOD PROCEDURE openSubMenu( lSelectFirst ) CLASS HTMenuBar
+
+    LOCAL aMenus := ::getMenus()
+    LOCAL aItems, aSubItems
+    LOCAL oSub
+    LOCAL nWidth
+    LOCAL nTop, nLeft, nBottom, nRight
+    LOCAL nOldShadow
+
+    IF ::FdropWinId = NIL .OR. ::FactiveMenu < 1 .OR. ::FactiveMenu > Len( aMenus )
+        RETURN
+    ENDIF
+
+    aItems := aMenus[ ::FactiveMenu ]:items()
+    IF ::FactiveItem < 1 .OR. ::FactiveItem > Len( aItems ) .OR. ;
+       ! ht_menuIsSub( aItems[ ::FactiveItem ] )
+        RETURN
+    ENDIF
+
+    oSub := aItems[ ::FactiveItem ]
+    aSubItems := oSub:items()
+
+    ::closeSubMenu()
+
+    IF Len( aSubItems ) = 0
+        RETURN
+    ENDIF
+
+    nWidth  := ht_menuWidth( aSubItems )
+    /* box top one row above the entry, so the first item lines up with it */
+    nTop    := ::FdropRect[ 1 ] + ::FactiveItem - 1
+    nLeft   := ::FdropRect[ 4 ] + 1
+    nBottom := nTop + Len( aSubItems ) + 1
+    nRight  := nLeft + nWidth
+
+    /* keep the box and its shadow (1 row, 2 cols) on screen */
+    IF nRight + 2 > ht_ScreenMaxCol()
+        nRight := ::FdropRect[ 2 ] - 1
+        nLeft  := nRight - nWidth
+    ENDIF
+    IF nBottom + 1 > ht_ScreenMaxRow()
+        nTop    -= nBottom + 1 - ht_ScreenMaxRow()
+        nBottom := nTop + Len( aSubItems ) + 1
+    ENDIF
+    nTop  := Max( nTop, 0 )
+    nLeft := Max( nLeft, 0 )
+
+    nOldShadow := wSetShadow( HT_SHADOW_ATTR )
+    ::FsubWinId := wOpen( nTop, nLeft, nBottom, nRight, .T. )
+    wSetShadow( nOldShadow )
+    wBox( NIL, HTTheme():getColor( HT_CLR_MENU_ITEM ) )
+    wFormat()
+
+    ::FsubMenu := oSub
+    ::FsubRect := { nTop, nLeft, nBottom, nRight }
+    ::FsubItem := IIF( HB_ISLOGICAL( lSelectFirst ) .AND. lSelectFirst, ht_menuStep( aSubItems, 0, 1 ), 0 )
+
+    ::paintMenuWindow( oSub, ::FsubWinId, ::FsubItem )
+    ::reselectParent()
+
+RETURN
+
+/** Closes the open submenu, if any (the parent dropdown stays open). */
+METHOD PROCEDURE closeSubMenu() CLASS HTMenuBar
+
+    IF ::FsubWinId != NIL
+        wClose( ::FsubWinId )
+        ::FsubWinId := NIL
+        ::FsubRect  := NIL
+        ::FsubMenu  := NIL
+        ::FsubItem  := 0
     ENDIF
 
 RETURN
 
 /** Renders the dropdown menu items with highlight on the active item.
- * @param oMenu HTMenu whose actions to display
+ * @param oMenu HTMenu whose entries to display
  */
 METHOD PROCEDURE paintDropdown( oMenu ) CLASS HTMenuBar
+
+    IF ::FdropWinId != NIL
+        ::paintMenuWindow( oMenu, ::FdropWinId, ::FactiveItem )
+    ENDIF
+
+RETURN
+
+/** Paints the entries of oMenu inside an open menu window (its box is
+ * already drawn). Submenu entries end with a ► marker.
+ * @param oMenu   HTMenu whose entries to display
+ * @param nWinId  window opened for it
+ * @param nActive highlighted entry (0 = none)
+ */
+METHOD PROCEDURE paintMenuWindow( oMenu, nWinId, nActive ) CLASS HTMenuBar
 
     LOCAL itm
     LOCAL nRow := 0
     LOCAL nMaxCol
     LOCAL nIdx := 0
-    LOCAL cColor
+    LOCAL cColor, cText
+    LOCAL aPaint
 
-    IF ::FdropWinId = NIL
-        RETURN
-    ENDIF
+    /* a window under another one (e.g. under a submenu's shadow) paints on
+       its own layer instead of over the window above */
+    aPaint := ht_winPaintBegin( nWinId )
 
-    wSelect( ::FdropWinId, .T. )
+    wSelect( nWinId, .F. )
     wFormat()
     wFormat( 1, 1, 1, 1 )
 
     nMaxCol := MaxCol()
 
-    FOR EACH itm IN oMenu:actions()
+    FOR EACH itm IN oMenu:items()
         nIdx++
-        IF itm:isSeparator
+        IF ht_menuIsSep( itm )
             DispOutAt( nRow, 0, Replicate( e"\xC4", nMaxCol + 1 ), HTTheme():getColor( HT_CLR_MENU_SEP ) )
         ELSE
-            cColor := IIF( nIdx = ::FactiveItem, HTTheme():getColor( HT_CLR_MENU_ITEM_SEL ), HTTheme():getColor( HT_CLR_MENU_ITEM ) )
-            DispOutAt( nRow, 0, PadR( " " + itm:text, nMaxCol + 1 ), cColor )
+            cColor := IIF( nIdx = nActive, HTTheme():getColor( HT_CLR_MENU_ITEM_SEL ), HTTheme():getColor( HT_CLR_MENU_ITEM ) )
+            cText  := PadR( " " + ht_menuText( itm ), nMaxCol + 1 )
+            IF ht_menuIsSub( itm )
+                cText := Left( cText, nMaxCol - 1 ) + Chr( 16 ) + " "   /* ► */
+            ENDIF
+            DispOutAt( nRow, 0, cText, cColor )
         ENDIF
         nRow++
     NEXT
 
     wFormat()
+
+    ht_winPaintEnd( nWinId, aPaint, .F. )
+
+RETURN
+
+/** Makes the menu bar's window the selected (keyboard) window again. */
+METHOD PROCEDURE reselectParent() CLASS HTMenuBar
+
+    LOCAL parent := ::parent()
+
+    IF parent != NIL .AND. parent:isDerivedFrom( "HTWidget" )
+        wSelect( parent:windowId, .F. )
+    ENDIF
 
 RETURN
 
@@ -522,9 +668,8 @@ RETURN .F.
  */
 METHOD FUNCTION handleMouseClick( nAbsRow, nAbsCol ) CLASS HTMenuBar
 
-    LOCAL aMenus, oMenu, aActions
+    LOCAL aMenus, aItems, oItem
     LOCAL nDropRow, nDropCol
-    LOCAL nDropTop, nDropLeft, nDropBottom, nDropRight
     LOCAL nItemIdx
     LOCAL parent
 
@@ -532,32 +677,56 @@ METHOD FUNCTION handleMouseClick( nAbsRow, nAbsCol ) CLASS HTMenuBar
         RETURN .F.
     ENDIF
 
-    /* get dropdown window bounds */
-    wSelect( ::FdropWinId, .F. )
-    nDropTop    := wRow()
-    nDropLeft   := wCol()
-    nDropBottom := nDropTop + MaxRow()
-    nDropRight  := nDropLeft + MaxCol()
+    parent := ::parent()
 
-    /* check if click is inside the dropdown */
-    IF nAbsRow >= nDropTop + 1 .AND. nAbsRow <= nDropBottom - 1 .AND. ;
-       nAbsCol >= nDropLeft + 1 .AND. nAbsCol <= nDropRight - 1
-
-        nDropRow := nAbsRow - nDropTop - 1
-        aMenus := ::getMenus()
-        oMenu := aMenus[ ::FactiveMenu ]
-        aActions := oMenu:actions()
-
-        nItemIdx := nDropRow + 1
-        IF nItemIdx >= 1 .AND. nItemIdx <= Len( aActions ) .AND. ;
-           ! aActions[ nItemIdx ]:isSeparator
-
-            aActions[ nItemIdx ]:trigger()
+    /* the submenu is on top: check it first */
+    IF ::FsubWinId != NIL .AND. ht_menuInside( ::FsubRect, nAbsRow, nAbsCol )
+        aItems   := ::FsubMenu:items()
+        nItemIdx := nAbsRow - ::FsubRect[ 1 ]
+        IF nItemIdx >= 1 .AND. nItemIdx <= Len( aItems ) .AND. ;
+           ! ht_menuIsSep( aItems[ nItemIdx ] ) .AND. ! ht_menuIsSub( aItems[ nItemIdx ] )
+            oItem := aItems[ nItemIdx ]
             ::closeMenu()
             ::FactiveMenu := 0
             ::FactiveItem := 0
+            oItem:trigger()
+            IF parent != NIL .AND. parent:isDerivedFrom( "HTWidget" )
+                parent:repaint()
+            ENDIF
+        ENDIF
+        RETURN .T.  /* separator or border — consume */
+    ENDIF
 
-            parent := ::parent()
+    /* check if click is inside the dropdown */
+    IF ht_menuInside( ::FdropRect, nAbsRow, nAbsCol )
+
+        aMenus   := ::getMenus()
+        aItems   := aMenus[ ::FactiveMenu ]:items()
+        nItemIdx := nAbsRow - ::FdropRect[ 1 ]
+
+        IF nItemIdx >= 1 .AND. nItemIdx <= Len( aItems ) .AND. ;
+           ! ht_menuIsSep( aItems[ nItemIdx ] )
+
+            oItem := aItems[ nItemIdx ]
+
+            IF ht_menuIsSub( oItem )
+                /* click on a submenu entry toggles its submenu */
+                IF ::FsubWinId != NIL .AND. ::FactiveItem == nItemIdx
+                    ::closeSubMenu()
+                ELSE
+                    ::FactiveItem := nItemIdx
+                    ::paintDropdown( aMenus[ ::FactiveMenu ] )
+                    ::openSubMenu( .F. )
+                ENDIF
+                ::reselectParent()
+                RETURN .T.
+            ENDIF
+
+            ::closeMenu()
+            ::FactiveMenu := 0
+            ::FactiveItem := 0
+            oItem:trigger()
+
             IF parent != NIL .AND. parent:isDerivedFrom( "HTWidget" )
                 parent:repaint()
             ENDIF
@@ -588,3 +757,65 @@ METHOD FUNCTION handleMouseClick( nAbsRow, nAbsCol ) CLASS HTMenuBar
     ENDIF
 
 RETURN .T.
+
+/* ---- dropdown entry helpers (entries are HTAction or HTMenu) ---- */
+
+/** .T. when the entry is a submenu. */
+STATIC FUNCTION ht_menuIsSub( itm )
+RETURN itm:isDerivedFrom( "HTMenu" )
+
+/** .T. when the entry is a separator action. */
+STATIC FUNCTION ht_menuIsSep( itm )
+RETURN ! ht_menuIsSub( itm ) .AND. itm:isSeparator()
+
+/** Display text of an entry: action text or submenu title. */
+STATIC FUNCTION ht_menuText( itm )
+
+    LOCAL cText := IIF( ht_menuIsSub( itm ), itm:title, itm:text )
+
+RETURN IIF( HB_ISSTRING( cText ), cText, "" )
+
+/** Next selectable (non-separator) entry from nCur in direction nStep,
+ * wrapping around. nCur = 0 starts before the first entry.
+ * @return entry index, or 0 when there is none
+ */
+STATIC FUNCTION ht_menuStep( aItems, nCur, nStep )
+
+    LOCAL nLen := Len( aItems )
+    LOCAL n := nCur
+    LOCAL i
+
+    FOR i := 1 TO nLen
+        n += nStep
+        IF n > nLen
+            n := 1
+        ELSEIF n < 1
+            n := nLen
+        ENDIF
+        IF ! ht_menuIsSep( aItems[ n ] )
+            RETURN n
+        ENDIF
+    NEXT
+
+RETURN 0
+
+/** Box width (right - left) for a dropdown listing aItems; submenu
+ * entries get room for the ► marker. */
+STATIC FUNCTION ht_menuWidth( aItems )
+
+    LOCAL nWidth := 10
+    LOCAL itm
+
+    FOR EACH itm IN aItems
+        IF ! ht_menuIsSep( itm )
+            nWidth := Max( nWidth, Len( ht_menuText( itm ) ) + IIF( ht_menuIsSub( itm ), 6, 4 ) )
+        ENDIF
+    NEXT
+
+RETURN nWidth
+
+/** .T. when the screen cell is inside the box (border excluded). */
+STATIC FUNCTION ht_menuInside( aRect, nRow, nCol )
+RETURN aRect != NIL .AND. ;
+    nRow >= aRect[ 1 ] + 1 .AND. nRow <= aRect[ 3 ] - 1 .AND. ;
+    nCol >= aRect[ 2 ] + 1 .AND. nCol <= aRect[ 4 ] - 1

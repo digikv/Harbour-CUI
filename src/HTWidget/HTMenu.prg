@@ -17,6 +17,7 @@ PUBLIC:
     METHOD addAction( ... )
     METHOD addMenu()
     METHOD addSeparator()
+    METHOD items()
     METHOD menuAction()
     METHOD paintEvent( event )
     METHOD setTitle( title ) INLINE ::Ftitle := title
@@ -172,6 +173,32 @@ METHOD FUNCTION addSeparator() CLASS HTMenu
     ::addAction( action )
 
 RETURN action
+
+/** Entries shown in this menu's dropdown, in the order they were added:
+ * actions, separators and submenus (HTMenu). Actions added from elsewhere
+ * (addAction( oAction ) with another parent) follow at the end.
+ * @return Array of HTAction / HTMenu
+ */
+METHOD FUNCTION items() CLASS HTMenu
+
+    LOCAL aItems := {}
+    LOCAL aActions := ::actions()
+    LOCAL itm
+
+    FOR EACH itm IN ::children
+        IF itm:isDerivedFrom( "HTMenu" ) .OR. ;
+           ( itm:isDerivedFrom( "HTAction" ) .AND. AScan( aActions, {| a | a == itm } ) > 0 )
+            AAdd( aItems, itm )
+        ENDIF
+    NEXT
+
+    FOR EACH itm IN aActions
+        IF AScan( aItems, {| a | a == itm } ) == 0
+            AAdd( aItems, itm )
+        ENDIF
+    NEXT
+
+RETURN aItems
 
 /** Returns the action that represents this menu in a parent menu bar.
  * @return HTAction or NIL
