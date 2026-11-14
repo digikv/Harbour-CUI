@@ -13,9 +13,10 @@ hbmk2 hbtui.hbp
 
 # Build a sample
 cd samples/showcase && hbmk2 showcase.prg hbmk.hbm
+cd samples/window && hbmk2 window_01.prg hbmk.hbm   # source is window_01.prg
 
 # Run tests (all headless, exit 0 = pass)
-cd tests && for t in test_basic test_layout test_theme test_widgets test_browse test_get; do hbmk2 $t.prg hbmk.hbm && ./$t; done
+cd tests && for t in test_basic test_eventloop test_layout test_theme test_widgets test_browse test_get test_integration; do hbmk2 $t.prg hbmk.hbm && ./$t; done
 ```
 
 Requires: Harbour compiler at `~/git/core`.
@@ -173,6 +174,11 @@ samples/          Demo applications (human-facing, require a display)
   progress/       Animated HTProgressBar with scheduleRepeat()
   theme/          Theme switching demo (4 themes, F-keys + buttons)
   toast/          HTToast non-blocking notifications (4 styles, stacking)
+  window/         window_01.prg: overlapping floating windows over an HTMainWindow
+                  shell — "Dialog" (2 HTGets + OK/Cancel), "Products" and
+                  "Customers" (HTBrowse grids). Exercises the window stack:
+                  drag/resize/maximize/minimize, click-to-raise, shadows,
+                  Ctrl+F6 window cycling, Enter-to-next-field, cursor restore
   showcase/       Full controls demo with all features
 tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_basic      HTPoint, HTSize, all HTEvent subclasses
@@ -181,7 +187,10 @@ tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_theme      HTTheme singleton, all 4 themes, invalid index fallback
   test_widgets    HTLabel, HTLineEdit, HTCheckBox, HTPushButton, HTListBox,
                   HTComboBox, HTCheckList, HTSpinner, HTProgressBar, HTScrollBar,
-                  HTTextEdit, HTContextMenu
+                  HTTextEdit, HTContextMenu, HTMenu:items() (submenu order)
   test_browse     HTBrowse column management, navigation blocks, callbacks
-  test_get        HTGet setup/getValue/setValue, label/picture/width, readOnly
+  test_get        HTGet setup/getValue/setValue, label/picture/width, readOnly,
+                  Enter moves to the next field (VALID rejection keeps focus)
+  test_integration Focus cycle (flat + nested layouts), layout geometry,
+                  childAt recursion, repaintChild delegation
 ```
