@@ -366,7 +366,9 @@ FUNCTION wSelect( nId, lBringToFront )
         lBringToFront := .T.
     ENDIF
 
-    IF lBringToFront
+    /* the desktop (0) is the stack base: selecting it to paint must never
+       lift it above the windows, or it swallows every click and key */
+    IF lBringToFront .AND. nId != 0
         i := AScan( s_aZOrder, nId )
         IF i > 0
             hb_ADel( s_aZOrder, i, .T. )
@@ -1116,12 +1118,26 @@ RETURN 0
  * @return state for ht_winPaintEnd(): { lCovered, lLayerRestored }
  */
 FUNCTION ht_winPaintBegin( nId )
-    LOCAL hWin
+    LOCAL hWin, hOther
+    LOCAL i, nPos, nOther
 
     hWin := ht_winGet( nId )
     IF hWin == NIL .OR. nId == 0 .OR. hWin[ "hidden" ] .OR. ! ht_winCovered( nId )
         RETURN { .F., .F. }
     ENDIF
+
+    /* the windows above get re-blitted afterwards from their layers. Popups
+       (menus, combo lists, message boxes) paint straight to the screen and
+       may have no layer yet, so refresh every exposed one from the screen,
+       which is exact for an uncovered window */
+    nPos := AScan( s_aZOrder, nId )
+    FOR i := nPos + 1 TO Len( s_aZOrder )
+        nOther := s_aZOrder[ i ]
+        hOther := ht_winGet( nOther )
+        IF nOther != 0 .AND. hOther != NIL .AND. ! hOther[ "hidden" ] .AND. ! ht_winCovered( nOther )
+            ht_winCapture( nOther )
+        ENDIF
+    NEXT
 
     DispBegin()
 
@@ -1255,3 +1271,4 @@ FUNCTION ht_windowAtMousePos()
     LOCAL nRow := ht_mRow( .T. )
     LOCAL nCol := ht_mCol( .T. )
 RETURN ht_winAtPos( nRow, nCol )
+
