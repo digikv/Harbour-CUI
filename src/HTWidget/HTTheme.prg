@@ -62,8 +62,8 @@ METHOD PROCEDURE loadDefault() CLASS HTTheme
     ::FaColors[ HT_CLR_GET_FOCUSED      ] := "0/14"
     ::FaColors[ HT_CLR_GET_READONLY     ] := "8/15"
     ::FaColors[ HT_CLR_GET_LABEL        ] := "0/9"
-    ::FaColors[ HT_CLR_BUTTON_NORMAL    ] := "15/8"   /* white on dark gray */
-    ::FaColors[ HT_CLR_BUTTON_FOCUSED   ] := "0/7"    /* black on light gray when focused */
+    ::FaColors[ HT_CLR_BUTTON_NORMAL    ] := "15/1"   /* white on blue */
+    ::FaColors[ HT_CLR_BUTTON_FOCUSED   ] := "0/14"   /* black on yellow when focused */
     ::FaColors[ HT_CLR_CHECK_NORMAL     ] := "0/9"
     ::FaColors[ HT_CLR_CHECK_FOCUSED    ] := "15/1"
     ::FaColors[ HT_CLR_LIST_NORMAL      ] := "0/15"

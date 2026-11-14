@@ -83,7 +83,7 @@ METHOD FUNCTION showDialog( cTitle, cMessage, cColor, lQuestion ) CLASS HTMessag
     nMsgWidth  := Max( Len( cMessage ), Len( cTitle ) + 4 )
     nMsgWidth  := Max( nMsgWidth, IIF( lQuestion, 20, 10 ) )
     nWinWidth  := nMsgWidth + 4
-    nWinHeight := 6   /* title + pad + message + pad + Digi button (2 rows) */
+    nWinHeight := 5   /* title + pad + message + pad + buttons */
 
     /* center on screen */
     nTop  := Int( ( ht_ScreenMaxRow() + 1 - nWinHeight ) / 2 )
@@ -102,13 +102,13 @@ METHOD FUNCTION showDialog( cTitle, cMessage, cColor, lQuestion ) CLASS HTMessag
 
     DispOutAt( 2, 1, PadR( cMessage, nWinWidth - 2 ), cColor )
 
-    /* Digi-style buttons (buttons.prg): padded face + ▀/▄ shadow */
+    /* flat padded buttons (same as HTPushButton) */
     IF lQuestion
-        nBtnCol := Int( ( nWinWidth - 22 ) / 2 )
+        nBtnCol := Int( ( nWinWidth - 20 ) / 2 )
         ht_paintDigiButton( 4, nBtnCol, "OK", .T. )
-        ht_paintDigiButton( 4, nBtnCol + 11, "Cancel", .F. )
+        ht_paintDigiButton( 4, nBtnCol + 10, "Cancel", .F. )
     ELSE
-        nBtnCol := Int( ( nWinWidth - 8 ) / 2 )
+        nBtnCol := Int( ( nWinWidth - 6 ) / 2 )
         ht_paintDigiButton( 4, nBtnCol, "OK", .T. )
     ENDIF
 
@@ -132,12 +132,12 @@ METHOD FUNCTION showDialog( cTitle, cMessage, cColor, lQuestion ) CLASS HTMessag
             ENDIF
         ELSEIF event:className() == "HTMOUSEEVENT" .AND. event:nKey = K_LBUTTONDOWN
             wSelect( nWinId, .T. )
-            IF mRow() = 4 .OR. mRow() = 5
+            IF mRow() = 4
                 IF lQuestion
                     IF mCol() >= nBtnCol .AND. mCol() < nBtnCol + 6
                         nResult := HT_DIALOG_ACCEPTED
                         EXIT
-                    ELSEIF mCol() >= nBtnCol + 11 .AND. mCol() < nBtnCol + 21
+                    ELSEIF mCol() >= nBtnCol + 10 .AND. mCol() < nBtnCol + 20
                         nResult := HT_DIALOG_REJECTED
                         EXIT
                     ENDIF

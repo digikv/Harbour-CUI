@@ -21,20 +21,22 @@
 PROCEDURE Main()
 
     LOCAL app, win, btn
+    LOCAL nW, nH, nCW
 
-    SetMode( 20, 55 )
+    ht_cuiSetupDisplay( 40, 131 )
+
+    nW  := MaxCol() + 1
+    nH  := MaxRow() + 1
+    nCW := nW
+    HB_SYMBOL_UNUSED( nH )
 
     app := HTApplication():new()
-    app:setDebug( .T. )
 
     win := HTMainWindow():new()
-    win:setWindowTitle( " Dialog Demo " )
-    win:move( 1, 1 )
-    win:resize( 50, 16 )
+    win:setWindowTitle( "Dialog Demo" )
 
     HTLabel():new( "Click a button to open a dialog:", win ):move( 2, 2 )
 
-    /* --- Information button --- */
     btn := HTPushButton():new( "Information", win )
     btn:move( 2, 4 )
     btn:onClicked := {|| ;
@@ -42,18 +44,16 @@ PROCEDURE Main()
         HTToast():show( "Info dialog closed", 2000, HT_CLR_TOAST_INFO ) ;
     }
 
-    /* --- Question button --- */
     btn := HTPushButton():new( "Question", win )
     btn:move( 18, 4 )
     btn:onClicked := {|| ShowQuestion() }
 
-    /* --- Custom dialog button --- */
     btn := HTPushButton():new( "Custom Dialog", win )
     btn:move( 32, 4 )
     btn:onClicked := {|| ShowCustomDialog() }
 
-    /* --- Separator --- */
     HTSeparator():new( win ):move( 1, 7 )
+    HTSeparator():new( win ):resize( nCW - 2, 1 )
 
     HTLabel():new( "Results shown as toast notifications", win ):move( 2, 9 )
 
@@ -81,12 +81,13 @@ STATIC PROCEDURE ShowCustomDialog()
     LOCAL dlg, oLbl, nResult
 
     dlg := HTDialog():new()
-    dlg:setWindowTitle( " Custom Dialog " )
-    dlg:move( 10, 4 )
-    dlg:resize( 30, 8 )
+    dlg:setWindowTitle( "Custom Dialog" )
+    dlg:resize( 40, 10 )
+    dlg:move( Int( ( ht_ScreenMaxCol() + 1 - 40 ) / 2 ), ;
+              Int( ( ht_ScreenMaxRow() + 1 - 10 ) / 2 ) )
 
     oLbl := HTLabel():new( "Choose an action:", dlg )
-    oLbl:setGeometry( 2, 2, 20, 1 )
+    oLbl:setGeometry( 2, 2, 30, 1 )
     dlg:addButtonBar( "OK", "Cancel" )
 
     nResult := dlg:exec()
