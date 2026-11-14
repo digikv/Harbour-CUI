@@ -6,6 +6,7 @@
 
 #include "hbtui.ch"
 #include "inkey.ch"
+#include "hbgtinfo.ch"
 
 STATIC s_lDebug := .F.
 STATIC s_aFormatStack := {}
@@ -25,6 +26,7 @@ PUBLIC:
 
     CONSTRUCTOR new()
 
+    METHOD activateNextWindow( nStep )
     METHOD activeWindow()
     METHOD addTopLevelWindow( windowId, widget )
     METHOD removeTopLevelWindow( windowId )
@@ -74,6 +76,51 @@ RETURN
  */
 METHOD FUNCTION activeWindow() CLASS HTApplication
 RETURN ::getTopLevelWindowFromWindowId( wSelect() )
+
+/** Activates the next (nStep = 1) or previous (nStep = -1) floating window,
+ * in creation order, wrapping around: brings it to the front and makes it
+ * the keyboard target. The fullscreen HTMainWindow shell is not cycled.
+ * @param nStep 1 = next, -1 = previous
+ * @return .T. if a window was activated
+ */
+METHOD FUNCTION activateNextWindow( nStep ) CLASS HTApplication
+
+    LOCAL aIds := {}
+    LOCAL nId, nPos
+    LOCAL window
+
+    FOR EACH nId IN hb_hKeys( ::FtopLevelWindows )
+        window := ::FtopLevelWindows[ nId ]
+        IF nId > 0 .AND. window != NIL .AND. window:isDerivedFrom( "HTWidget" ) .AND. ;
+           ! window:isDerivedFrom( "HTMainWindow" ) .AND. ht_winIsShown( nId )
+            AAdd( aIds, nId )
+        ENDIF
+    NEXT
+
+    IF Len( aIds ) = 0
+        RETURN .F.
+    ENDIF
+
+    ASort( aIds )
+
+    nPos := AScan( aIds, wSelect() )
+    IF nPos = 0
+        /* active window is the shell (or none): start at either end */
+        nPos := IIF( nStep > 0, 1, Len( aIds ) )
+    ELSE
+        nPos += nStep
+        IF nPos > Len( aIds )
+            nPos := 1
+        ELSEIF nPos < 1
+            nPos := Len( aIds )
+        ENDIF
+    ENDIF
+
+    window := ::FtopLevelWindows[ aIds[ nPos ] ]
+    window:raise()
+    wSelect( aIds[ nPos ], .F. )
+
+RETURN .T.
 
 /** Registers a top-level window by its CT window handle.
  * @param windowId Numeric CT window handle
@@ -157,6 +204,10 @@ METHOD FUNCTION exec() CLASS HTApplication
                         event:mouseCol := event:mouseAbsCol - wCol()
                         window:addEvent( event )
                     ENDIF
+                ELSEIF event:key == K_CTRL_F6
+                    /* Ctrl+F6 / Ctrl+Shift+F6: next / previous window (MDI
+                       style). Alt+Tab never reaches the app — Windows uses it. */
+                    ::activateNextWindow( IIF( hb_bitAnd( hb_gtInfo( HB_GTI_KBDSHIFTS ), HB_GTI_KBD_SHIFT ) != 0, -1, 1 ) )
                 ELSE
                     /* keyboard events go to active window */
                     ::queueEvent( event )

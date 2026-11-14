@@ -21,6 +21,9 @@ STATIC s_nAmount
 
 CLASS DemoWindow FROM HTWidget
 
+PROTECTED:
+    DATA FaLastGeom INIT NIL   /* { x, y, w, h } last shown in the status bar */
+
 PUBLIC:
     METHOD new()
     METHOD mouseEvent( eventMouse )
@@ -36,6 +39,10 @@ METHOD new() CLASS DemoWindow
 RETURN self
 
 METHOD PROCEDURE mouseEvent( eventMouse ) CLASS DemoWindow
+    /* baseline before the first event, so a plain click reports nothing */
+    IF ::FaLastGeom == NIL
+        ::FaLastGeom := { ::Fx, ::Fy, ::Fwidth, ::Fheight }
+    ENDIF
     ::super:mouseEvent( eventMouse )
     ::reportGeom()
 RETURN
@@ -50,8 +57,19 @@ METHOD PROCEDURE maximizeEvent( maximizeEvent ) CLASS DemoWindow
     ::reportGeom()
 RETURN
 
-/** Push this window's geometry to the main-window status bar. */
+/** Push this window's geometry to the main-window status bar, only when it
+ * changed (move, resize, maximize, minimize). Reporting on every mouse
+ * event would overwrite messages such as the OK button's right away. */
 METHOD PROCEDURE reportGeom() CLASS DemoWindow
+
+    LOCAL aGeom := { ::Fx, ::Fy, ::Fwidth, ::Fheight }
+
+    IF ::FaLastGeom != NIL .AND. ;
+       aGeom[ 1 ] == ::FaLastGeom[ 1 ] .AND. aGeom[ 2 ] == ::FaLastGeom[ 2 ] .AND. ;
+       aGeom[ 3 ] == ::FaLastGeom[ 3 ] .AND. aGeom[ 4 ] == ::FaLastGeom[ 4 ]
+        RETURN
+    ENDIF
+    ::FaLastGeom := aGeom
 
     ShowStatus( AllTrim( ::FwindowTitle ) + ;
         "  top=" + hb_ntos( ::Fy ) + ;
@@ -77,8 +95,8 @@ PROCEDURE Main()
     main:setWindowTitle( "Window Demo" )
     main:show()
 
-    HTLabel():new( "Drag title = move   / = resize   # = maximize   _ = minimize   x = close", ;
-        main ):move( 2, 1 )
+    HTLabel():new( "Drag title = move   / = resize   # = maximize   _ = minimize   x = close" + ;
+        "   Ctrl+F6 = next window", main ):move( 2, 1 )
 
     s_oMainStatus := HTStatusBar():new( main )
     s_oMainStatus:setGeometry( 0, Max( 0, main:height - 2 ), main:width, 1 )

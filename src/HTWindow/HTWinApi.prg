@@ -1249,6 +1249,11 @@ FUNCTION ht_winSetCursor( nId, nRow, nCol )
 
 RETURN .T.
 
+/** .T. when window nId is open and not hidden. */
+FUNCTION ht_winIsShown( nId )
+    LOCAL hWin := ht_winGet( nId )
+RETURN hWin != NIL .AND. ! hWin[ "hidden" ]
+
 /** Hit-test: returns window id at screen-absolute row/col (topmost wins). */
 FUNCTION ht_winAtPos( nRow, nCol )
     LOCAL i, nId, hWin

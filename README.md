@@ -36,8 +36,11 @@ Older standalone CUI helpers (`win.prg`, `cui.ch`) are kept under [`legacy/`](le
 
 - Title-bar chrome: drag the title to move, `/` resizes (content repaints live while the mouse button is held), `#` maximizes, `_` minimizes, `x` closes.
 - A click anywhere in a window brings it to the front (`widget:raise()`). The fullscreen `HTMainWindow` stays underneath as the application shell, and closing it ends the application.
+- Ctrl+F6 / Ctrl+Shift+F6 activate the next / previous window from the keyboard (Alt+Tab is taken by Windows itself).
 - Drop shadows follow every move and resize. A window covered by others paints into its own layer and never over the windows above it.
 - The text cursor returns to the focused editor (`HTGet`, `HTLineEdit`, `HTTextEdit`) after any repaint, also when switching between windows. A click past the typed text in an `HTGet` lands right after it.
+- In `HTGet` and `HTLineEdit`, Enter moves to the next field like Tab (Clipper READ style); a failing VALID keeps the focus.
+- Window repaints are buffered (`DispBegin`/`DispEnd`) and a focus change repaints only the two affected controls, so clicks don't make the screen flicker.
 
 **Theme system** — `HTTheme` singleton with multiple built-in themes (Default, Dark, High Contrast, Mono).
 
