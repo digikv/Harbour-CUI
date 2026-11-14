@@ -190,6 +190,8 @@ METHOD PROCEDURE run( oTarget, bCondition ) CLASS HTEventLoop
         IF event != NIL
             event:setWidget( oTarget )
             oTarget:event( event )
+            /* keep the hardware cursor on the focused editor */
+            HTApplication():syncCursor()
         ENDIF
 
     ENDDO

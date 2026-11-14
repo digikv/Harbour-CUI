@@ -34,6 +34,7 @@ PUBLIC:
     METHOD quit() INLINE ::Fexecute := .F.
     METHOD setDebug( lEnable )
     METHOD setDisplaySize( nRows, nCols )
+    METHOD syncCursor()
 
     METHOD desktop()   INLINE ::Fdesktop  /* explicit INLINE: avoids BLOCK getter scope issue */
     METHOD rows()      INLINE ::FnRows
@@ -181,6 +182,10 @@ METHOD FUNCTION exec() CLASS HTApplication
                 ENDDO
             NEXT
 
+            /* any paint (e.g. a status bar in another window) moves the
+               hardware cursor — put it back on the focused editor */
+            ::syncCursor()
+
         ENDDO
 
     ELSE
@@ -190,6 +195,38 @@ METHOD FUNCTION exec() CLASS HTApplication
     ENDIF
 
 RETURN result
+
+/** Places the hardware cursor on the text cursor of the focused widget in the
+ * active window (HTGet, HTLineEdit, HTTextEdit). No-op when the focused
+ * widget has no cursor or that cell is covered by another window.
+ */
+METHOD PROCEDURE syncCursor() CLASS HTApplication
+
+    LOCAL window, oFocus, aCur, aOff
+
+    window := ::activeWindow()
+    IF window == NIL
+        RETURN
+    ENDIF
+
+    oFocus := window:focusWidget()
+    IF oFocus == NIL
+        RETURN
+    ENDIF
+
+    aCur := oFocus:cursorPos()
+    IF aCur == NIL
+        RETURN
+    ENDIF
+
+    aOff := oFocus:windowOffset()
+    IF aOff == NIL
+        RETURN
+    ENDIF
+
+    ht_winSetCursor( window:windowId, aOff[ 1 ] + aCur[ 1 ], aOff[ 2 ] + aCur[ 2 ] )
+
+RETURN
 
 /** Looks up a top-level widget by its CT window handle.
  * @param windowId Numeric CT window handle

@@ -14,7 +14,10 @@ PROTECTED:
 PUBLIC:
 
     CONSTRUCTOR new( ... )
+    METHOD closeEvent( closeEvent )
     METHOD menuBar()
+    /* fullscreen app shell: stays beneath floating windows, never raised */
+    METHOD raise() INLINE NIL
     METHOD show()
     METHOD fitToScreen()
 
@@ -32,6 +35,14 @@ METHOD new( ... ) CLASS HTMainWindow
     ::FcharWidgetMaximize := NIL
     ::FcharWidgetHide     := NIL
 RETURN self
+
+/** Closing the main window ends the application event loop.
+ * @param closeEvent HTCloseEvent instance
+ */
+METHOD PROCEDURE closeEvent( closeEvent ) CLASS HTMainWindow
+    ::super:closeEvent( closeEvent )
+    HTApplication():quit()
+RETURN
 
 /** Sizes this window to the full character grid (0,0)..(MaxCol,MaxRow). */
 METHOD PROCEDURE fitToScreen() CLASS HTMainWindow

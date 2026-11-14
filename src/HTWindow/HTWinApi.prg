@@ -616,10 +616,12 @@ FUNCTION ht_winDrag( nId, nGrabAbsRow, nGrabAbsCol )
 RETURN { hWin[ "left" ], hWin[ "top" ] }
 
 /** Blocking bottom-right resize with screen-stack compose.
- * Preview is a filled chrome frame; caller must full-repaint on return.
+ * With bPaint, each frame calls Eval( bPaint, nLeft, nTop, nWidth, nHeight )
+ * so the owner repaints live content at the new size; without it the
+ * preview is a filled chrome frame. Caller must full-repaint on return.
  * @return { left, top, width, height }
  */
-FUNCTION ht_winResize( nId, nMinW, nMinH )
+FUNCTION ht_winResize( nId, nMinW, nMinH, bPaint )
     LOCAL hWin
     LOCAL nTop, nLeft
     LOCAL nNewBottom, nNewRight
@@ -712,14 +714,20 @@ FUNCTION ht_winResize( nId, nMinW, nMinH )
         hWin[ "shadBottom" ] := hWin[ "bottom" ] + nShadH
         hWin[ "shadRight"  ] := hWin[ "right"  ] + nShadW
 
-        /* lightweight preview frame (absolute coords; viewport off) */
-        HT_SETVIEWPORT( 0, 0, -1, 0 )
-        nW := nNewRight - nLeft + 1
-        FOR nRow := nTop TO nNewBottom
-            hb_DispOutAt( nRow, nLeft, Space( nW ), cWin )
-        NEXT
-        hb_DispOutAt( nTop, nLeft, Space( nW ), cTitle )
-        hb_DispOutAt( nNewBottom, nNewRight, "/", cWin )
+        IF HB_ISBLOCK( bPaint )
+            /* live content: owner repaints chrome + children at the new size */
+            Eval( bPaint, nLeft, nTop, nNewRight - nLeft + 1, nNewBottom - nTop + 1 )
+            HT_SETVIEWPORT( 0, 0, -1, 0 )
+        ELSE
+            /* lightweight preview frame (absolute coords; viewport off) */
+            HT_SETVIEWPORT( 0, 0, -1, 0 )
+            nW := nNewRight - nLeft + 1
+            FOR nRow := nTop TO nNewBottom
+                hb_DispOutAt( nRow, nLeft, Space( nW ), cWin )
+            NEXT
+            hb_DispOutAt( nTop, nLeft, Space( nW ), cTitle )
+            hb_DispOutAt( nNewBottom, nNewRight, "/", cWin )
+        ENDIF
         IF lShadow
             hb_Shadow( nTop, nLeft, nNewBottom, nNewRight )
         ENDIF
@@ -730,6 +738,10 @@ FUNCTION ht_winResize( nId, nMinW, nMinH )
     aArea := ht_winArea( hWin )
     ht_winCompose( nId )
     hWin[ "backImage" ] := SaveScreen( aArea[ 1 ], aArea[ 2 ], aArea[ 3 ], aArea[ 4 ] )
+    /* caller repaints only the window rect — lay the shadow down now */
+    IF lShadow
+        hb_Shadow( hWin[ "top" ], hWin[ "left" ], hWin[ "bottom" ], hWin[ "right" ] )
+    ENDIF
     ht_SyncViewport()
 
 RETURN { hWin[ "left" ], hWin[ "top" ], ;
@@ -787,6 +799,10 @@ FUNCTION ht_winSetRect( nId, nTop, nLeft, nBottom, nRight )
     hWin[ "layerImage" ] := NIL
     aArea := ht_winArea( hWin )
     hWin[ "backImage" ] := SaveScreen( aArea[ 1 ], aArea[ 2 ], aArea[ 3 ], aArea[ 4 ] )
+    /* caller repaints only the window rect — lay the shadow down now */
+    IF hb_hHasKey( hWin, "shadow" ) .AND. hWin[ "shadow" ] >= 0
+        hb_Shadow( hWin[ "top" ], hWin[ "left" ], hWin[ "bottom" ], hWin[ "right" ] )
+    ENDIF
     DispEnd()
     ht_SyncViewport()
 
@@ -1035,6 +1051,187 @@ FUNCTION ht_winCapture( nId )
     ENDIF
 
 RETURN NIL
+
+/** .T. when a visible window above nId in the z-order overlaps it (that
+ * window's shadow included): the screen cells there are not nId's content.
+ */
+STATIC FUNCTION ht_winCovered( nId )
+    LOCAL hWin, hOther
+    LOCAL i, nPos
+
+    hWin := ht_winGet( nId )
+    nPos := AScan( s_aZOrder, nId )
+    IF hWin == NIL .OR. nPos == 0
+        RETURN .F.
+    ENDIF
+
+    FOR i := nPos + 1 TO Len( s_aZOrder )
+        hOther := ht_winGet( s_aZOrder[ i ] )
+        IF hOther != NIL .AND. ! hOther[ "hidden" ] .AND. ;
+           hOther[ "top" ] <= hWin[ "bottom" ] .AND. hOther[ "shadBottom" ] >= hWin[ "top" ] .AND. ;
+           hOther[ "left" ] <= hWin[ "right" ] .AND. hOther[ "shadRight" ] >= hWin[ "left" ]
+            RETURN .T.
+        ENDIF
+    NEXT
+
+RETURN .F.
+
+/** Re-blits every visible window above nId (restores what nId painted over). */
+STATIC PROCEDURE ht_winBlitAbove( nId )
+    LOCAL i, nPos, hWin
+
+    nPos := AScan( s_aZOrder, nId )
+    IF nPos == 0
+        RETURN
+    ENDIF
+
+    HT_SETVIEWPORT( 0, 0, -1, 0 )
+    FOR i := nPos + 1 TO Len( s_aZOrder )
+        hWin := ht_winGet( s_aZOrder[ i ] )
+        IF hWin != NIL .AND. s_aZOrder[ i ] != 0 .AND. ! hWin[ "hidden" ]
+            ht_winBlitLayer( hWin )
+        ENDIF
+    NEXT
+    ht_SyncViewport()
+
+RETURN
+
+/** Topmost visible window id (0 when only the desktop is shown). */
+STATIC FUNCTION ht_winTopmost()
+    LOCAL i, nId, hWin
+
+    FOR i := Len( s_aZOrder ) TO 1 STEP -1
+        nId  := s_aZOrder[ i ]
+        hWin := ht_winGet( nId )
+        IF nId != 0 .AND. hWin != NIL .AND. ! hWin[ "hidden" ]
+            RETURN nId
+        ENDIF
+    NEXT
+
+RETURN 0
+
+/** Starts an in-place paint of window nId. When other windows cover it, the
+ * paint is buffered (DispBegin) on top of nId's own layer, so it neither
+ * lands on the covering windows nor mixes their cells into the capture.
+ * @return state for ht_winPaintEnd(): { lCovered, lLayerRestored }
+ */
+FUNCTION ht_winPaintBegin( nId )
+    LOCAL hWin
+
+    hWin := ht_winGet( nId )
+    IF hWin == NIL .OR. nId == 0 .OR. hWin[ "hidden" ] .OR. ! ht_winCovered( nId )
+        RETURN { .F., .F. }
+    ENDIF
+
+    DispBegin()
+
+    IF hWin[ "winImage" ] == NIL
+        RETURN { .T., .F. }
+    ENDIF
+
+    HT_SETVIEWPORT( 0, 0, -1, 0 )
+    RestScreen( hWin[ "top" ], hWin[ "left" ], ;
+        hWin[ "bottom" ], hWin[ "right" ], hWin[ "winImage" ] )
+    ht_SyncViewport()
+
+RETURN { .T., .T. }
+
+/** Finishes a paint begun with ht_winPaintBegin(): captures the window layer
+ * and puts the covering windows back on top.
+ * @param aState value returned by ht_winPaintBegin()
+ * @param lFull  .T. when the paint filled the whole window rect (chrome +
+ *               content), so the rect holds only this window's cells
+ */
+FUNCTION ht_winPaintEnd( nId, aState, lFull )
+    LOCAL hWin
+    LOCAL lCapture
+
+    hWin := ht_winGet( nId )
+
+    IF hWin != NIL .AND. nId != 0
+        IF aState[ 1 ]
+            lCapture := lFull .OR. aState[ 2 ]
+        ELSE
+            lCapture := lFull .OR. ! hWin[ "hidden" ]
+        ENDIF
+        IF lCapture
+            ht_winCapture( nId )
+        ENDIF
+        IF aState[ 1 ]
+            ht_winBlitAbove( nId )
+        ENDIF
+    ENDIF
+
+    IF aState[ 1 ]
+        DispEnd()
+    ENDIF
+
+RETURN NIL
+
+/** Brings window nId to the front of the stack and shows its layer.
+ * The previous front window is captured first: typing and other direct
+ * paints in it are on screen but may not be in its layer yet.
+ * @return .T. if the stacking order changed
+ */
+FUNCTION ht_winRaise( nId )
+    LOCAL hWin
+    LOCAL nTop, i
+
+    hWin := ht_winGet( nId )
+    IF hWin == NIL .OR. nId == 0 .OR. hWin[ "hidden" ]
+        RETURN .F.
+    ENDIF
+
+    nTop := ht_winTopmost()
+    IF nTop != 0
+        ht_winCapture( nTop )
+    ENDIF
+
+    IF nTop == nId
+        RETURN .F.
+    ENDIF
+
+    i := AScan( s_aZOrder, nId )
+    IF i == 0
+        RETURN .F.
+    ENDIF
+    hb_ADel( s_aZOrder, i, .T. )
+    AAdd( s_aZOrder, nId )
+
+    HT_SETVIEWPORT( 0, 0, -1, 0 )
+    DispBegin()
+    ht_winBlitLayer( hWin )
+    DispEnd()
+    ht_SyncViewport()
+
+RETURN .T.
+
+/** Places the hardware cursor at a window-relative row/col, but only where
+ * that window is the topmost one (never on top of a covering window).
+ * @return .T. if the cursor was placed
+ */
+FUNCTION ht_winSetCursor( nId, nRow, nCol )
+    LOCAL hWin
+    LOCAL nAbsRow, nAbsCol
+
+    hWin := ht_winGet( nId )
+    IF hWin == NIL .OR. hWin[ "hidden" ]
+        RETURN .F.
+    ENDIF
+
+    nAbsRow := hWin[ "top"  ] + nRow
+    nAbsCol := hWin[ "left" ] + nCol
+
+    IF nAbsRow < hWin[ "top" ] .OR. nAbsRow > hWin[ "bottom" ] .OR. ;
+       nAbsCol < hWin[ "left" ] .OR. nAbsCol > hWin[ "right" ] .OR. ;
+       ht_winAtPos( nAbsRow, nAbsCol ) != nId
+        RETURN .F.
+    ENDIF
+
+    /* raw SetPos: this file does not include hbtui.ch, so no viewport remap */
+    SetPos( nAbsRow, nAbsCol )
+
+RETURN .T.
 
 /** Hit-test: returns window id at screen-absolute row/col (topmost wins). */
 FUNCTION ht_winAtPos( nRow, nCol )

@@ -47,6 +47,7 @@ PUBLIC:
     METHOD paintEvent( event )
     METHOD keyEvent( keyEvent )
     METHOD mouseEvent( eventMouse )
+    METHOD cursorPos()
 
     METHOD getText()
     METHOD setText( cText )
@@ -273,6 +274,23 @@ METHOD PROCEDURE paintEvent( event ) CLASS HTTextEdit
     ENDIF
 
 RETURN
+
+/** Widget-local text cursor position while focused (inside the visible area).
+ * @return { nRow, nCol } or NIL
+ */
+METHOD FUNCTION cursorPos() CLASS HTTextEdit
+
+    LOCAL nRow, nCol
+
+    IF ::hasFocus()
+        nRow := ::FnCurRow - ::FnTopRow
+        nCol := ::FnCurCol - ::FnLeftCol
+        IF nRow >= 0 .AND. nRow < ::Fheight .AND. nCol >= 0 .AND. nCol < ::Fwidth
+            RETURN { nRow, nCol }
+        ENDIF
+    ENDIF
+
+RETURN NIL
 
 /** Handles keyboard input for navigation, editing, and clipboard.
  * @param keyEvent HTKeyEvent

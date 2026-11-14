@@ -25,6 +25,7 @@ PUBLIC:
     METHOD paintEvent( event )
     METHOD keyEvent( keyEvent )
     METHOD mouseEvent( eventMouse )
+    METHOD cursorPos() INLINE IIF( ::hasFocus(), { 0, ::FcursorPos - ::FdispOffset }, NIL )
 
     METHOD setText( text )
     METHOD hasSelection() INLINE ::FselStart > 0 .AND. ::FselEnd > 0 .AND. ::FselStart != ::FselEnd

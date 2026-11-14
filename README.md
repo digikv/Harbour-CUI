@@ -32,6 +32,13 @@ Older standalone CUI helpers (`win.prg`, `cui.ch`) are kept under [`legacy/`](le
 
 **Viewport system** — `wFormat()` / viewport remapping in `src/HTWindow/` so child widgets paint in local coordinates.
 
+**Window stack** — overlapping SaveScreen windows composed in z-order over the desktop (`src/HTWindow/HTWinApi.prg`):
+
+- Title-bar chrome: drag the title to move, `/` resizes (content repaints live while the mouse button is held), `#` maximizes, `_` minimizes, `x` closes.
+- A click anywhere in a window brings it to the front (`widget:raise()`). The fullscreen `HTMainWindow` stays underneath as the application shell, and closing it ends the application.
+- Drop shadows follow every move and resize. A window covered by others paints into its own layer and never over the windows above it.
+- The text cursor returns to the focused editor (`HTGet`, `HTLineEdit`, `HTTextEdit`) after any repaint, also when switching between windows. A click past the typed text in an `HTGet` lands right after it.
+
 **Theme system** — `HTTheme` singleton with multiple built-in themes (Default, Dark, High Contrast, Mono).
 
 ## Quick Start
@@ -50,6 +57,7 @@ cd samples/hello && hbmk2 hello.prg hbmk.hbm && ./hello
 |--------|-------------|
 | `hello` | Minimal HTMainWindow + HTLabel |
 | `dialog` | HTDialog + HTMessageBox + toast results |
+| `window` | Overlapping windows: a form with two HTGets and two HTBrowse grids (move, resize, raise, maximize, minimize) |
 | `browse` | HTBrowse data grid with inline editing |
 | `controls` | Buttons, checkboxes, spinner, combo, list |
 | `get` | HTGet with PICTURE / VALID / WHEN |
@@ -63,6 +71,9 @@ cd samples/hello && hbmk2 hello.prg hbmk.hbm && ./hello
 
 ```bash
 cd samples/<name> && hbmk2 <name>.prg hbmk.hbm && ./<name>
+
+# the window sample's source is window_01.prg
+cd samples/window && hbmk2 window_01.prg hbmk.hbm && ./window_01
 ```
 
 ## Requirements

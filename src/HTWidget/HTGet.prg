@@ -85,6 +85,7 @@ PUBLIC:
     METHOD mouseEvent( eventMouse )
     METHOD focusInEvent( eventFocus )
     METHOD focusOutEvent( eventFocus )
+    METHOD cursorPos()
 
     METHOD setup( xVar, cLabel, cPicture, bValid, bWhen, cHelpLine, bOnChange, lReadOnly, lHide, nWidth )
     METHOD getValue()
@@ -365,6 +366,8 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTGet
         /* only react to clicks on the input area */
         IF nClickCol >= ::FlabelWidth .AND. ::FoGet != NIL .AND. ::FlGetActive
             nNewPos := ::FdispOffset + ( nClickCol - ::FlabelWidth )
+            /* a click past the typed text lands right after it, not in the blanks */
+            nNewPos := Min( nNewPos, Len( RTrim( ::FoGet:buffer ) ) + 1 )
             IF nNewPos >= 1
                 ::FoGet:pos := Min( nNewPos, Len( ::FoGet:buffer ) )
             ENDIF
@@ -446,6 +449,18 @@ METHOD PROCEDURE focusOutEvent( eventFocus ) CLASS HTGet
     ::super:focusOutEvent( eventFocus )
 
 RETURN
+
+/** Widget-local text cursor position while the GET is being edited.
+ * @return { nRow, nCol } or NIL
+ */
+METHOD FUNCTION cursorPos() CLASS HTGet
+
+    IF ::FlGetActive .AND. ::FoGet != NIL .AND. ! ::FreadOnly .AND. ::hasFocus() .AND. ;
+       HB_ISNUMERIC( ::FoGet:pos ) .AND. ::FoGet:pos > 0
+        RETURN { 0, ::FlabelWidth + ::FoGet:pos - ::FdispOffset }
+    ENDIF
+
+RETURN NIL
 
 /** Returns the current value by evaluating the xVar code block.
  * @return Current value, or empty string if xVar is NIL

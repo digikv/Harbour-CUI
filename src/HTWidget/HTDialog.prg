@@ -201,6 +201,18 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTDialog
 
     LOCAL nDeltaRow, nDeltaCol
 
+    /* [x] rejects directly: the base class queues an HTCloseEvent on the
+       application queue, which the modal loop never drains */
+    IF eventMouse:nKey = K_LBUTTONUP .AND. ::FwinSysBtnClose .AND. ;
+       ::FbtnClosePos != NIL .AND. eventMouse:mouseRow = 0 .AND. ;
+       eventMouse:mouseCol >= ::FbtnClosePos[ 1 ] .AND. ;
+       eventMouse:mouseCol <= ::FbtnClosePos[ 2 ]
+        ::FwinSysBtnClose := .F.
+        ::FposDown := NIL
+        ::reject()
+        RETURN
+    ENDIF
+
     IF eventMouse:nKey = K_MOUSEMOVE .AND. ::FposDown != NIL .AND. ::FwinSysBtnMove .AND. ::FwindowId != NIL
         /* delta = event mouse position - click offset */
         nDeltaRow := eventMouse:mouseRow - ::FposDown:y

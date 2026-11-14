@@ -123,7 +123,9 @@ METHOD PROCEDURE configureBrowse() CLASS HTBrowse
     oWin := NIL
     oAnc := Self
     DO WHILE oAnc != NIL
-        IF oAnc:isDerivedFrom( "HTWidget" ) .AND. oAnc:FwindowId != NIL
+        /* public accessor: FwindowId is PROTECTED and a parent window class
+           (e.g. a user subclass of HTWidget) is unrelated to HTBrowse */
+        IF oAnc:isDerivedFrom( "HTWidget" ) .AND. oAnc:hasOwnWindow()
             oWin := oAnc
             EXIT
         ENDIF
@@ -131,7 +133,7 @@ METHOD PROCEDURE configureBrowse() CLASS HTBrowse
     ENDDO
 
     IF oWin != NIL
-        wSelect( oWin:FwindowId, .F. )
+        wSelect( oWin:windowId, .F. )
         /* accumulate child offsets up to the window; +1 row for CUI title */
         nRelRow := 1
         nRelCol := 0

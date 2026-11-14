@@ -63,6 +63,14 @@ PROTECTED:
 
 PUBLIC:
 
+    /* .T. when this widget owns a CT window (windowId walks up to parents) */
+    METHOD hasOwnWindow() INLINE ::FwindowId != NIL
+
+    /* widget-local { row, col } of the text cursor while editing; NIL = none.
+       Editing widgets override this so the app can restore the cursor. */
+    METHOD cursorPos() INLINE NIL
+    METHOD windowOffset()
+
     CONSTRUCTOR new( ... )
 
     METHOD actions()
@@ -82,6 +90,7 @@ PUBLIC:
     METHOD move( ... )
     METHOD moveEvent( moveEvent )
     METHOD paintEvent( event )
+    METHOD raise()
     METHOD repaint()
     METHOD resize( ... )
     METHOD resizeEvent( event )
@@ -475,8 +484,9 @@ METHOD PROCEDURE focusInEvent( eventFocus ) CLASS HTWidget
     ENDIF
 
     IF ::FwindowId != NIL
-        /* select and bring window to top (Z-order) */
-        wSelect( ::windowId, .T. )
+        /* bring window to the front and make it the keyboard target */
+        ::raise()
+        wSelect( ::FwindowId, .F. )
     ENDIF
 
     /* auto-focus first focusable child if none focused */
@@ -543,6 +553,27 @@ METHOD FUNCTION getWindowId() CLASS HTWidget
         RETURN parent:windowId
     ENDIF
 RETURN ::FwindowId
+
+/** Offset of this widget's (0,0) from its top-level window's top-left corner
+ * (CUI title row included), summed through container widgets.
+ * @return { nRow, nCol } or NIL when the widget is not inside a window
+ */
+METHOD FUNCTION windowOffset() CLASS HTWidget
+
+    LOCAL oAnc := Self
+    LOCAL nRow := 1
+    LOCAL nCol := 0
+
+    DO WHILE oAnc != NIL .AND. oAnc:isDerivedFrom( "HTWidget" )
+        IF oAnc:hasOwnWindow()
+            RETURN { nRow, nCol }
+        ENDIF
+        nRow += oAnc:y
+        nCol += oAnc:x
+        oAnc := oAnc:parent()
+    ENDDO
+
+RETURN NIL
 
 /** Returns array of visible children that can receive focus.
  * @return Array of HTWidget with focusPolicy != HT_FOCUS_NONE
@@ -760,6 +791,9 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTWidget
     SWITCH eventMouse:nKey
     CASE K_LBUTTONDOWN
 
+        /* clicking a window (title, border or content) brings it to the front */
+        ::raise()
+
         ::FposUp := NIL
         ::FposDown := HTPoint():new( eventMouse:mouseCol, eventMouse:mouseRow )
 
@@ -772,10 +806,13 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTWidget
         ::FwinSysBtnResize := ::FbtnResizePos != NIL .AND. ::FposDown:y = ( ::Fheight - 1 ) .AND. ::FposDown:x >= ::FbtnResizePos[ 1 ] .AND. ::FposDown:x <= ::FbtnResizePos[ 2 ]
 
         IF ::FwinSysBtnResize
-            /* blocking Digi-style resize with screen-stack compose */
+            /* blocking Digi-style resize with screen-stack compose;
+               the block repaints live content on every size change */
             IF ::FwindowId != NIL
                 aPos := ht_winResize( ::FwindowId, ;
-                    Max( ::minimumWidth, 20 ), Max( ::minimumHeight, 5 ) )
+                    Max( ::minimumWidth, 20 ), Max( ::minimumHeight, 5 ), ;
+                    {| nX, nY, nW, nH | ::Fx := nX, ::Fy := nY, ;
+                        ::Fwidth := nW, ::Fheight := nH, ::paintEvent() } )
                 ::Fx      := aPos[ 1 ]
                 ::Fy      := aPos[ 2 ]
                 ::Fwidth  := aPos[ 3 ]
@@ -965,7 +1002,14 @@ RETURN
  */
 METHOD PROCEDURE paintEvent( event ) CLASS HTWidget
 
+    LOCAL aPaint := { .F., .F. }
+
     HB_SYMBOL_UNUSED( event )
+
+    /* an existing window under others must not paint over them */
+    IF ::FwindowId != NIL .AND. ::FwindowId > 0
+        aPaint := ht_winPaintBegin( ::FwindowId )
+    ENDIF
 
     /* no parent, widget has/is a top level window */
     IF ::FwindowId != NIL .OR. ( ::parent = NIL .AND. ::FwindowId = NIL )
@@ -978,7 +1022,7 @@ METHOD PROCEDURE paintEvent( event ) CLASS HTWidget
     ENDIF
 
     IF ::FwindowId != NIL .AND. ::FwindowId > 0
-        ht_winCapture( ::FwindowId )
+        ht_winPaintEnd( ::FwindowId, aPaint, .T. )
     ENDIF
 
 RETURN
@@ -1158,11 +1202,23 @@ RETURN
  */
 METHOD PROCEDURE repaintChild( child ) CLASS HTWidget
 
+    LOCAL nOldWin
+    LOCAL aPaint
+
     IF ::FwindowId != NIL
-        /* top-level window: select CT window, reset margins, paint child */
+        /* top-level window: select CT window, reset margins, paint child.
+           Restore the previous selection afterwards — the selected window is
+           the keyboard target, and repainting e.g. a status bar in another
+           window must not steal it. */
+        nOldWin := wSelect()
+        /* a window covered by others paints on its own layer, not over them,
+           and the layer is recaptured so moves don't show stale content */
+        aPaint := ht_winPaintBegin( ::FwindowId )
         wSelect( ::FwindowId, .F. )
         wFormat()
         ::paintChild( child )
+        ht_winPaintEnd( ::FwindowId, aPaint, .F. )
+        wSelect( nOldWin, .F. )
     ELSE
         /* container widget (no CT window): delegate to parent so the full
            viewport chain is rebuilt (container → child positions are correct) */
@@ -1193,6 +1249,15 @@ METHOD PROCEDURE paintWidget() CLASS HTWidget
         NEXT
     ENDIF
 
+RETURN
+
+/** Brings this top-level window to the front of the window stack.
+ * No-op for child widgets (they have no window of their own).
+ */
+METHOD PROCEDURE raise() CLASS HTWidget
+    IF ::FwindowId != NIL
+        ht_winRaise( ::FwindowId )
+    ENDIF
 RETURN
 
 /** Triggers an immediate repaint by calling paintEvent directly. */
