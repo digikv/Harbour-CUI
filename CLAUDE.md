@@ -23,6 +23,16 @@ Requires: Harbour compiler at `~/git/core`.
 
 GT driver: `gtxwc` on Linux (X11 window), `gtwvt` on Windows. Tests use `gttrm` / `-gtnul`.
 
+Platform code is split with `#ifdef __PLATFORM__WINDOWS` (note: Harbour defines only the
+upper-case form; `__PLATFORM__Windows` is never defined):
+- `HTEventLoop:poll()` — Win32 WndProc mouse queue (Windows) vs portable `Inkey()` path
+- `HTApplication:exec()` — installs the Win32 mouse bridge (`ht_winmouse.c`, stubs elsewhere)
+- `ht_cuiSetupDisplay()` — gtwvt fullscreen + Consolas font fit (Windows) vs fixed
+  `SetMode( nRows, nCols )` window in the GT's own font (Linux)
+
+The portable path can be checked on Windows by building a copy of the library with
+`__PLATFORM__WINDOWS` renamed in those three files.
+
 Compiler flags: `-w3 -es2` (warnings level 3, warnings as errors).
 
 ## Architecture

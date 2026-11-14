@@ -83,6 +83,8 @@ cd samples/window && hbmk2 window_01.prg hbmk.hbm && ./window_01
 
 - Harbour compiler
 - GT driver: `gtxwc` on Linux, `gtwvt` on Windows (tests: `gttrm` / `-gtnul`)
+  - Windows: borderless fullscreen with the Consolas font scaled to fill the screen; mouse via a Win32 WndProc bridge.
+  - Linux: an X11 window with exactly the requested grid (default 40×131) in the GT's own font; mouse via `Inkey()`. Platform code is selected with `#ifdef __PLATFORM__WINDOWS`.
 - Compiler flags: `-w3 -es2`
 
 ## License / credits

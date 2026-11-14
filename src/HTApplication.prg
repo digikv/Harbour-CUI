@@ -169,11 +169,14 @@ METHOD FUNCTION exec() CLASS HTApplication
          * before any user windows are created */
         ::Fdesktop:paintEvent( HTPaintEvent():new() )
 
-        /* Win32/gtwvt: subclass console HWND for coalesced mouse events */
+#ifdef __PLATFORM__WINDOWS
+        /* Win32/gtwvt: subclass console HWND for coalesced mouse events.
+           Elsewhere (gtxwc/gttrm) HTEventLoop reads the mouse via Inkey. */
         ht_WinMouseInstall()
         RegisterHtOnEventMouseMove()
         RegisterHtOnEventMouseDown()
         RegisterHtOnEventLBDblClick()
+#endif
 
         ::Fexecute := .T.
 

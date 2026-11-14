@@ -148,15 +148,15 @@ RETURN NIL
  * Values are Windows COLORREF (0x00BBGGRR), not RRGGBB.
  */
 FUNCTION ht_cuiApplyPalette()
-    LOCAL aPal, nI
+    LOCAL aPal
 
-    /* keep defaults for 0-8, override 9-15 like harbour-cui */
+    /* keep defaults for 0-8, override 9-15 like harbour-cui. A GT that does
+       not report its palette (some terminals) keeps its own colors: setting
+       a made-up array would turn slots 0-8 black. gtwvt and gtxwc report it;
+       both take Windows COLORREF (0x00BBGGRR) values. */
     aPal := hb_gtInfo( HB_GTI_PALETTE )
     IF ! HB_ISARRAY( aPal ) .OR. Len( aPal ) != 16
-        aPal := Array( 16 )
-        FOR nI := 1 TO 16
-            aPal[ nI ] := 0
-        NEXT
+        RETURN NIL
     ENDIF
 
     aPal[ 10 ] := ht_rgb( 160, 160, 160 )  /* 9  window gray */
@@ -183,8 +183,10 @@ RETURN nR + nG * 256 + nB * 65536
  * @param nCols  Preferred cols (default 131); final size may grow to fill screen
  */
 FUNCTION ht_cuiSetupDisplay( nRows, nCols )
+#ifdef __PLATFORM__WINDOWS
     LOCAL nWidth, nHeight, nFontW, nFontH
     LOCAL nDeskCols, nDeskRows
+#endif
 
     IF nRows == NIL
         nRows := 40
@@ -193,12 +195,18 @@ FUNCTION ht_cuiSetupDisplay( nRows, nCols )
         nCols := 131
     ENDIF
 
-#ifdef __PLATFORM__WINDOWS
-    hb_gtInfo( HB_GTI_FONTNAME, "Consolas" )
-    hb_gtInfo( HB_GTI_SELECTCOPY, "Select and Copy" )
+#ifndef __PLATFORM__WINDOWS
+    /* gtxwc (X11) / gttrm (terminal): the fullscreen fit below depends on
+       gtwvt and Consolas metrics. Keep the GT's own font and give the window
+       exactly the requested grid; it is not resizable, because a grid change
+       would invalidate layouts computed from MaxRow()/MaxCol(). On a
+       terminal SetMode() cannot resize, so the terminal's size is used. */
+    hb_gtInfo( HB_GTI_CLOSABLE, .T. )
+    hb_gtInfo( HB_GTI_RESIZABLE, .F. )
+    SetMode( nRows, nCols )
 #else
     hb_gtInfo( HB_GTI_FONTNAME, "Consolas" )
-#endif
+    hb_gtInfo( HB_GTI_SELECTCOPY, "Select and Copy" )
     hb_gtInfo( HB_GTI_RESIZEMODE, HB_GTI_RESIZEMODE_FONT )
     hb_gtInfo( HB_GTI_FONTQUALITY, HB_GTI_FONTQ_HIGH )
     hb_gtInfo( HB_GTI_FONTWEIGHT, HB_GTI_FONTW_NORMAL )
@@ -250,6 +258,7 @@ FUNCTION ht_cuiSetupDisplay( nRows, nCols )
             ENDIF
         ENDIF
     ENDIF
+#endif
 
     ht_cuiApplyPalette()
 

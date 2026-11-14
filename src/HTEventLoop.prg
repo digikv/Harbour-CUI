@@ -69,10 +69,13 @@ METHOD FUNCTION poll( nTimeout ) CLASS HTEventLoop
     /* run pending scheduled tasks */
     ::runPendingTasks()
 
+#ifdef __PLATFORM__WINDOWS
     /*
      * Win32/gtwvt path: drain coalesced mouse queue first.
      * During Inkey() the subclassed WndProc fills the queue; MOVE is
      * coalesced so drag does not flood the event loop.
+     * Not compiled on Linux/macOS: there the Inkey path below handles the
+     * mouse (gtxwc / gttrm report clicks and moves through Inkey).
      */
     IF ht_WinMouseActive()
         nRow := 0
@@ -111,8 +114,10 @@ METHOD FUNCTION poll( nTimeout ) CLASS HTEventLoop
 
         RETURN HTKeyEvent():new( nKey )
     ENDIF
+#endif
 
-    /* Fallback (gtxwc / gtnul / non-Windows): Inkey + coalesce MOVE */
+    /* Portable path (gtxwc / gttrm on Linux, gtnul, or Windows GTs without
+       the WndProc bridge): Inkey + coalesce MOVE */
     nKey := Inkey( nTimeout )
     nRow := mRow( .T. )
     nCol := mCol( .T. )
@@ -122,9 +127,12 @@ METHOD FUNCTION poll( nTimeout ) CLASS HTEventLoop
          * gtxwc queues every MotionNotify. Drain the flood and keep the
          * last cell position — same idea as ht_winmouse.c s_fHaveMove.
          * If a click/key arrives while draining, prefer it (clicks first).
+         * Inkey() without a timeout returns at once (0 = queue empty);
+         * Inkey( 0 ) would block until the next event and freeze the app
+         * (no repaint, toasts or scheduled tasks) after every mouse move.
          */
         DO WHILE .T.
-            nNext := Inkey( 0 )
+            nNext := Inkey()
             IF nNext == K_MOUSEMOVE
                 nRow := mRow( .T. )
                 nCol := mCol( .T. )

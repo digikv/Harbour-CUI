@@ -52,7 +52,7 @@ RegisterHtOnEventLBDblClick()
 
 **Coalescing:** every `WM_MOUSEMOVE` overwrites a single pending move slot. Button events go into a ring queue (size 64). Hooks run when the queue is drained from `poll()`, never from inside `WndProc` (avoids Harbour VM reentrancy).
 
-**Non-Windows / gtnul:** the same symbols exist as stubs; `ht_WinMouseActive()` is `.F.` and `poll()` uses the fallback path below.
+**Non-Windows / gtnul:** the same symbols exist as stubs; `ht_WinMouseActive()` is `.F.` and `poll()` uses the fallback path below. On Linux/macOS the Win32 branch of `poll()` and the bridge install in `HTApplication:exec()` are not even compiled (`#ifdef __PLATFORM__WINDOWS`).
 
 ## HTEventLoop (Singleton)
 
@@ -66,9 +66,9 @@ Always runs `HTToast():checkExpired()` and `runPendingTasks()` first, then:
 3. After `Inkey`, check the mouse queue again (messages may have arrived during the wait)
 4. Intercept `HB_K_RESIZE` → `handleResize()`
 
-**Fallback (tests / non-Windows / gtxwc):**
+**Fallback (tests / Linux gtxwc / gttrm / Windows GTs without the bridge):**
 1. `Inkey(nTimeout)` — keyboard and native mouse codes (`K_MOUSEMOVE`, clicks, …)
-2. If `K_MOUSEMOVE`: **coalesce** — drain further `Inkey(0)` moves, keep the last cell; if a click/key appears while draining, prefer it (same “clicks first” idea as the Win32 queue)
+2. If `K_MOUSEMOVE`: **coalesce** — drain further moves with `Inkey()` (no timeout: returns 0 at once when the queue is empty — `Inkey(0)` would block until the next event), keep the last cell; if a click/key appears while draining, prefer it (same “clicks first” idea as the Win32 queue)
 3. If `Inkey` returned 0 but `mRow(.T.)`/`mCol(.T.)` changed vs last poll → synthesize `K_MOUSEMOVE`
 4. Intercept `HB_K_RESIZE` → `handleResize()`
 
