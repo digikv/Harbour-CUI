@@ -881,8 +881,9 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTWidget
                             oOldWidget:focusOutEvent( HTFocusEvent():new( HT_EVENT_TYPE_FOCUSOUT ) )
                         ENDIF
                         ::FfocusWidget := oHitChild
+                        /* focusOut/focusIn repaint just these two children;
+                           a full window repaint here made the screen flicker */
                         ::FfocusWidget:focusInEvent( HTFocusEvent():new( HT_EVENT_TYPE_FOCUSIN ) )
-                        ::repaint()
                     ENDIF
                 ENDIF
 
@@ -1011,8 +1012,15 @@ RETURN
 METHOD PROCEDURE paintEvent( event ) CLASS HTWidget
 
     LOCAL aPaint := { .F., .F. }
+    LOCAL lTopLevel := ::FwindowId != NIL .OR. ::parent = NIL
 
     HB_SYMBOL_UNUSED( event )
+
+    /* a window repaint clears the whole window first: buffer it, so the
+       screen shows only the finished result instead of flickering */
+    IF lTopLevel
+        DispBegin()
+    ENDIF
 
     /* an existing window under others must not paint over them */
     IF ::FwindowId != NIL .AND. ::FwindowId > 0
@@ -1020,7 +1028,7 @@ METHOD PROCEDURE paintEvent( event ) CLASS HTWidget
     ENDIF
 
     /* no parent, widget has/is a top level window */
-    IF ::FwindowId != NIL .OR. ( ::parent = NIL .AND. ::FwindowId = NIL )
+    IF lTopLevel
         ::paintTopLevelWindow()
     ENDIF
 
@@ -1031,6 +1039,10 @@ METHOD PROCEDURE paintEvent( event ) CLASS HTWidget
 
     IF ::FwindowId != NIL .AND. ::FwindowId > 0
         ht_winPaintEnd( ::FwindowId, aPaint, .T. )
+    ENDIF
+
+    IF lTopLevel
+        DispEnd()
     ENDIF
 
 RETURN
@@ -1219,6 +1231,7 @@ METHOD PROCEDURE repaintChild( child ) CLASS HTWidget
            the keyboard target, and repainting e.g. a status bar in another
            window must not steal it. */
         nOldWin := wSelect()
+        DispBegin()   /* show the child's finished look in one screen update */
         /* a window covered by others paints on its own layer, not over them,
            and the layer is recaptured so moves don't show stale content */
         aPaint := ht_winPaintBegin( ::FwindowId )
@@ -1226,6 +1239,7 @@ METHOD PROCEDURE repaintChild( child ) CLASS HTWidget
         wFormat()
         ::paintChild( child )
         ht_winPaintEnd( ::FwindowId, aPaint, .F. )
+        DispEnd()
         wSelect( nOldWin, .F. )
     ELSE
         /* container widget (no CT window): delegate to parent so the full
