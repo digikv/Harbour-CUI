@@ -86,6 +86,7 @@ PUBLIC:
     METHOD focusInEvent( eventFocus )
     METHOD focusOutEvent( eventFocus )
     METHOD cursorPos()
+    METHOD enterMovesFocus() INLINE .T.   /* Enter = next field, as in READ */
 
     METHOD setup( xVar, cLabel, cPicture, bValid, bWhen, cHelpLine, bOnChange, lReadOnly, lHide, nWidth )
     METHOD getValue()

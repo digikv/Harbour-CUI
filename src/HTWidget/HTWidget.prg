@@ -71,6 +71,10 @@ PUBLIC:
     METHOD cursorPos() INLINE NIL
     METHOD windowOffset()
 
+    /* .T. for form input fields: Enter moves to the next field like Tab
+       (Clipper READ style). Widgets that use Enter themselves keep .F. */
+    METHOD enterMovesFocus() INLINE .F.
+
     CONSTRUCTOR new( ... )
 
     METHOD actions()
@@ -702,20 +706,15 @@ METHOD FUNCTION focusPrevChild() CLASS HTWidget
 
 RETURN .T.
 
+/** Returns the focused child widget reference.
+ * @return HTWidget or NIL
+ */
+METHOD FUNCTION focusWidget() CLASS HTWidget
+RETURN ::FfocusWidget
+
 /** Returns .T. if this widget is the currently focused child of its parent.
  * @return Logical
  */
-/** Returns the focused child widget reference (debug logging for containers). */
-METHOD FUNCTION focusWidget() CLASS HTWidget
-
-    IF ::FfocusWidget != NIL .AND. ::className() == "HTWIDGET"
-        ht_debugLog( "container:focusWidget()=" + ;
-            IIF( hb_isString( ::FfocusWidget:Ftext ), ::FfocusWidget:Ftext, "?" ) + ;
-            " caller=" + ProcName( 1 ) + "/" + ProcName( 2 ) + "/" + ProcName( 3 ) )
-    ENDIF
-
-RETURN ::FfocusWidget
-
 METHOD FUNCTION hasFocus() CLASS HTWidget
 
     LOCAL p := ::parent()
@@ -764,6 +763,15 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS HTWidget
 
     IF keyEvent:key = K_SH_TAB
         IF ::focusPrevChild()
+            keyEvent:accept()
+        ENDIF
+        RETURN
+    ENDIF
+
+    /* Enter in an input field (HTGet, HTLineEdit) moves on like Tab;
+       VALID still applies — a rejected value keeps the focus */
+    IF keyEvent:key = K_ENTER .AND. ::FfocusWidget != NIL .AND. ::FfocusWidget:enterMovesFocus()
+        IF ::focusNextChild()
             keyEvent:accept()
         ENDIF
         RETURN

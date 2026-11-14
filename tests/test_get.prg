@@ -9,6 +9,7 @@
  */
 
 #include "hbtui.ch"
+#include "inkey.ch"
 
 STATIC nPass := 0
 STATIC nFail := 0
@@ -23,6 +24,7 @@ PROCEDURE Main()
     TestGetLabel()
     TestGetPicture()
     TestGetReadOnly()
+    TestGetEnterMovesFocus()
 
     nTotal := nPass + nFail
     QOut( "" )
@@ -183,5 +185,38 @@ STATIC PROCEDURE TestGetReadOnly()
 
     o:setReadOnly( .F. )
     Assert( "HTGet:setReadOnly .F.",      ! o:readOnly )
+
+RETURN
+
+/*----------------------------------------------------------------*/
+
+STATIC PROCEDURE TestGetEnterMovesFocus()
+
+    LOCAL oForm, oGet1, oGet2
+    LOCAL c1 := "a         "
+    LOCAL c2 := "b         "
+    LOCAL lValid := .T.
+
+    oForm := HTWidget():new()
+
+    oGet1 := HTGet():new( oForm )
+    oGet1:setup( {|x| IIF( x == NIL, c1, c1 := x ) }, "", "", {|| lValid }, NIL, "", NIL, .F., .F., 10 )
+    oGet2 := HTGet():new( oForm )
+    oGet2:setup( {|x| IIF( x == NIL, c2, c2 := x ) }, "", "", NIL, NIL, "", NIL, .F., .F., 10 )
+
+    oForm:focusNextChild()
+    Assert( "Enter: first GET focused",              oForm:focusWidget() == oGet1 )
+
+    lValid := .F.
+    oForm:keyEvent( HTKeyEvent():new( K_ENTER ) )
+    Assert( "Enter: failing VALID keeps the focus",  oForm:focusWidget() == oGet1 )
+
+    lValid := .T.
+    oForm:keyEvent( HTKeyEvent():new( K_ENTER ) )
+    Assert( "Enter: moves to the next GET",          oForm:focusWidget() == oGet2 )
+
+    Assert( "HTGet:enterMovesFocus",                 oGet1:enterMovesFocus() )
+    Assert( "HTLineEdit:enterMovesFocus",            HTLineEdit():new():enterMovesFocus() )
+    Assert( "HTPushButton keeps Enter for itself",   ! HTPushButton():new( "OK" ):enterMovesFocus() )
 
 RETURN
