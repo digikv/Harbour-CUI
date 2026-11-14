@@ -84,7 +84,8 @@ cd samples/window && hbmk2 window_01.prg hbmk.hbm && ./window_01
 - Harbour compiler
 - GT driver: `gtxwc` on Linux, `gtwvt` on Windows (tests: `gttrm` / `-gtnul`)
   - Windows: borderless fullscreen with the Consolas font scaled to fill the screen; mouse via a Win32 WndProc bridge.
-  - Linux: an X11 window with exactly the requested grid (default 40×131) in the GT's own font; mouse via `Inkey()`. Platform code is selected with `#ifdef __PLATFORM__WINDOWS`.
+  - Linux: an X11 window that starts with the requested grid (default 40×131) in the GT's own font; mouse via `Inkey()`. `gtxwc` cannot scale its font, so resizing or maximizing the window changes the grid instead: the `HTMainWindow` shell and its bottom status bar follow, floating windows keep their place. Platform code is selected with `#ifdef __PLATFORM__WINDOWS`.
+  - `gtxwc` draws with X core fonts and stops with "Cannot load 'fixed' font" when they are missing — install them first (Debian/Ubuntu: `sudo apt install xfonts-base`). Building Harbour itself with `gtxwc` needs `libx11-dev`.
 - Compiler flags: `-w3 -es2`
 
 ## License / credits

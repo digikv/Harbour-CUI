@@ -70,7 +70,9 @@ Always runs `HTToast():checkExpired()` and `runPendingTasks()` first, then:
 1. `Inkey(nTimeout)` — keyboard and native mouse codes (`K_MOUSEMOVE`, clicks, …)
 2. If `K_MOUSEMOVE`: **coalesce** — drain further moves with `Inkey()` (no timeout: returns 0 at once when the queue is empty — `Inkey(0)` would block until the next event), keep the last cell; if a click/key appears while draining, prefer it (same “clicks first” idea as the Win32 queue)
 3. If `Inkey` returned 0 but `mRow(.T.)`/`mCol(.T.)` changed vs last poll → synthesize `K_MOUSEMOVE`
-4. Intercept `HB_K_RESIZE` → `handleResize()`
+4. GT event keys (they pass `Inkey()` only with `HB_INKEY_GTEVENT` in the mask, which `HTApplication:exec()` sets on non-Windows): `HB_K_RESIZE` → `handleResize()`; `HB_K_CLOSE` / `HB_K_TERMINATE` → `HTApplication():quit()`; focus/connect/menu events are dropped, never dispatched as keys
+
+**handleResize():** repaints the desktop at the new screen size, recomposes the window stack from the saved layers, calls `screenResized()` on each `HTMainWindow` (refit to the screen; a status bar on the bottom row stays docked there) and repaints every top-level window in one buffered update, then restores the keyboard window. On gtxwc a window resize changes the grid; on gtwvt (font-scaling mode) the grid stays.
 
 ```harbour
 LOCAL event := HTEventLoop():poll( 0.1 )  /* 100ms timeout */

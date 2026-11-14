@@ -197,12 +197,15 @@ FUNCTION ht_cuiSetupDisplay( nRows, nCols )
 
 #ifndef __PLATFORM__WINDOWS
     /* gtxwc (X11) / gttrm (terminal): the fullscreen fit below depends on
-       gtwvt and Consolas metrics. Keep the GT's own font and give the window
-       exactly the requested grid; it is not resizable, because a grid change
-       would invalidate layouts computed from MaxRow()/MaxCol(). On a
+       gtwvt and Consolas metrics. Keep the GT's own font and start with
+       exactly the requested grid. gtxwc has no font-scaling resize mode:
+       resizing or maximizing the window changes the grid and posts
+       HB_K_RESIZE, which HTEventLoop:handleResize() follows (the
+       HTMainWindow shell refits, floating windows keep their place). Window
+       managers may maximize even a non-resizable window, so allow it. On a
        terminal SetMode() cannot resize, so the terminal's size is used. */
     hb_gtInfo( HB_GTI_CLOSABLE, .T. )
-    hb_gtInfo( HB_GTI_RESIZABLE, .F. )
+    hb_gtInfo( HB_GTI_RESIZABLE, .T. )
     SetMode( nRows, nCols )
 #else
     hb_gtInfo( HB_GTI_FONTNAME, "Consolas" )

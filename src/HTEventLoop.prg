@@ -175,10 +175,25 @@ METHOD FUNCTION poll( nTimeout ) CLASS HTEventLoop
         RETURN HTMouseEvent():new( nKey, nRow, nCol )
     ENDIF
 
-    IF nKey = HB_K_RESIZE
+    /* GT events (only with HB_INKEY_GTEVENT in the mask, set on non-Windows) */
+    SWITCH nKey
+    CASE HB_K_RESIZE
+        /* gtxwc: the window was resized/maximized and the grid followed */
         ::handleResize()
         RETURN NIL
-    ENDIF
+    CASE HB_K_CLOSE
+    CASE HB_K_TERMINATE
+        /* window close button / system shutdown request */
+        HTApplication():quit()
+        RETURN NIL
+    CASE HB_K_GOTFOCUS
+    CASE HB_K_LOSTFOCUS
+    CASE HB_K_CONNECT
+    CASE HB_K_DISCONNECT
+    CASE HB_K_MENU
+        /* not keys: never dispatch them to widgets */
+        RETURN NIL
+    ENDSWITCH
 
 RETURN HTKeyEvent():new( nKey )
 
@@ -295,11 +310,15 @@ RETURN
 METHOD PROCEDURE handleResize() CLASS HTEventLoop
 
     LOCAL app, desktop, window, key
+    LOCAL nOldWin
 
     app := HTApplication()
     IF app = NIL
         RETURN
     ENDIF
+
+    nOldWin := wSelect()
+    DispBegin()
 
     /* update desktop to new screen dimensions */
     desktop := app:desktop
@@ -308,15 +327,29 @@ METHOD PROCEDURE handleResize() CLASS HTEventLoop
         wSelect( 0 )
         wBoard()
         desktop:paintEvent( HTPaintEvent():new() )
+        /* the desktop fill wiped the screen: lay the windows back from their
+           layers, so the repaints below (which snapshot windows above the
+           one they paint) start from a consistent stack */
+        ht_winCompose( 0 )
     ENDIF
 
-    /* repaint all top-level windows */
+    /* repaint all top-level windows; the fullscreen shell (HTMainWindow)
+       first follows the new grid — on gtxwc a window resize changes the
+       grid (it has no font-scaling mode), on gtwvt the grid stays */
     FOR EACH key IN hb_hKeys( app:topLevelWindows )
         window := app:topLevelWindows[ key ]
-        IF window != NIL .AND. window:isDerivedFrom( "HTWidget" )
+        IF key != 0 .AND. window != NIL .AND. window:isDerivedFrom( "HTWidget" )
+            IF window:isDerivedFrom( "HTMainWindow" )
+                window:screenResized()
+            ENDIF
             window:repaint()
         ENDIF
     NEXT
+
+    DispEnd()
+
+    /* repaints select their own window: give the keyboard back */
+    wSelect( nOldWin, .F. )
 
     /* reset mouse tracking (grid changed) */
     ::FmouseRow := -1

@@ -159,7 +159,14 @@ METHOD FUNCTION exec() CLASS HTApplication
         ht_cuiSetupDisplay( ::FnRows, ::FnCols )
 
         //set( _SET_EVENTMASK, INKEY_ALL + HB_INKEY_RAW + HB_INKEY_EXT + HB_INKEY_GTEVENT )
+#ifdef __PLATFORM__WINDOWS
         Set( _SET_EVENTMASK, INKEY_ALL )
+#else
+        /* gtxwc changes the grid when its window is resized/maximized and
+           posts HB_K_RESIZE; GT event keys only pass Inkey() when
+           HB_INKEY_GTEVENT is in the mask (HTEventLoop:poll handles them) */
+        Set( _SET_EVENTMASK, INKEY_ALL + HB_INKEY_GTEVENT )
+#endif
         SetBlink( .F. )
 
         result := 0

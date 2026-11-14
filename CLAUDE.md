@@ -27,8 +27,12 @@ Platform code is split with `#ifdef __PLATFORM__WINDOWS` (note: Harbour defines 
 upper-case form; `__PLATFORM__Windows` is never defined):
 - `HTEventLoop:poll()` — Win32 WndProc mouse queue (Windows) vs portable `Inkey()` path
 - `HTApplication:exec()` — installs the Win32 mouse bridge (`ht_winmouse.c`, stubs elsewhere)
-- `ht_cuiSetupDisplay()` — gtwvt fullscreen + Consolas font fit (Windows) vs fixed
+- `ht_cuiSetupDisplay()` — gtwvt fullscreen + Consolas font fit (Windows) vs a resizable
   `SetMode( nRows, nCols )` window in the GT's own font (Linux)
+- `HTApplication:exec()` event mask — non-Windows adds `HB_INKEY_GTEVENT`, so gtxwc's
+  `HB_K_RESIZE` (grid follows the window size) reaches `HTEventLoop:handleResize()`,
+  which repaints the desktop, refits `HTMainWindow` (`screenResized()`: bottom status
+  bar re-docked) and repaints every window. gtxwc needs X core fonts (`xfonts-base`).
 
 The portable path can be checked on Windows by building a copy of the library with
 `__PLATFORM__WINDOWS` renamed in those three files.

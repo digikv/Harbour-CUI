@@ -20,6 +20,7 @@ PUBLIC:
     METHOD raise() INLINE NIL
     METHOD show()
     METHOD fitToScreen()
+    METHOD screenResized()
 
 ENDCLASS
 
@@ -57,6 +58,29 @@ METHOD PROCEDURE fitToScreen() CLASS HTMainWindow
     IF ::Fheight < 20
         ::Fheight := 20
     ENDIF
+RETURN
+
+/** Follows a change of the character grid (HB_K_RESIZE): refits the window
+ * to the screen and keeps a status bar that sat on the bottom row docked
+ * there, stretched to the new width. The caller repaints.
+ */
+METHOD PROCEDURE screenResized() CLASS HTMainWindow
+
+    LOCAL nOldHeight := ::Fheight
+    LOCAL nOldWidth  := ::Fwidth
+    LOCAL child
+
+    ::fitToScreen()
+
+    IF ::Fheight != nOldHeight .OR. ::Fwidth != nOldWidth
+        FOR EACH child IN ::children
+            IF child:isDerivedFrom( "HTStatusBar" ) .AND. child:y == nOldHeight - 2
+                /* content row Fheight - 2 = last window row (row 0 is the title) */
+                child:setGeometry( child:x, ::Fheight - 2, ::Fwidth - child:x, 1 )
+            ENDIF
+        NEXT
+    ENDIF
+
 RETURN
 
 /** Returns the menu bar, creating one if it does not exist.
