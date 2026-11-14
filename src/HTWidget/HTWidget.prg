@@ -928,6 +928,22 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTWidget
         /* title-bar drag and corner resize are blocking (ht_winDrag / ht_winResize) */
         EXIT
 
+    CASE K_LDBLCLK
+
+        /* double-click: hand it to the child under the cursor (the first
+           click of the pair already focused it), e.g. HTBrowse cell edit */
+        nContentRow := eventMouse:mouseRow - 1
+        nContentCol := eventMouse:mouseCol
+        IF nContentRow >= 0 .AND. nContentCol >= 0
+            oHitChild := ::childAt( nContentRow, nContentCol )
+            IF oHitChild != NIL
+                eventMouse:mouseRow := nContentRow - oHitChild:y
+                eventMouse:mouseCol := nContentCol - oHitChild:x
+                oHitChild:mouseEvent( eventMouse )
+            ENDIF
+        ENDIF
+        EXIT
+
     CASE K_RBUTTONDOWN
 
         /* right-click: show context menu on the child under cursor, or on self */

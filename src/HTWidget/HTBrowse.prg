@@ -27,11 +27,17 @@ PROTECTED:
 
     DATA FoBrowse                           /* TBrowse instance */
     DATA FlConfigured    INIT .F.
-    DATA FoEditWidget    INIT NIL           /* HTLineEdit used for inline editing */
+    DATA FoEditGet       INIT NIL           /* HTGetBackend editing the current cell */
+    DATA FxEditVar       INIT NIL           /* value being edited (bound to FoEditGet) */
     DATA FxOldValue      INIT NIL           /* original value before edit */
     DATA FlEditing       INIT .F.           /* currently editing a cell */
+    DATA FnEditRow       INIT 0             /* edited cell, browse-local row/col */
+    DATA FnEditCol       INIT 0
+    DATA FnEditOffset    INIT 1             /* first buffer char shown in the cell */
 
     METHOD configureBrowse()
+    METHOD editKey( nKey )
+    METHOD repaintSelf()
 
 PUBLIC:
 
@@ -40,6 +46,8 @@ PUBLIC:
     METHOD paintEvent( paintEvent )
     METHOD keyEvent( keyEvent )
     METHOD mouseEvent( eventMouse )
+    METHOD focusOutEvent( eventFocus )
+    METHOD cursorPos()
 
     /* data source blocks */
     METHOD setSkipBlock( b )
@@ -68,9 +76,11 @@ PUBLIC:
     METHOD refreshAll()
     METHOD refreshCurrent()
 
-    /* inline editing */
+    /* inline editing: F2 / typing / double-click start, Enter or Up/Down
+       save, Esc cancels. Columns need a read/write block {|x| ... } */
     METHOD beginEdit( nKey )
     METHOD endEdit( lAccept )
+    METHOD isEditing() INLINE ::FlEditing
 
     /* direct access to TBrowse object */
     METHOD browse() INLINE ::FoBrowse
@@ -169,6 +179,8 @@ RETURN
  */
 METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTBrowse
 
+    LOCAL oCol, cBuffer, nWidth, nPos
+
     HB_SYMBOL_UNUSED( paintEvent )
 
     IF ::FoBrowse:colCount = 0
@@ -191,11 +203,31 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTBrowse
     ::FoBrowse:refreshAll()
     ::FoBrowse:forceStable()
 
-    /* paint inline edit widget overlay if active */
-    IF ::FlEditing .AND. ::FoEditWidget != NIL
-        DispOutAt( ::FoEditWidget:y, ::FoEditWidget:x, ;
-            PadR( ::FoEditWidget:text, ::FoEditWidget:width ), ;
-            HTTheme():getColor( HT_CLR_LINEEDIT_FOCUSED ) )
+    /* inline editor over the current cell. TBrowse (core RTL, absolute
+       coordinates) leaves the cursor on the current cell after
+       forceStable(); DispOutAt here is relative to this browse's viewport,
+       whose origin is the TBrowse's nTop/nLeft. */
+    IF ::FlEditing .AND. ::FoEditGet != NIL
+        oCol := ::FoBrowse:getColumn( ::FoBrowse:colPos )
+        cBuffer := ::FoEditGet:buffer
+        nWidth := IIF( oCol != NIL .AND. HB_ISNUMERIC( oCol:width ), oCol:width, Len( cBuffer ) )
+        nWidth := Max( 1, nWidth )
+
+        ::FnEditRow := Row() - ::FoBrowse:nTop
+        ::FnEditCol := Col() - ::FoBrowse:nLeft
+
+        /* scroll the buffer so the edit cursor stays inside the cell */
+        nPos := ::FoEditGet:pos
+        IF nPos < ::FnEditOffset
+            ::FnEditOffset := nPos
+        ELSEIF nPos > ::FnEditOffset + nWidth - 1
+            ::FnEditOffset := nPos - nWidth + 1
+        ENDIF
+        ::FnEditOffset := Max( 1, ::FnEditOffset )
+
+        DispOutAt( ::FnEditRow, ::FnEditCol, ;
+            PadR( SubStr( cBuffer, ::FnEditOffset ), nWidth ), ;
+            HTTheme():getColor( HT_CLR_GET_FOCUSED ) )
     ENDIF
 
 RETURN
@@ -211,24 +243,27 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS HTBrowse
         RETURN
     ENDIF
 
-    /* route keys to edit widget during inline editing */
-    IF ::FlEditing .AND. ::FoEditWidget != NIL
+    /* inline editing owns the keys; Up/Down save and then move */
+    IF ::FlEditing .AND. ::FoEditGet != NIL
         SWITCH keyEvent:key
         CASE K_ENTER
             ::endEdit( .T. )
-            EXIT
+            keyEvent:accept()
+            RETURN
         CASE K_ESC
             ::endEdit( .F. )
-            EXIT
+            keyEvent:accept()
+            RETURN
+        CASE K_UP
+        CASE K_DOWN
+            ::endEdit( .T. )
+            EXIT   /* fall through to normal navigation below */
         OTHERWISE
-            ::FoEditWidget:keyEvent( keyEvent )
+            ::editKey( keyEvent:key )
+            keyEvent:accept()
+            ::repaintSelf()
+            RETURN
         ENDSWITCH
-        keyEvent:accept()
-        parent := ::parent()
-        IF parent != NIL .AND. parent:isDerivedFrom( "HTWidget" )
-            parent:repaintChild( self )
-        ENDIF
-        RETURN
     ENDIF
 
     SWITCH keyEvent:key
@@ -326,27 +361,41 @@ RETURN
  */
 METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTBrowse
 
-    LOCAL nMouseRow, nMouseCol
+    LOCAL nMouseRow
     LOCAL nClickRow, nSkip, nColSkip
     LOCAL parent
     LOCAL nHeadHeight
-    LOCAL nTargetCol, nHitResult
+    LOCAL nTargetCol
 
     IF ::FoBrowse:colCount = 0
         RETURN
     ENDIF
 
     SWITCH eventMouse:nKey
+    CASE K_LDBLCLK
+        /* double-click: edit the cell (the first click already selected it) */
+        IF ::Feditable
+            ::beginEdit( 0 )
+        ELSEIF ::FonActivated != NIL
+            Eval( ::FonActivated, ::FoBrowse:rowPos, ::FoBrowse:colPos )
+        ENDIF
+        EXIT
+
     CASE K_LBUTTONDOWN
+
+        /* a click elsewhere saves the cell being edited */
+        IF ::FlEditing
+            ::endEdit( .T. )
+        ENDIF
 
         /*
          * Mouse coords are relative to the CT window (margins=0).
          * The browse viewport starts at (1 + ::y, 1 + ::x) in window coords.
          * Convert to browse-local coordinates.
          */
-        /* mouseRow/Col are child-relative (translated by parent's dispatch) */
+        /* mouseRow is child-relative (translated by parent's dispatch); the
+           column comes from TBrowse:mColPos below */
         nMouseRow := eventMouse:mouseRow
-        nMouseCol := eventMouse:mouseCol
 
         IF nMouseRow < 0
             RETURN
@@ -365,6 +414,16 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTBrowse
             RETURN
         ENDIF
 
+        /* clicked column: TBrowse:mColPos maps the mouse position (MRow/MCol,
+           absolute) through the column screen positions of the last stable
+           paint. Read it BEFORE moving rows — configureBrowse() calls
+           configure(), which drops those positions until the next
+           stabilize, so mColPos would come back 0 for a click on another row */
+        nTargetCol := ::FoBrowse:mColPos
+        IF nTargetCol < 1
+            nTargetCol := ::FoBrowse:colPos
+        ENDIF
+
         /* skip from current rowPos to clicked row */
         nSkip := nClickRow - ::FoBrowse:rowPos
 
@@ -380,15 +439,6 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTBrowse
                 ::FoBrowse:up()
                 nSkip++
             ENDDO
-        ENDIF
-
-        /* use TBrowse:hitTest to determine the clicked column —
-           it accounts for centering offset, frozen columns, separators */
-        nHitResult := ::FoBrowse:hitTest( nMouseRow, nMouseCol )
-        HB_SYMBOL_UNUSED( nHitResult )
-        nTargetCol := ::FoBrowse:mColPos
-        IF nTargetCol < 1
-            nTargetCol := ::FoBrowse:colPos
         ENDIF
 
         /* navigate to the target column */
@@ -503,15 +553,16 @@ METHOD PROCEDURE refreshAll() CLASS HTBrowse
 
 RETURN
 
-/** Starts inline editing of the current cell.
- * Creates a temporary HTLineEdit overlaying the cell.
- * @param nKey Initial key to feed (0 = edit existing value, >0 = start typing)
+/** Starts inline editing of the current cell with a TGet (HTGetBackend), so
+ * the column PICTURE applies and the value keeps its type.
+ * @param nKey 0 = edit the current value (F2 / double-click / API);
+ *             a printable key = replace the value, starting with that key
  */
 METHOD PROCEDURE beginEdit( nKey ) CLASS HTBrowse
 
-    LOCAL oCol, xValue, cValue
-    LOCAL nColPos, nCellLeft, nCellWidth, nDataRow
-    LOCAL parent
+    LOCAL oCol, xValue
+    LOCAL nColPos, nWidth
+    LOCAL cPicture
 
     IF ::FlEditing .OR. ::FoBrowse:colCount = 0
         RETURN
@@ -519,69 +570,75 @@ METHOD PROCEDURE beginEdit( nKey ) CLASS HTBrowse
 
     nColPos := ::FoBrowse:colPos
     oCol := ::FoBrowse:getColumn( nColPos )
-
     IF oCol == NIL
         RETURN
     ENDIF
 
-    /* get current cell value */
     xValue := Eval( oCol:block )
-    ::FxOldValue := xValue
-    cValue := IIF( hb_isString( xValue ), xValue, hb_CStr( xValue ) )
+    /* TGet edits characters, numbers, dates, timestamps and logicals */
+    IF ! ValType( xValue ) $ "CNDTL"
+        RETURN
+    ENDIF
 
-    /* fire onBeginEdit callback */
     IF ::FonBeginEdit != NIL
         IF ! Eval( ::FonBeginEdit, ::FoBrowse:rowPos, nColPos, xValue )
             RETURN
         ENDIF
     ENDIF
 
-    /* use TBrowse's own cursor position — after forceStable, Row()/Col()
-       mark the exact cell position accounting for separators and alignment */
-    ::FoBrowse:forceStable()
-    nDataRow := Row()
-    nCellLeft := Col()
-    nCellWidth := IIF( oCol:width != NIL, oCol:width, 10 )
+    ::FxOldValue := xValue
+    cPicture := oCol:picture
 
-    /* create edit widget */
-    ::FoEditWidget := HTLineEdit():new()
-    ::FoEditWidget:setGeometry( nCellLeft, nDataRow, nCellWidth, 1 )
-    ::FoEditWidget:show()
-    ::FoEditWidget:setText( AllTrim( cValue ) )
+    /* strings are edited padded to the column width, so the user can type
+       up to it (the value is RTrim()-ed back on save) */
+    IF HB_ISSTRING( xValue )
+        nWidth := IIF( HB_ISNUMERIC( oCol:width ), oCol:width, Len( xValue ) )
+        ::FxEditVar := PadR( xValue, Max( Len( xValue ), nWidth ) )
+    ELSE
+        ::FxEditVar := xValue
+    ENDIF
 
+    ::FoEditGet := HTGetBackend():new( 0, 0, ;
+        {| x | IIF( x == NIL, ::FxEditVar, ::FxEditVar := x ) }, "", cPicture )
+    ::FoEditGet:setFocus()
+    ::FnEditOffset := 1
     ::FlEditing := .T.
 
-    /* if a key was pressed to start editing, feed it */
     IF nKey > 0
-        ::FoEditWidget:setText( "" )
-        ::FoEditWidget:keyEvent( HTKeyEvent():new( nKey ) )
+        /* typing starts a new value: the first key clears the cell */
+        ::FoEditGet:clear := .T.
+        ::editKey( nKey )
+    ELSEIF HB_ISSTRING( xValue )
+        /* F2 on text: cursor after the text, like a spreadsheet */
+        ::FoEditGet:pos := Min( Len( RTrim( ::FoEditGet:buffer ) ) + 1, Len( ::FoEditGet:buffer ) )
     ENDIF
 
-    /* paint the edit widget */
-    parent := ::parent()
-    IF parent != NIL .AND. parent:isDerivedFrom( "HTWidget" )
-        parent:repaintChild( self )
-    ENDIF
+    ::repaintSelf()
 
 RETURN
 
-/** Ends inline editing and optionally saves the new value.
- * @param lAccept .T. to save, .F. to discard
+/** Ends inline editing.
+ * @param lAccept .T. writes the typed value back through the column block
+ *                (after onEndEdit agrees), .F. discards the edit
  */
 METHOD PROCEDURE endEdit( lAccept ) CLASS HTBrowse
 
-    LOCAL xNewValue, oCol, parent
+    LOCAL xNewValue, oCol
 
     DEFAULT lAccept := .T.
 
-    IF ! ::FlEditing .OR. ::FoEditWidget == NIL
+    IF ! ::FlEditing .OR. ::FoEditGet == NIL
         RETURN
     ENDIF
 
     IF lAccept
-        xNewValue := ::FoEditWidget:text
+        /* buffer -> typed value (unTransform via the PICTURE) */
+        ::FoEditGet:assign()
+        xNewValue := ::FxEditVar
+        IF HB_ISSTRING( xNewValue )
+            xNewValue := RTrim( xNewValue )
+        ENDIF
 
-        /* fire onEndEdit callback */
         IF ::FonEndEdit != NIL
             IF ! Eval( ::FonEndEdit, ::FoBrowse:rowPos, ::FoBrowse:colPos, ::FxOldValue, xNewValue )
                 lAccept := .F.
@@ -589,7 +646,7 @@ METHOD PROCEDURE endEdit( lAccept ) CLASS HTBrowse
         ENDIF
 
         IF lAccept
-            /* write the value back via the column block (if it supports writing) */
+            /* write back through the column block (read-only blocks ignore it) */
             oCol := ::FoBrowse:getColumn( ::FoBrowse:colPos )
             IF oCol != NIL
                 Eval( oCol:block, xNewValue )
@@ -597,12 +654,94 @@ METHOD PROCEDURE endEdit( lAccept ) CLASS HTBrowse
         ENDIF
     ENDIF
 
-    ::FoEditWidget := NIL
+    ::FoEditGet:killFocus()
+    ::FoEditGet  := NIL
+    ::FxEditVar  := NIL
     ::FxOldValue := NIL
-    ::FlEditing := .F.
+    ::FlEditing  := .F.
 
-    /* refresh browse */
-    parent := ::parent()
+    ::FoBrowse:refreshCurrent()
+    ::repaintSelf()
+
+RETURN
+
+/** Applies one editing key to the cell editor (TGet semantics, as HTGet).
+ * @return .T. if the key was used
+ */
+METHOD FUNCTION editKey( nKey ) CLASS HTBrowse
+
+    LOCAL cChar
+
+    SWITCH nKey
+    CASE K_LEFT
+        ::FoEditGet:left()
+        EXIT
+    CASE K_RIGHT
+        ::FoEditGet:right()
+        EXIT
+    CASE K_HOME
+        ::FoEditGet:home()
+        EXIT
+    CASE K_END
+        ::FoEditGet:end()
+        EXIT
+    CASE K_BS
+        ::FoEditGet:backSpace()
+        EXIT
+    CASE K_DEL
+        ::FoEditGet:delete()
+        EXIT
+    CASE K_CTRL_Y
+        ::FoEditGet:delEnd()
+        EXIT
+    CASE K_CTRL_U
+        ::FoEditGet:undo()
+        EXIT
+    CASE K_INS
+        Set( _SET_INSERT, ! Set( _SET_INSERT ) )
+        EXIT
+    OTHERWISE
+        cChar := hb_keyChar( nKey )
+        IF Len( cChar ) = 1 .AND. Asc( cChar ) >= 32
+            IF Set( _SET_INSERT )
+                ::FoEditGet:insert( cChar )
+            ELSE
+                ::FoEditGet:overStrike( cChar )
+            ENDIF
+        ELSE
+            RETURN .F.
+        ENDIF
+    ENDSWITCH
+
+RETURN .T.
+
+/** Text cursor inside the edited cell (browse-local), for
+ * HTApplication:syncCursor(); NIL when not editing. */
+METHOD FUNCTION cursorPos() CLASS HTBrowse
+
+    IF ::FlEditing .AND. ::FoEditGet != NIL .AND. ::hasFocus() .AND. ;
+       HB_ISNUMERIC( ::FoEditGet:pos ) .AND. ::FoEditGet:pos > 0
+        RETURN { ::FnEditRow, ::FnEditCol + ::FoEditGet:pos - ::FnEditOffset }
+    ENDIF
+
+RETURN NIL
+
+/** Leaving the browse (Tab, click on another control) saves the edit. */
+METHOD PROCEDURE focusOutEvent( eventFocus ) CLASS HTBrowse
+
+    IF ::FlEditing
+        ::endEdit( .T. )
+    ENDIF
+
+    ::super:focusOutEvent( eventFocus )
+
+RETURN
+
+/** Repaints this browse through its parent (re-establishes the viewport). */
+METHOD PROCEDURE repaintSelf() CLASS HTBrowse
+
+    LOCAL parent := ::parent()
+
     IF parent != NIL .AND. parent:isDerivedFrom( "HTWidget" )
         parent:repaintChild( self )
     ENDIF

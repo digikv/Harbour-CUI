@@ -96,7 +96,7 @@ PROCEDURE Main()
     main:show()
 
     HTLabel():new( "Drag title = move   / = resize   # = maximize   _ = minimize   x = close" + ;
-        "   Ctrl+F6 = next window", main ):move( 2, 1 )
+        "   Ctrl+F6 = next window   F2 = edit cell", main ):move( 2, 1 )
 
     s_oMainStatus := HTStatusBar():new( main )
     s_oMainStatus:setGeometry( 0, Max( 0, main:height - 2 ), main:width, 1 )
@@ -231,13 +231,20 @@ STATIC PROCEDURE BuildBrowse( win, cTitle, aData, aCols )
     brw:setColSep( e"\xB3" )
     brw:onActivated := {|| ShowStatus( cTitle + ": " + hb_CStr( aData[ aRec[ 1 ], 2 ] ) ) }
 
+    /* cells are editable: F2 / typing / double-click, Enter saves, Esc cancels */
+    brw:editable := .T.
+    brw:onEndEdit := {| nRow, nCol, xOld, xNew | HB_SYMBOL_UNUSED( nRow ), ;
+        ShowStatus( cTitle + ": " + aCols[ nCol ][ 1 ] + "  " + ;
+            AllTrim( hb_CStr( xOld ) ) + " -> " + AllTrim( hb_CStr( xNew ) ) ), .T. }
+
     layout:addWidget( brw )
 
 RETURN
 
-/** Read-only column block bound to its own column index. */
+/** Read/write column block bound to its own column index: {|x| ... }
+ * returns the cell, or stores x into it (used by inline editing). */
 STATIC FUNCTION ColumnBlock( aData, aRec, nCol )
-RETURN {|| aData[ aRec[ 1 ], nCol ] }
+RETURN {| x | IIF( x == NIL, aData[ aRec[ 1 ], nCol ], aData[ aRec[ 1 ], nCol ] := x ) }
 
 /** TBrowse skip over an array; aRec[ 1 ] is the current row. */
 STATIC FUNCTION ArraySkip( aRec, nLen, nRequest )

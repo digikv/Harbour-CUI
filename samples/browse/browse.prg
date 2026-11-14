@@ -55,7 +55,7 @@ PROCEDURE Main()
     brw:addColumn( "Code",   {|x| IIF( x == NIL, aData[ nRecNo, 1 ], aData[ nRecNo, 1 ] := x ) }, 7 )
     brw:addColumn( "Name",   {|x| IIF( x == NIL, aData[ nRecNo, 2 ], aData[ nRecNo, 2 ] := x ) }, 12 )
     brw:addColumn( "Type",   {|x| IIF( x == NIL, aData[ nRecNo, 3 ], aData[ nRecNo, 3 ] := x ) }, 10 )
-    brw:addColumn( "Budget", {|x| IIF( x == NIL, aData[ nRecNo, 4 ], aData[ nRecNo, 4 ] := Val( x ) ) }, 12, "999,999.99" )
+    brw:addColumn( "Budget", {|x| IIF( x == NIL, aData[ nRecNo, 4 ], aData[ nRecNo, 4 ] := x ) }, 12, "999,999.99" )
 
     brw:setHeadSep( e"\xC4" )
     brw:setColSep( e"\xB3" )

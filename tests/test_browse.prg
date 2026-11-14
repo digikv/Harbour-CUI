@@ -8,6 +8,7 @@
  */
 
 #include "hbtui.ch"
+#include "inkey.ch"
 
 STATIC nPass := 0
 STATIC nFail := 0
@@ -19,6 +20,7 @@ PROCEDURE Main()
     TestBrowseInit()
     TestBrowseColumns()
     TestBrowseCallbacks()
+    TestBrowseInlineEdit()
 
     nTotal := nPass + nFail
     QOut( "" )
@@ -113,5 +115,52 @@ STATIC PROCEDURE TestBrowseCallbacks()
     Assert( "HTBrowse:onActivated set",  o:onActivated != NIL )
 
     Assert( "HTBrowse:editable still .F.", ! o:editable )
+
+RETURN
+
+/*----------------------------------------------------------------*/
+
+STATIC PROCEDURE TestBrowseInlineEdit()
+
+    LOCAL o
+    LOCAL aData := { { "A", 10.50 } }
+    LOCAL aEnd := {}
+
+    o := HTBrowse():new()
+    o:setGoTopBlock( {|| NIL } )
+    o:setGoBottomBlock( {|| NIL } )
+    o:setSkipBlock( {|| 0 } )
+    o:addColumn( "Name",   {|x| IIF( x == NIL, aData[ 1, 1 ], aData[ 1, 1 ] := x ) }, 10 )
+    o:addColumn( "Amount", {|x| IIF( x == NIL, aData[ 1, 2 ], aData[ 1, 2 ] := x ) }, 8, "9999.99" )
+    o:editable := .T.
+    o:onEndEdit := {| r, c, xOld, xNew | HB_SYMBOL_UNUSED( r ), AAdd( aEnd, { c, xOld, xNew } ), .T. }
+
+    /* F2 on text: cursor after the text, typed keys extend it, Enter saves */
+    o:keyEvent( HTKeyEvent():new( K_F2 ) )
+    Assert( "Edit: F2 starts editing",              o:isEditing() )
+    o:keyEvent( HTKeyEvent():new( Asc( "B" ) ) )
+    o:keyEvent( HTKeyEvent():new( Asc( "C" ) ) )
+    o:keyEvent( HTKeyEvent():new( K_ENTER ) )
+    Assert( "Edit: Enter ends editing",             ! o:isEditing() )
+    Assert( "Edit: text saved (RTrim)",             aData[ 1, 1 ] == "ABC" )
+    Assert( "Edit: onEndEdit old/new",              Len( aEnd ) == 1 .AND. aEnd[ 1, 2 ] == "A" .AND. aEnd[ 1, 3 ] == "ABC" )
+
+    /* typing on a numeric cell replaces it and saves a number */
+    o:browse():colPos := 2
+    o:keyEvent( HTKeyEvent():new( Asc( "4" ) ) )
+    o:keyEvent( HTKeyEvent():new( Asc( "2" ) ) )
+    o:keyEvent( HTKeyEvent():new( K_ENTER ) )
+    Assert( "Edit: numeric saved as number",        HB_ISNUMERIC( aData[ 1, 2 ] ) .AND. aData[ 1, 2 ] == 42 )
+    Assert( "Edit: onEndEdit gets typed value",     Len( aEnd ) == 2 .AND. aEnd[ 2, 2 ] == 10.50 .AND. aEnd[ 2, 3 ] == 42 )
+
+    /* Esc discards */
+    o:keyEvent( HTKeyEvent():new( Asc( "9" ) ) )
+    o:keyEvent( HTKeyEvent():new( K_ESC ) )
+    Assert( "Edit: Esc keeps the old value",        aData[ 1, 2 ] == 42 .AND. Len( aEnd ) == 2 )
+
+    /* not editable: typing does not start an edit */
+    o:editable := .F.
+    o:keyEvent( HTKeyEvent():new( Asc( "7" ) ) )
+    Assert( "Edit: disabled when not editable",     ! o:isEditing() )
 
 RETURN

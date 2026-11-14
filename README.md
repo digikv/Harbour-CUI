@@ -22,7 +22,7 @@ Older standalone CUI helpers (`win.prg`, `cui.ch`) are kept under [`legacy/`](le
 | Windows | HTMainWindow, HTDesktop, HTDialog (modal + button bar + draggable), HTMessageBox |
 | Input | HTLineEdit (selection + clipboard), HTGet (full PICTURE/VALID/WHEN), HTTextEdit, HTSpinner, HTCheckList |
 | Buttons | HTPushButton, HTCheckBox, HTRadioButton |
-| Lists | HTListBox, HTComboBox (type-to-filter), HTBrowse (TBrowse wrapper, inline editing) |
+| Lists | HTListBox, HTComboBox (type-to-filter), HTBrowse (TBrowse wrapper, inline cell editing: F2 / typing / double-click, typed values via the column PICTURE) |
 | Menus | HTMenuBar, HTMenu, HTContextMenu, HTAction |
 | Layout | HTVBoxLayout, HTHBoxLayout, HTGridLayout |
 | Display | HTLabel, HTFrame, HTProgressBar, HTStatusBar, HTSeparator, HTScrollBar, HTTabWidget, HTToolBar |
@@ -60,7 +60,7 @@ cd samples/hello && hbmk2 hello.prg hbmk.hbm && ./hello
 |--------|-------------|
 | `hello` | Minimal HTMainWindow + HTLabel |
 | `dialog` | HTDialog + HTMessageBox + toast results |
-| `window` | Overlapping windows: a form with two HTGets and two HTBrowse grids (move, resize, raise, maximize, minimize) |
+| `window` | Overlapping windows: a form with two HTGets and two editable HTBrowse grids (move, resize, raise, maximize, minimize, cell editing) |
 | `browse` | HTBrowse data grid with inline editing |
 | `controls` | Buttons, checkboxes, spinner, combo, list |
 | `get` | HTGet with PICTURE / VALID / WHEN |

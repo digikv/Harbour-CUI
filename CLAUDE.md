@@ -202,7 +202,8 @@ tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_widgets    HTLabel, HTLineEdit, HTCheckBox, HTPushButton, HTListBox,
                   HTComboBox, HTCheckList, HTSpinner, HTProgressBar, HTScrollBar,
                   HTTextEdit, HTContextMenu, HTMenu:items() (submenu order)
-  test_browse     HTBrowse column management, navigation blocks, callbacks
+  test_browse     HTBrowse column management, navigation blocks, callbacks,
+                  inline cell editing (F2/typing, Enter/Esc, typed numeric save)
   test_get        HTGet setup/getValue/setValue, label/picture/width, readOnly,
                   Enter moves to the next field (VALID rejection keeps focus)
   test_integration Focus cycle (flat + nested layouts), layout geometry,
