@@ -90,5 +90,6 @@ cd samples/window && hbmk2 window_01.prg hbmk.hbm && ./window_01
 
 ## License / credits
 
+- Harbour-CUI is released under the [MIT License](LICENSE) — Copyright (c) 2021-2026 Srđan Dragojlović.
 - Widget framework foundation: [tfonrouge/HBTui](https://github.com/tfonrouge/HBTui)
 - Harbour-CUI maintenance and CUI window evolution: [digikv/Harbour-CUI](https://github.com/digikv/Harbour-CUI)
