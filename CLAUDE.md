@@ -103,6 +103,18 @@ beneath); a `wSelect()` before `exec()` is overridden.
 
 **Targeted repaint**: `parent:repaintChild(self)` repaints a single child without clearing the entire window. Used by all controls for state changes.
 
+**Geometry**: `move()` and `resize()` take effect at once (they also queue the move/resize event), so a
+widget resized inside a running `HTDialog:exec()` paints with its new size. `HTDialog:move()` before
+`exec()` keeps that position (otherwise the dialog is centered). `setTitleButtons( lHide, lMaximize,
+lResize )` hides title bar buttons besides close (a message box: `.F., .F., .F.`).
+
+**HTBrowse**: wraps a TBrowse (`browse()`), or shows an existing one: `setBrowse( oTBrowse )` (its
+columns/blocks stay). `setColorSpec( c )` keeps own colors (NIL = theme). A paint redraws from the
+rows TBrowse already read (`invalidate()`); position and colors are assigned only when they change
+(each assignment makes TBrowse re-read every row) — after data changes call `refreshAll()` /
+`refreshCurrent()`, as with a plain TBrowse. `stabilize()` leaves the screen cursor on the current
+cell (a GET at `Row(), Col()` edits it in place).
+
 **Theme system**: `HTTheme()` singleton, `HT_CLR_MAX` (57) color categories. All widgets use `HTTheme():getColor(HT_CLR_xxx)` instead of hardcoded colors, at paint time.
 - A theme = one color string per category + optionally a **palette** (16 COLORREF values, `ht_rgb()`:
   what indexes 0..15 look like). `loadTheme( cName )` sets both; `applyPalette()` pushes the palette
@@ -119,6 +131,8 @@ beneath); a `wSelect()` before `exec()` is overridden.
   `themePalette()`, `isBuiltIn()`, `categoryName( nCat )`. Names are case-insensitive.
 - After a change call `HTApplication():repaintAll()` (desktop + every top-level window in place).
   A palette change alone repaints by itself (the GT exposes the whole screen).
+- `ht_usePalette( .F. )` (callable before `HTApplication():new()`): themes change the color strings
+  only and never touch the GT palette — for apps that manage their own palette.
 
 **Debug logging**: `ht_debugLog(cMessage)` writes to stderr when enabled via `HTApplication():setDebug(.T.)`. Capture with `./myapp 2>debug.log`.
 
@@ -289,7 +303,8 @@ tests/            Automated test suite (headless, -gtnul, exit code 0/1)
                   Unicode: UTF8EX default, CJK typing (ht_keyText, editors, HTGet),
                   wide-cell helpers, SaveScreen keeping Unicode, ht_glyph
   test_browse     HTBrowse column management, navigation blocks, callbacks,
-                  inline cell editing (F2/typing, Enter/Esc, typed numeric save)
+                  inline cell editing (F2/typing, Enter/Esc, typed numeric save),
+                  setBrowse (external TBrowse), own colors, repaint without re-reading rows
   test_get        HTGet setup/getValue/setValue, label/picture/width, readOnly,
                   Enter moves to the next field (VALID rejection keeps focus)
   test_integration Focus cycle (flat + nested layouts), layout geometry,

@@ -36,6 +36,7 @@ PROCEDURE Main()
     TestTextEdit()
     TestContextMenu()
     TestMenuItems()
+    TestTitleButtons()
     TestUnicodeInput()   /* last: HTApplication():new() switches the codepage */
 
     nTotal := nPass + nFail
@@ -612,3 +613,19 @@ STATIC FUNCTION ScrCell( cScr, n )
     LOCAL nPos := ( n - 1 ) * ( hb_BLen( cScr ) / 4 ) + 1
 
 RETURN hb_BCode( hb_BSubStr( cScr, nPos, 1 ) ) + hb_BCode( hb_BSubStr( cScr, nPos + 1, 1 ) ) * 256
+
+/* setTitleButtons(): a message box keeps only close */
+STATIC PROCEDURE TestTitleButtons()
+
+    LOCAL o := HTDialog():new( NIL, "Msg" )
+
+    o:setTitleButtons( .F., .F., .F. )
+    Assert( "setTitleButtons: all off",   o:charWidgetHide == NIL .AND. o:charWidgetMaximize == NIL .AND. o:charWidgetResize == NIL )
+    Assert( "setTitleButtons: close kept", o:charWidgetClose != NIL )
+    o:setTitleButtons( NIL, .T. )
+    Assert( "setTitleButtons: maximize back, others as they were", o:charWidgetMaximize != NIL .AND. o:charWidgetHide == NIL )
+
+    o:resize( 30, 6 )
+    Assert( "HTDialog:resize at once",    o:width == 30 .AND. o:height == 6 )
+
+RETURN

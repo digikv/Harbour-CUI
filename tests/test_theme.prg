@@ -37,6 +37,7 @@ PROCEDURE Main()
     TestBuiltInThemes()
     TestOwnThemes()
     TestInvalidIndex()
+    TestUsePalette()
 
     nTotal := nPass + nFail
     QOut( "" )
@@ -278,5 +279,19 @@ STATIC PROCEDURE TestOwnThemes()
     Assert( "categoryName invalid", oTheme:categoryName( 0 ) == "" )
 
     oTheme:loadDefault()
+
+RETURN
+
+/* ht_usePalette( .F. ): themes keep the application's palette */
+STATIC PROCEDURE TestUsePalette()
+
+    LOCAL lOld := ht_usePalette( .F. )
+
+    Assert( "ht_usePalette: on by default",   lOld )
+    Assert( "ht_usePalette: now off",         ! ht_usePalette() )
+    Assert( "loadTheme works with it off",    HTTheme():loadTheme( "Blue" ) .AND. HTTheme():themeName() == "Blue" )
+    ht_usePalette( .T. )
+    HTTheme():loadTheme( "Classic" )
+    Assert( "ht_usePalette: back on",         ht_usePalette() )
 
 RETURN

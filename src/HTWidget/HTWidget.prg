@@ -63,6 +63,11 @@ PROTECTED:
 
 PUBLIC:
 
+    /* title bar buttons besides close: minimize (─), maximize (□) and the
+       resize grip (┘); .F. hides one (a message box: close only). NIL
+       leaves it as it is. Call before the window is shown. */
+    METHOD setTitleButtons( lHide, lMaximize, lResize )
+
     /* .T. when this widget owns a CT window (windowId walks up to parents) */
     METHOD hasOwnWindow() INLINE ::FwindowId != NIL
 
@@ -1310,6 +1315,23 @@ METHOD PROCEDURE repaint() CLASS HTWidget
     ::paintEvent()
 RETURN
 
+/** Shows or hides the title bar buttons besides close.
+ * @param lHide     minimize button (─)
+ * @param lMaximize maximize / restore button (□ / ▫)
+ * @param lResize   resize grip in the bottom right corner (┘)
+ */
+METHOD PROCEDURE setTitleButtons( lHide, lMaximize, lResize ) CLASS HTWidget
+    IF HB_ISLOGICAL( lHide )
+        ::FcharWidgetHide := IIF( lHide, ht_glyph( 0x2500, "_" ), NIL )
+    ENDIF
+    IF HB_ISLOGICAL( lMaximize )
+        ::FcharWidgetMaximize := IIF( lMaximize, ht_glyph( 0x25A1, "#" ), NIL )
+    ENDIF
+    IF HB_ISLOGICAL( lResize )
+        ::FcharWidgetResize := IIF( lResize, ht_glyph( 0x2518, "/" ), NIL )
+    ENDIF
+RETURN
+
 /** Resizes the widget. Accepts HTSize or (width, height) numeric pair.
  * @param ... HTSize or two numeric values (width, height)
  */
@@ -1326,6 +1348,14 @@ METHOD PROCEDURE resize( ... ) CLASS HTWidget
         EXIT
     ENDSWITCH
     IF eventResize != NIL
+        /* the new size holds at once, as move() does with the position: a
+           widget resized inside a running modal dialog (HTDialog:exec(), the
+           dialog paints itself before its loop handles the queue) is drawn
+           with it; the event still follows for resizeEvent() overrides */
+        IF eventResize:size != NIL
+            ::Fwidth  := eventResize:size:width
+            ::Fheight := eventResize:size:height
+        ENDIF
         ::addEvent( eventResize )
     ENDIF
 RETURN

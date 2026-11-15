@@ -21,6 +21,7 @@ PROCEDURE Main()
     TestBrowseColumns()
     TestBrowseCallbacks()
     TestBrowseInlineEdit()
+    TestBrowseExternal()
 
     nTotal := nPass + nFail
     QOut( "" )
@@ -162,5 +163,49 @@ STATIC PROCEDURE TestBrowseInlineEdit()
     o:editable := .F.
     o:keyEvent( HTKeyEvent():new( Asc( "7" ) ) )
     Assert( "Edit: disabled when not editable",     ! o:isEditing() )
+
+RETURN
+
+/* an existing TBrowse shown by HTBrowse (setBrowse); own colors; a repaint
+   draws from the rows TBrowse read, refreshAll() reads them again */
+STATIC PROCEDURE TestBrowseExternal()
+
+    LOCAL o, oTB, n
+    LOCAL nReads := 0
+    LOCAL aRow := { "X" }
+
+    oTB := TBrowseNew()
+    oTB:goTopBlock    := {|| NIL }
+    oTB:goBottomBlock := {|| NIL }
+    oTB:skipBlock     := {|| 0 }
+    oTB:addColumn( TBColumnNew( "Col", {|| ++nReads, aRow[ 1 ] } ) )
+
+    o := HTBrowse():new()
+    o:setBrowse( oTB )
+    o:resize( 20, 5 )
+    Assert( "setBrowse: shows that TBrowse",       o:browse() == oTB .AND. o:columnCount() == 1 )
+    Assert( "resize: size holds at once",          o:width == 20 .AND. o:height == 5 )
+
+    o:setColorSpec( "W/B,N/W" )
+    o:paintEvent( HTPaintEvent():new() )
+    Assert( "setColorSpec: kept over the theme",   oTB:colorSpec == "W/B,N/W" )
+
+    n := nReads
+    o:paintEvent( HTPaintEvent():new() )
+    Assert( "repaint: no row read again",          nReads == n )
+
+    o:refreshAll()
+    o:paintEvent( HTPaintEvent():new() )
+    Assert( "refreshAll: rows read again",         nReads > n )
+
+    /* the cell: first data row; TBrowse centers a narrow column */
+    SetPos( 0, 0 )
+    o:stabilize()
+    Assert( "stabilize: cursor on the current cell", Row() == oTB:nTop + 1 .AND. ;
+        Col() >= oTB:nLeft .AND. Col() <= oTB:nRight - 2 )
+
+    o:setColorSpec( NIL )
+    o:paintEvent( HTPaintEvent():new() )
+    Assert( "setColorSpec( NIL ): theme colors",   !( oTB:colorSpec == "W/B,N/W" ) )
 
 RETURN

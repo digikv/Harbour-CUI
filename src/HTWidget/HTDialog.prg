@@ -160,7 +160,8 @@ METHOD FUNCTION addButtonBar( ... ) CLASS HTDialog
 RETURN aButtons
 
 /** Synchronous move — sets position immediately (no event queuing).
- * Before exec(): sets geometry for paintTopLevelWindow.
+ * Before exec(): sets geometry for paintTopLevelWindow; a dialog moved
+ * before exec() opens there (else centered).
  * @param ... HTPoint or (x, y) numeric pair
  */
 METHOD PROCEDURE move( ... ) CLASS HTDialog
@@ -176,6 +177,7 @@ METHOD PROCEDURE move( ... ) CLASS HTDialog
     ENDIF
     ::Fx := nNewX
     ::Fy := nNewY
+    ::FlPosSet := .T.   /* exec() keeps the position instead of centering */
 RETURN
 
 /** Synchronous resize — sets dimensions immediately (no event queuing).

@@ -34,6 +34,7 @@ PROTECTED:
     DATA FnEditRow       INIT 0             /* edited cell, browse-local row/col */
     DATA FnEditCol       INIT 0
     DATA FnEditOffset    INIT 1             /* first buffer char shown in the cell */
+    DATA FcColorSpec     INIT NIL           /* setColorSpec(): own colors instead of the theme */
 
     METHOD configureBrowse()
     METHOD editKey( nKey )
@@ -62,7 +63,7 @@ PUBLIC:
     METHOD setHeadSep( c )    INLINE ::FoBrowse:headSep := c
     METHOD setColSep( c )     INLINE ::FoBrowse:colSep := c
     METHOD setFootSep( c )    INLINE ::FoBrowse:footSep := c
-    METHOD setColorSpec( c )  INLINE ::FoBrowse:colorSpec := c
+    METHOD setColorSpec( c )  INLINE ::FcColorSpec := c   /* NIL = theme colors */
     METHOD setFrozen( n )     INLINE ::FoBrowse:freeze := n
 
     /* state */
@@ -84,6 +85,11 @@ PUBLIC:
 
     /* direct access to TBrowse object */
     METHOD browse() INLINE ::FoBrowse
+    /* show an existing TBrowse / TBrowseDB (its columns, blocks, colors) */
+    METHOD setBrowse( oBrowse )
+    /* bring the TBrowse up to date at its screen position; the cursor is
+       left on the current cell (for a GET over the cell) */
+    METHOD stabilize()
 
     PROPERTY onActivated READWRITE               /* {|nRow, nCol| ... } Enter/dblclick */
     PROPERTY editable READWRITE INIT .F.           /* .T. to enable inline cell editing */
@@ -165,12 +171,16 @@ METHOD PROCEDURE configureBrowse() CLASS HTBrowse
         nRight  := nLeft + ht_MaxCol()
     ENDIF
 
-    ::FoBrowse:nTop    := nTop
-    ::FoBrowse:nLeft   := nLeft
-    ::FoBrowse:nBottom := nBottom
-    ::FoBrowse:nRight  := nRight
-
-    ::FoBrowse:configure()
+    /* each assignment makes TBrowse re-read every visible row: only on a
+       change (moved / resized window) */
+    IF ::FoBrowse:nTop != nTop .OR. ::FoBrowse:nLeft != nLeft .OR. ;
+       ::FoBrowse:nBottom != nBottom .OR. ::FoBrowse:nRight != nRight .OR. ! ::FlConfigured
+        ::FoBrowse:nTop    := nTop
+        ::FoBrowse:nLeft   := nLeft
+        ::FoBrowse:nBottom := nBottom
+        ::FoBrowse:nRight  := nRight
+        ::FlConfigured := .T.
+    ENDIF
 
 RETURN
 
@@ -179,7 +189,7 @@ RETURN
  */
 METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTBrowse
 
-    LOCAL oCol, cBuffer, nWidth, nPos
+    LOCAL oCol, cBuffer, nWidth, nPos, cColor
 
     HB_SYMBOL_UNUSED( paintEvent )
 
@@ -187,20 +197,30 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTBrowse
         RETURN
     ENDIF
 
-    /* set colorSpec: pair 1 = normal cells, pair 2 = selected cell */
-    IF ::hasFocus()
-        ::FoBrowse:colorSpec := HTTheme():getColor( HT_CLR_BROWSE_FOCUSED ) + "," + ;
+    /* colorSpec: setColorSpec()'s own colors, else the theme's - pair 1 =
+       normal cells, pair 2 = selected cell. Assigned only on a change:
+       TBrowse re-reads its rows after each assignment. */
+    IF ::FcColorSpec != NIL
+        cColor := ::FcColorSpec
+    ELSEIF ::hasFocus()
+        cColor := HTTheme():getColor( HT_CLR_BROWSE_FOCUSED ) + "," + ;
             HTTheme():getColor( HT_CLR_BROWSE_SELECTED )
     ELSE
-        ::FoBrowse:colorSpec := HTTheme():getColor( HT_CLR_BROWSE_NORMAL ) + "," + ;
+        cColor := HTTheme():getColor( HT_CLR_BROWSE_NORMAL ) + "," + ;
             HTTheme():getColor( HT_CLR_BROWSE_NORMAL )
     ENDIF
+    IF !( ::FoBrowse:colorSpec == cColor )
+        ::FoBrowse:colorSpec := cColor
+    ENDIF
 
-    /* TBrowse uses core DispOutAt (absolute coords), reconfigure each paint */
+    /* TBrowse uses core DispOutAt (absolute coords): its position follows
+       the window */
     ::configureBrowse()
 
-    /* let TBrowse render using absolute screen coordinates */
-    ::FoBrowse:refreshAll()
+    /* the window under the browse was cleared: redraw every row, from the
+       rows TBrowse already read (invalidate). Data changed elsewhere is
+       shown after refreshAll() / refreshCurrent(), as with a TBrowse. */
+    ::FoBrowse:invalidate()
     ::FoBrowse:forceStable()
 
     /* TBrowse writes one character per cell: give CJK characters their
@@ -536,6 +556,26 @@ METHOD PROCEDURE addColumn( ... ) CLASS HTBrowse
 
     ::FlConfigured := .F.
 
+RETURN
+
+/** Shows an existing TBrowse / TBrowseDB: its columns, blocks and
+ * separators stay as they are; its position follows this widget.
+ * @param oBrowse TBrowse object
+ */
+METHOD PROCEDURE setBrowse( oBrowse ) CLASS HTBrowse
+    ::FoBrowse := oBrowse
+    ::FlConfigured := .F.
+RETURN
+
+/** Brings the TBrowse up to date at this widget's screen position. The
+ * screen cursor is left on the current cell (TBrowse:stabilize()), so a
+ * GET at Row(), Col() edits the cell in place.
+ */
+METHOD PROCEDURE stabilize() CLASS HTBrowse
+    IF ::FoBrowse:colCount > 0
+        ::configureBrowse()
+        ::FoBrowse:forceStable()
+    ENDIF
 RETURN
 
 /** Marks all rows for refresh and triggers a repaint via parent. */

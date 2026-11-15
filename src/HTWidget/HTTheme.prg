@@ -220,7 +220,7 @@ RETURN .T.
 /** Shows the current palette. GTs that do not report a palette (gtnul, some
  * terminals) keep their own colors; gtwvt and gtxwc repaint the screen. */
 METHOD PROCEDURE applyPalette() CLASS HTTheme
-    IF HB_ISARRAY( ::FaPalette ) .AND. ht_isPalette( hb_gtInfo( HB_GTI_PALETTE ) )
+    IF ht_usePalette() .AND. HB_ISARRAY( ::FaPalette ) .AND. ht_isPalette( hb_gtInfo( HB_GTI_PALETTE ) )
         hb_gtInfo( HB_GTI_PALETTE, ::FaPalette )
     ENDIF
 RETURN
@@ -708,3 +708,19 @@ STATIC FUNCTION ht_palAmber()
     aPal[ 16 ] := ht_rgb( 255, 214, 150 )   /* 15 "white" */
 
 RETURN aPal
+
+/** ht_usePalette( [ lOn ] ) -> lOld : themes show their palettes (default).
+ * With .F. a theme changes the color strings only and the palette on screen
+ * stays the application's own (hb_gtInfo( HB_GTI_PALETTE ) set by the
+ * program). Can be called before HTApplication():new() / the first HTTheme().
+ */
+FUNCTION ht_usePalette( lOn )
+
+    STATIC s_lOn := .T.
+    LOCAL lOld := s_lOn
+
+    IF HB_ISLOGICAL( lOn )
+        s_lOn := lOn
+    ENDIF
+
+RETURN lOld
