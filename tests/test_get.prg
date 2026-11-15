@@ -25,6 +25,7 @@ PROCEDURE Main()
     TestGetPicture()
     TestGetReadOnly()
     TestGetEnterMovesFocus()
+    TestGetUnchangedKeepsValue()
 
     nTotal := nPass + nFail
     QOut( "" )
@@ -218,5 +219,34 @@ STATIC PROCEDURE TestGetEnterMovesFocus()
     Assert( "HTGet:enterMovesFocus",                 oGet1:enterMovesFocus() )
     Assert( "HTLineEdit:enterMovesFocus",            HTLineEdit():new():enterMovesFocus() )
     Assert( "HTPushButton keeps Enter for itself",   ! HTPushButton():new( "OK" ):enterMovesFocus() )
+
+RETURN
+
+/*----------------------------------------------------------------*/
+
+/** Leaving a field that was not edited leaves its variable alone, like
+ * ReadModal(); an unpictured date shows like TGet shows it. Assigning the
+ * unchanged buffer read "11/15/26" back as 1926 (the default epoch). */
+STATIC PROCEDURE TestGetUnchangedKeepsValue()
+
+    LOCAL dDate := hb_SToD( "20261115" )
+    LOCAL nNum  := 1.23456
+    LOCAL oDlg, oDate, oNum
+
+    oDlg := HTDialog():new( NIL, "Test" )
+    oDate := HTGet():new( oDlg )
+    oDate:setup( {| x | IIF( x == NIL, dDate, dDate := x ) }, "", "", NIL, NIL, "", NIL, .F., .F., 10 )
+    oNum := HTGet():new( oDlg )
+    oNum:setup( {| x | IIF( x == NIL, nNum, nNum := x ) }, "", "9.99", NIL, NIL, "", NIL, .F., .F., 10 )
+
+    Assert( "HTGet: unpictured date shows like TGet", oDate:getDisplayValue() == DToC( dDate ) )
+
+    oDate:focusInEvent( HTFocusEvent():new( HT_EVENT_TYPE_FOCUSIN ) )
+    oDate:focusOutEvent( HTFocusEvent():new( HT_EVENT_TYPE_FOCUSOUT ) )
+    Assert( "HTGet: unchanged date keeps its century", dDate == hb_SToD( "20261115" ) )
+
+    oNum:focusInEvent( HTFocusEvent():new( HT_EVENT_TYPE_FOCUSIN ) )
+    oNum:focusOutEvent( HTFocusEvent():new( HT_EVENT_TYPE_FOCUSOUT ) )
+    Assert( "HTGet: unchanged number keeps hidden decimals", nNum == 1.23456 )
 
 RETURN

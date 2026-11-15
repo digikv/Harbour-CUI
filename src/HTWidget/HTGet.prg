@@ -415,8 +415,13 @@ METHOD PROCEDURE focusOutEvent( eventFocus ) CLASS HTGet
 
     IF ::FlGetActive .AND. ::FoGet != NIL
 
-        /* write edited value back to the variable */
-        ::FoGet:assign()
+        /* write an edited value back to the variable - only when it was
+           edited, like ReadModal(): assigning an unchanged buffer re-reads
+           it through the picture, which turns a date shown with a two-digit
+           year into another century, or cuts decimals the picture hides */
+        IF ::FoGet:changed
+            ::FoGet:assign()
+        ENDIF
 
         /* run post-validation */
         IF ::Fvalid != NIL
@@ -560,10 +565,6 @@ METHOD FUNCTION getDisplayValue() CLASS HTGet
         cValue := ""
     ENDIF
 
-    IF Len( ::Fpicture ) > 0
-        RETURN Transform( cValue, ::Fpicture )
-    ELSEIF hb_isString( cValue )
-        RETURN cValue
-    ENDIF
-
-RETURN hb_CStr( cValue )
+    /* an empty picture formats like TGet does: a date by DToC() (not
+       hb_CStr()'s "0d20261115"), a number by Str(), a logical as T/F */
+RETURN Transform( cValue, ::Fpicture )
