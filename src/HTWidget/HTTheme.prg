@@ -148,7 +148,7 @@ METHOD FUNCTION categoryName( nCategory ) CLASS HTTheme
         "CHECKLIST_SELECTED", "CHECKLIST_SELUNFOC", "MSGBOX_INFO", "MSGBOX_WARN", ;
         "MSGBOX_QUEST", "MENU_SEP", "SCROLLBAR", "CTXMENU_NORMAL", "CTXMENU_SELECTED", ;
         "CTXMENU_SEP", "TOAST_INFO", "TOAST_SUCCESS", "TOAST_WARNING", "TOAST_ERROR", ;
-        "BROWSE_SELECTED", "TITLEBAR", "TITLEBTN" }
+        "BROWSE_SELECTED", "TITLEBAR", "TITLEBTN", "MENU_HOTKEY", "MENU_HOTKEY_SEL" }
 
     IF HB_ISNUMERIC( nCategory ) .AND. nCategory >= 1 .AND. nCategory <= Len( s_aNames )
         RETURN s_aNames[ nCategory ]
@@ -404,6 +404,9 @@ STATIC FUNCTION ht_themeFromRoles( h )
     a[ HT_CLR_CTXMENU_SEP       ] := h[ "menu" ]
     a[ HT_CLR_MENU_BAR_SEL      ] := h[ "menuSel" ]
     a[ HT_CLR_MENU_ITEM_SEL     ] := h[ "menuSel" ]
+    /* hot key letters: red on the menu colors, as Digi shows them */
+    a[ HT_CLR_MENU_HOTKEY       ] := hb_HGetDef( h, "menuHot", ht_clrFg( h[ "menu" ], "4" ) )
+    a[ HT_CLR_MENU_HOTKEY_SEL   ] := hb_HGetDef( h, "menuHotSel", ht_clrFg( h[ "menuSel" ], "4" ) )
     a[ HT_CLR_CTXMENU_SELECTED  ] := h[ "menuSel" ]
 
     a[ HT_CLR_STATUSBAR         ] := h[ "status" ]
@@ -429,6 +432,13 @@ RETURN a
 
 /* Digi "klasicna": windows on palette gray 9, menu bar 10, title 11,
    highlight 14 (pastel blue), white 15 */
+/* a color pair with another foreground: ht_clrFg( "0/10", "4" ) -> "4/10" */
+STATIC FUNCTION ht_clrFg( cColor, cFg )
+
+    LOCAL n := At( "/", cColor )
+
+RETURN cFg + IIF( n > 0, SubStr( cColor, n ), "/0" )
+
 STATIC FUNCTION ht_rolesDigi()
 RETURN { ;
     "window"   => "0/9",  "desktop"     => "0/8", ;
@@ -532,6 +542,8 @@ STATIC FUNCTION ht_colorsHighContrast()
     a[ HT_CLR_MSGBOX_INFO       ] := "15/00"
     a[ HT_CLR_MSGBOX_WARN       ] := "14/00"
     a[ HT_CLR_MSGBOX_QUEST      ] := "11/00"
+    a[ HT_CLR_MENU_HOTKEY       ] := "14/00"
+    a[ HT_CLR_MENU_HOTKEY_SEL   ] := "04/15"
     a[ HT_CLR_MENU_SEP          ] := "15/00"
     a[ HT_CLR_SCROLLBAR         ] := "15/00"
     a[ HT_CLR_CTXMENU_NORMAL    ] := "15/00"
@@ -596,6 +608,8 @@ STATIC FUNCTION ht_colorsMono()
     a[ HT_CLR_MSGBOX_INFO       ] := "15/00"
     a[ HT_CLR_MSGBOX_WARN       ] := "15/00"
     a[ HT_CLR_MSGBOX_QUEST      ] := "15/00"
+    a[ HT_CLR_MENU_HOTKEY       ] := "15/00"
+    a[ HT_CLR_MENU_HOTKEY_SEL   ] := "08/07"
     a[ HT_CLR_MENU_SEP          ] := "15/00"
     a[ HT_CLR_SCROLLBAR         ] := "07/00"
     a[ HT_CLR_CTXMENU_NORMAL    ] := "15/00"

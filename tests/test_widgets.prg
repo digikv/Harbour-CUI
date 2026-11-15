@@ -473,6 +473,42 @@ STATIC PROCEDURE TestMenuItems()
     aItems := oThemes:items()
     Assert( "HTMenu:submenu items",              Len( aItems ) == 1 .AND. aItems[ 1 ] == aDark )
 
+    TestMenuHotKeys()
+
+RETURN
+
+/* "&" hot keys, Alt + hot key, action shortcuts, the active bar */
+STATIC PROCEDURE TestMenuHotKeys()
+
+    LOCAL oBar, oFile, oEdit, oAct, oKurs
+    LOCAL cHit := ""
+
+    oBar  := HTMenuBar():new()
+    oFile := oBar:addMenu( "&Ulazi" )
+    oFile:addAction( "&Prijemnica" ):onTriggered := {|| cHit += "P" }
+    oEdit := oBar:addMenu( "&Ispravke" )
+    oAct  := oEdit:addAction( "Poreske &stope" )
+    oAct:onTriggered := {|| cHit += "S" }
+    oKurs := oEdit:addAction( "K&urs" )
+    oKurs:onTriggered := {|| cHit += "K" }
+    oKurs:setShortcut( K_CTRL_B )
+
+    Assert( "Menu: a letter on an inactive bar is not used", ! oBar:handleKey( Asc( "i" ) ) )
+    Assert( "Menu: Alt + hot key opens that menu",  oBar:handleKey( K_ALT_I ) .AND. oBar:isMenuOpen() )
+    Assert( "Menu: hot key letter runs the entry",  oBar:handleKey( Asc( "s" ) ) .AND. cHit == "S" )
+    Assert( "Menu: closed after running",           ! oBar:isMenuOpen() .AND. ! oBar:isActive() )
+    Assert( "Menu: action shortcut (Ctrl+B)",       oBar:handleKey( K_CTRL_B ) .AND. cHit == "SK" )
+
+    oBar:activate()
+    Assert( "Menu: activate() highlights a title",  oBar:isActive() .AND. ! oBar:isMenuOpen() )
+    Assert( "Menu: active bar, hot key opens",      oBar:handleKey( Asc( "u" ) ) .AND. oBar:isMenuOpen() )
+    oBar:handleKey( K_ENTER )
+    Assert( "Menu: first entry highlighted on open", cHit == "SKP" )
+
+    Assert( "Menu: barRow 1 by default",            oBar:barRow() == 1 )
+    oBar:setBarRow( 0 )
+    Assert( "Menu: setBarRow",                      oBar:barRow() == 0 )
+
 RETURN
 
 /*----------------------------------------------------------------*/

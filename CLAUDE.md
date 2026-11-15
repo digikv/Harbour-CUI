@@ -108,6 +108,15 @@ widget resized inside a running `HTDialog:exec()` paints with its new size. `HTD
 `exec()` keeps that position (otherwise the dialog is centered). `setTitleButtons( lHide, lMaximize,
 lResize )` hides title bar buttons besides close (a message box: `.F., .F., .F.`).
 
+**HTMenuBar**: `"&File"` / `"Save &as"` mark hot keys (shown without the `&`, the letter in
+`HT_CLR_MENU_HOTKEY(_SEL)`): Alt + a title's hot key (else its first letter) opens it; on the active
+bar a title's letter opens it; in an open dropdown / submenu an entry's letter runs it.
+`action:setShortcut( K_CTRL_B )` runs an action from anywhere (bar inactive or open). `activate()`,
+`isActive()`, `activeMenu()`; `setBarRow( 0 )` draws the bar on its window's title row (a one-row
+window as a screen menu bar on row 0; the window routes clicks: `handleClick( 0, nCol )` /
+`handleMouseClick( nAbsRow, nAbsCol )`). Inkey Alt codes follow the keyboard rows
+(K_ALT_Q = 272, K_ALT_A = 286, K_ALT_Z = 300) — `hb_keyCode( "Alt+F" )` is the code of `"A"`.
+
 **HTBrowse**: wraps a TBrowse (`browse()`), or shows an existing one: `setBrowse( oTBrowse )` (its
 columns/blocks stay). `setColorSpec( c )` keeps own colors (NIL = theme). A paint redraws from the
 rows TBrowse already read (`invalidate()`); position and colors are assigned only when they change
@@ -115,7 +124,7 @@ rows TBrowse already read (`invalidate()`); position and colors are assigned onl
 `refreshCurrent()`, as with a plain TBrowse. `stabilize()` leaves the screen cursor on the current
 cell (a GET at `Row(), Col()` edits it in place).
 
-**Theme system**: `HTTheme()` singleton, `HT_CLR_MAX` (57) color categories. All widgets use `HTTheme():getColor(HT_CLR_xxx)` instead of hardcoded colors, at paint time.
+**Theme system**: `HTTheme()` singleton, `HT_CLR_MAX` (59) color categories. All widgets use `HTTheme():getColor(HT_CLR_xxx)` instead of hardcoded colors, at paint time.
 - A theme = one color string per category + optionally a **palette** (16 COLORREF values, `ht_rgb()`:
   what indexes 0..15 look like). `loadTheme( cName )` sets both; `applyPalette()` pushes the palette
   to the GT only when the GT reports one (gtwvt/gtxwc; not gtnul/most terminals).
@@ -300,6 +309,7 @@ tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_widgets    HTLabel, HTLineEdit, HTCheckBox, HTPushButton, HTListBox,
                   HTComboBox, HTCheckList, HTSpinner, HTProgressBar, HTScrollBar,
                   HTTextEdit, HTContextMenu, HTMenu:items() (submenu order),
+                  HTMenuBar hot keys / Alt / shortcuts, setTitleButtons,
                   Unicode: UTF8EX default, CJK typing (ht_keyText, editors, HTGet),
                   wide-cell helpers, SaveScreen keeping Unicode, ht_glyph
   test_browse     HTBrowse column management, navigation blocks, callbacks,

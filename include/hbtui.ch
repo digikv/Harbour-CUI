@@ -103,7 +103,9 @@
 #define HT_CLR_BROWSE_SELECTED  55
 #define HT_CLR_TITLEBAR         56
 #define HT_CLR_TITLEBTN         57
-#define HT_CLR_MAX              57
+#define HT_CLR_MENU_HOTKEY      58   /* hot key letter (&) of a menu title / entry */
+#define HT_CLR_MENU_HOTKEY_SEL  59   /* ... on the highlighted title / entry */
+#define HT_CLR_MAX              59
 
 /* alignment flags (can be combined with hb_bitOr) */
 #define HT_ALIGN_LEFT           0

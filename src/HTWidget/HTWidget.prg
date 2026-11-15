@@ -866,8 +866,8 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTWidget
                 ht_objectFromId( ::FmenuBar ):handleMouseClick( eventMouse:mouseAbsRow, eventMouse:mouseAbsCol )
                 EXIT
             ENDIF
-            /* check menu bar click (row 0 of content = menu bar row) */
-            IF nContentRow = 0
+            /* check menu bar click (content row 0 = the bar under the title) */
+            IF nContentRow = ht_objectFromId( ::FmenuBar ):barRow() - 1
                 IF ht_objectFromId( ::FmenuBar ):handleClick( 0, nContentCol )
                     EXIT
                 ENDIF

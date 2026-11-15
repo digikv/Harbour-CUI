@@ -17,6 +17,7 @@ PROTECTED:
     DATA FmenuOpen       INIT .F.
     DATA FdropWinId      INIT NIL
     DATA FdropRect       INIT NIL   /* { top, left, bottom, right } screen-absolute */
+    DATA FnBarRow        INIT 1     /* window row of the bar: 1 = under the title */
 
     /* open submenu (an HTMenu entry of the dropdown) */
     DATA FsubMenu        INIT NIL
@@ -32,6 +33,8 @@ PROTECTED:
     METHOD paintMenuWindow( oMenu, nWinId, nActive )
     METHOD reselectParent()
     METHOD getMenus()
+    METHOD openAt( nIndex )
+    METHOD repaintParent()
 
 PUBLIC:
 
@@ -46,6 +49,16 @@ PUBLIC:
     METHOD handleClick( nRow, nCol )
     METHOD handleMouseClick( nAbsRow, nAbsCol )
     METHOD isMenuOpen() INLINE ::FmenuOpen
+    METHOD isActive()   INLINE ::FactiveMenu > 0
+    METHOD activeMenu() INLINE ::FactiveMenu   /* highlighted title, 0 = none */
+
+    /* window row the bar is drawn on: 1 (default) under the title bar, 0 on
+       the title row itself (a one-row window as a screen menu bar) */
+    METHOD barRow()        INLINE ::FnBarRow
+    METHOD setBarRow( n )  INLINE ::FnBarRow := n
+
+    /* highlights menu nMenu (default 1) as F10 does, without opening it */
+    METHOD activate( nMenu )
 
 ENDCLASS
 
@@ -198,21 +211,30 @@ METHOD PROCEDURE paintEvent( event ) CLASS HTMenuBar
     LOCAL itm
     LOCAL y := 0
     LOCAL nIdx := 0
-    LOCAL cColor
+    LOCAL cColor, cHot
 
     HB_SYMBOL_UNUSED( event )
 
     wSelect( ::parent():windowId, .F. )
     wFormat()
-    wFormat( 1, 0, 0, 0 )
+    IF ::FnBarRow > 0
+        wFormat( ::FnBarRow, 0, 0, 0 )
+    ENDIF
     DispOutAt( 0, 0, Space( ::parent():width ), HTTheme():getColor( HT_CLR_MENU_BAR ) )
     FOR EACH itm IN ::children
         IF itm:isDerivedFrom("HTMenu")
             nIdx++
-            cColor := IIF( nIdx = ::FactiveMenu, HTTheme():getColor( HT_CLR_MENU_BAR_SEL ), HTTheme():getColor( HT_CLR_MENU_BAR ) )
+            IF nIdx = ::FactiveMenu
+                cColor := HTTheme():getColor( HT_CLR_MENU_BAR_SEL )
+                cHot   := HTTheme():getColor( HT_CLR_MENU_HOTKEY_SEL )
+            ELSE
+                cColor := HTTheme():getColor( HT_CLR_MENU_BAR )
+                cHot   := HTTheme():getColor( HT_CLR_MENU_HOTKEY )
+            ENDIF
             itm:move( 0, ++y )
-            DispOutAt( 0, y, " " + itm:title + " ", cColor )
-            y += ht_strWidth( itm:title ) + 2
+            DispOutAt( 0, y, " " + ht_menuPlain( itm:title ) + " ", cColor )
+            ht_menuHotOut( 0, y + 1, itm:title, cHot )
+            y += ht_strWidth( ht_menuPlain( itm:title ) ) + 2
         ENDIF
     NEXT
     wFormat()
@@ -251,17 +273,23 @@ METHOD FUNCTION handleKey( nKey ) CLASS HTMenuBar
         RETURN .T.
     ENDIF
 
-    /* Alt+letter accelerators (check first letter of each menu title) */
-    IF ::FactiveMenu = 0
-        /* check for Alt+letter: Alt key codes are typically K_ALT_A to K_ALT_Z */
+    /* action shortcuts (HTAction:setShortcut( K_CTRL_B ), ...) work with
+       the bar inactive or a dropdown open */
+    IF ::FsubWinId == NIL .AND. ( oItem := ht_menuShortcut( aMenus, nKey ) ) != NIL
+        ::closeMenu()
+        ::FactiveMenu := 0
+        ::FactiveItem := 0
+        oItem:trigger()
+        ::repaintParent()
+        RETURN .T.
+    ENDIF
+
+    /* Alt + the hot key of a title ("&File", else its first letter) opens
+       that menu. (hb_keyCode( "Alt+F" ) is the code of "A", not Alt+F.) */
+    IF ::FsubWinId == NIL
         FOR i := 1 TO nMenuCount
-            IF nKey = hb_keyCode( "Alt+" + Upper( Left( aMenus[ i ]:title, 1 ) ) )
-                ::FactiveMenu := i
-                ::openMenu( i )
-                parent := ::parent()
-                IF parent != NIL
-                    parent:repaint()
-                ENDIF
+            IF nKey == ht_altKey( ht_menuHot( aMenus[ i ]:title, .T. ) )
+                ::openAt( i )
                 RETURN .T.
             ENDIF
         NEXT
@@ -305,6 +333,17 @@ METHOD FUNCTION handleKey( nKey ) CLASS HTMenuBar
         CASE K_RIGHT
             EXIT
         OTHERWISE
+            /* the hot key letter of an entry runs it */
+            i := ht_menuHotFind( aItems, nKey )
+            IF i > 0 .AND. ! ht_menuIsSub( aItems[ i ] )
+                oItem := aItems[ i ]
+                ::closeMenu()
+                ::FactiveMenu := 0
+                ::FactiveItem := 0
+                oItem:trigger()
+                ::repaintParent()
+                RETURN .T.
+            ENDIF
             RETURN .F.
         ENDSWITCH
 
@@ -389,7 +428,32 @@ METHOD FUNCTION handleKey( nKey ) CLASS HTMenuBar
         ::FactiveItem := 0
         EXIT
     OTHERWISE
-        RETURN .F.
+        IF ::FmenuOpen
+            /* hot key letter of a dropdown entry: run it / open its submenu */
+            i := ht_menuHotFind( aItems, nKey )
+            IF i == 0
+                RETURN .F.
+            ENDIF
+            ::FactiveItem := i
+            IF ht_menuIsSub( aItems[ i ] )
+                ::paintDropdown( aMenus[ ::FactiveMenu ] )
+                ::openSubMenu( .T. )
+            ELSE
+                oItem := aItems[ i ]
+                ::closeMenu()
+                ::FactiveMenu := 0
+                ::FactiveItem := 0
+                oItem:trigger()
+            ENDIF
+        ELSE
+            /* bar active: a title's hot key letter opens it */
+            i := ht_menuHotFind( aMenus, nKey )
+            IF i == 0
+                RETURN .F.
+            ENDIF
+            ::openAt( i )
+            RETURN .T.
+        ENDIF
     ENDSWITCH
 
     parent := ::parent()
@@ -398,6 +462,41 @@ METHOD FUNCTION handleKey( nKey ) CLASS HTMenuBar
     ENDIF
 
 RETURN .T.
+
+/** Highlights a menu title (the F10 state) without opening its dropdown.
+ * @param nMenu 1-based menu index (default 1)
+ */
+METHOD PROCEDURE activate( nMenu ) CLASS HTMenuBar
+    IF Len( ::getMenus() ) > 0
+        ::FactiveMenu := Max( 1, Min( hb_defaultValue( nMenu, 1 ), Len( ::getMenus() ) ) )
+        ::repaintParent()
+    ENDIF
+RETURN
+
+/** Opens menu nIndex with its first entry highlighted (Alt + hot key, or a
+ * hot key letter on the active bar). */
+METHOD PROCEDURE openAt( nIndex ) CLASS HTMenuBar
+
+    LOCAL aMenus := ::getMenus()
+
+    ::closeMenu()
+    ::FactiveMenu := nIndex
+    ::FactiveItem := ht_menuStep( aMenus[ nIndex ]:items(), 0, 1 )
+    ::openMenu( nIndex )
+    ::repaintParent()
+
+RETURN
+
+/** Repaints the window holding the bar. */
+METHOD PROCEDURE repaintParent() CLASS HTMenuBar
+
+    LOCAL parent := ::parent()
+
+    IF parent != NIL
+        parent:repaint()
+    ENDIF
+
+RETURN
 
 /** Opens the dropdown for the menu at the given index.
  * @param nIndex 1-based menu index
@@ -432,11 +531,11 @@ METHOD PROCEDURE openMenu( nIndex ) CLASS HTMenuBar
     /* find menu's horizontal position */
     nMenuLeft := 0
     FOR itm := 1 TO nIndex - 1
-        nMenuLeft += ht_strWidth( aMenus[ itm ]:title ) + 3
+        nMenuLeft += ht_strWidth( ht_menuPlain( aMenus[ itm ]:title ) ) + 3
     NEXT
     nMenuLeft++
 
-    nDropTop    := wRow() + 2
+    nDropTop    := wRow() + ::FnBarRow + 1
     nDropLeft   := wCol() + nMenuLeft
     nDropBottom := nDropTop + Len( aItems ) + 1
     nDropRight  := nDropLeft + nMaxWidth
@@ -571,7 +670,7 @@ METHOD PROCEDURE paintMenuWindow( oMenu, nWinId, nActive ) CLASS HTMenuBar
     LOCAL nRow := 0
     LOCAL nMaxCol
     LOCAL nIdx := 0
-    LOCAL cColor, cText
+    LOCAL cColor, cText, cHot
     LOCAL aPaint
 
     /* a window under another one (e.g. under a submenu's shadow) paints on
@@ -589,12 +688,19 @@ METHOD PROCEDURE paintMenuWindow( oMenu, nWinId, nActive ) CLASS HTMenuBar
         IF ht_menuIsSep( itm )
             DispOutAt( nRow, 0, Replicate( ht_glyph( 0x2500, "-" ), nMaxCol + 1 ), HTTheme():getColor( HT_CLR_MENU_SEP ) )
         ELSE
-            cColor := IIF( nIdx = nActive, HTTheme():getColor( HT_CLR_MENU_ITEM_SEL ), HTTheme():getColor( HT_CLR_MENU_ITEM ) )
+            IF nIdx = nActive
+                cColor := HTTheme():getColor( HT_CLR_MENU_ITEM_SEL )
+                cHot   := HTTheme():getColor( HT_CLR_MENU_HOTKEY_SEL )
+            ELSE
+                cColor := HTTheme():getColor( HT_CLR_MENU_ITEM )
+                cHot   := HTTheme():getColor( HT_CLR_MENU_HOTKEY )
+            ENDIF
             cText  := ht_cellPadR( " " + ht_menuText( itm ), nMaxCol + 1 )
             IF ht_menuIsSub( itm )
                 cText := ht_cellPadR( cText, nMaxCol - 1 ) + Chr( 16 ) + " "   /* ► */
             ENDIF
             DispOutAt( nRow, 0, cText, cColor )
+            ht_menuHotOut( nRow, 1, ht_menuRaw( itm ), cHot )
         ENDIF
         nRow++
     NEXT
@@ -636,7 +742,7 @@ METHOD FUNCTION handleClick( nRow, nCol ) CLASS HTMenuBar
     /* determine which menu title was clicked */
     nLeft := 1
     FOR i := 1 TO nMenuCount
-        nWidth := ht_strWidth( aMenus[ i ]:title ) + 2
+        nWidth := ht_strWidth( ht_menuPlain( aMenus[ i ]:title ) ) + 2
         nRight := nLeft + nWidth - 1
         IF nCol >= nLeft .AND. nCol <= nRight
             IF ::FactiveMenu = i .AND. ::FmenuOpen
@@ -770,10 +876,99 @@ RETURN ! ht_menuIsSub( itm ) .AND. itm:isSeparator()
 
 /** Display text of an entry: action text or submenu title. */
 STATIC FUNCTION ht_menuText( itm )
+RETURN ht_menuPlain( ht_menuRaw( itm ) )
+
+/** Text of an entry as given, with its "&" hot key mark. */
+STATIC FUNCTION ht_menuRaw( itm )
 
     LOCAL cText := IIF( ht_menuIsSub( itm ), itm:title, itm:text )
 
 RETURN IIF( HB_ISSTRING( cText ), cText, "" )
+
+/** Text without the "&" hot key mark: "&File" -> "File". */
+STATIC FUNCTION ht_menuPlain( cText )
+RETURN IIF( HB_ISSTRING( cText ), StrTran( cText, "&", "" ), "" )
+
+/** Hot key of a text: the letter after "&", upper case; "" without one
+ * (lFirst: the first letter then - menu titles keep Alt + first letter). */
+STATIC FUNCTION ht_menuHot( cText, lFirst )
+
+    LOCAL n
+
+    IF ! HB_ISSTRING( cText )
+        RETURN ""
+    ENDIF
+    n := At( "&", cText )
+    IF n > 0 .AND. n < Len( cText )
+        RETURN Upper( SubStr( cText, n + 1, 1 ) )
+    ENDIF
+
+RETURN IIF( hb_defaultValue( lFirst, .F. ), Upper( Left( cText, 1 ) ), "" )
+
+/** Paints the hot key letter of cText (marked with "&") over the text
+ * already shown at nRow, nCol without the mark. */
+STATIC PROCEDURE ht_menuHotOut( nRow, nCol, cText, cColor )
+
+    LOCAL n := At( "&", cText )
+
+    IF n > 0 .AND. n < Len( cText )
+        DispOutAt( nRow, nCol + ht_strWidth( Left( cText, n - 1 ) ), SubStr( cText, n + 1, 1 ), cColor )
+    ENDIF
+
+RETURN
+
+/** Index of the entry (or menu title) whose "&" hot key is the key typed;
+ * 0 for none. */
+STATIC FUNCTION ht_menuHotFind( aItems, nKey )
+
+    LOCAL cKey := IIF( nKey >= 32 .AND. nKey != 127, Upper( hb_keyChar( nKey ) ), "" )
+    LOCAL itm
+
+    IF Empty( cKey )
+        RETURN 0
+    ENDIF
+    FOR EACH itm IN aItems
+        IF ! ht_menuIsSep( itm ) .AND. ht_menuHot( ht_menuRaw( itm ) ) == cKey
+            RETURN itm:__enumIndex()
+        ENDIF
+    NEXT
+
+RETURN 0
+
+/** The action, in any menu or submenu, whose shortcut is nKey; NIL for none. */
+STATIC FUNCTION ht_menuShortcut( aItems, nKey )
+
+    LOCAL itm, oFound
+
+    FOR EACH itm IN aItems
+        IF ht_menuIsSub( itm )
+            IF ( oFound := ht_menuShortcut( itm:items(), nKey ) ) != NIL
+                RETURN oFound
+            ENDIF
+        ELSEIF ! itm:isSeparator() .AND. HB_ISNUMERIC( itm:shortcut ) .AND. itm:shortcut == nKey
+            RETURN itm
+        ENDIF
+    NEXT
+
+RETURN NIL
+
+/** Inkey code of Alt + letter (K_ALT_A ... K_ALT_Z follow the keyboard
+ * rows, not the alphabet); 0 for anything else. */
+STATIC FUNCTION ht_altKey( cLetter )
+
+    LOCAL n
+
+    IF Len( cLetter ) != 1
+        RETURN 0
+    ELSEIF ( n := At( cLetter, "QWERTYUIOP" ) ) > 0
+        RETURN 271 + n          /* K_ALT_Q = 272 */
+    ELSEIF ( n := At( cLetter, "ASDFGHJKL" ) ) > 0
+        RETURN 285 + n          /* K_ALT_A = 286 */
+    ELSEIF ( n := At( cLetter, "ZXCVBNM" ) ) > 0
+        RETURN 299 + n          /* K_ALT_Z = 300 */
+    ENDIF
+
+RETURN 0
 
 /** Next selectable (non-separator) entry from nCur in direction nStep,
  * wrapping around. nCur = 0 starts before the first entry.
