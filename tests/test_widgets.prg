@@ -2,7 +2,9 @@
  * test_widgets.prg - Property and container tests for HBTui widget classes.
  *
  * Tests: HTLabel, HTLineEdit, HTCheckBox, HTPushButton, HTListBox,
- *        HTComboBox, HTCheckList, HTSpinner, HTProgressBar, HTScrollBar
+ *        HTComboBox, HTCheckList, HTSpinner, HTProgressBar, HTScrollBar,
+ *        Unicode (CJK) typing: ht_keyText(), HTLineEdit/HTTextEdit/HTGet,
+ *        HTApplication's UTF8EX default codepage
  *
  * Runs headless (-gtnul). Callbacks are verified by calling the method
  * that fires them (toggle() for checkboxes) and checking a captured variable.
@@ -11,6 +13,8 @@
  */
 
 #include "hbtui.ch"
+#include "inkey.ch"
+#include "hbgtinfo.ch"
 
 STATIC nPass := 0
 STATIC nFail := 0
@@ -32,6 +36,7 @@ PROCEDURE Main()
     TestTextEdit()
     TestContextMenu()
     TestMenuItems()
+    TestUnicodeInput()   /* last: HTApplication():new() switches the codepage */
 
     nTotal := nPass + nFail
     QOut( "" )
@@ -433,5 +438,111 @@ STATIC PROCEDURE TestMenuItems()
 
     aItems := oThemes:items()
     Assert( "HTMenu:submenu items",              Len( aItems ) == 1 .AND. aItems[ 1 ] == aDark )
+
+RETURN
+
+/*----------------------------------------------------------------*/
+
+/* Traditional Chinese typed through an IME: gtwvt / gtxwc deliver Unicode
+   Inkey codes; editors must insert the multi-byte text (google group report:
+   "unable to input traditional chinese characters"). */
+STATIC PROCEDURE TestUnicodeInput()
+
+    LOCAL cOldCP := hb_cdpSelect()
+    LOCAL cHan, aKeys, nKey, o, t, g, cVal, cScr
+
+    /* HTApplication picks UTF8EX when the app left Harbour's default "EN" */
+    hb_cdpSelect( "EN" )
+    HTApplication():new()
+    Assert( "HTApplication:new selects UTF8EX", hb_cdpSelect() == "UTF8EX" )
+
+    /* U+7E41 U+9AD4 U+4E2D U+6587 (traditional Chinese): 4 chars, 12 bytes in UTF-8 */
+    cHan := e"\xE7\xB9\x81\xE9\xAB\x94\xE4\xB8\xAD\xE6\x96\x87"
+    Assert( "UTF8EX: Len() counts characters", Len( cHan ) == 4 )
+
+    /* the keys an IME commit produces */
+    aKeys := {}
+    hb_keyPut( cHan )
+    DO WHILE ( nKey := Inkey() ) != 0
+        AAdd( aKeys, nKey )
+    ENDDO
+    Assert( "Inkey: one key per CJK character", Len( aKeys ) == 4 )
+
+    Assert( "ht_keyText: CJK key -> UTF-8 char", Len( aKeys ) == 4 .AND. ht_keyText( aKeys[ 1 ] ) == Left( cHan, 1 ) )
+    Assert( "ht_keyText: ASCII letter",       ht_keyText( Asc( "a" ) ) == "a" )
+    Assert( "ht_keyText: space",              ht_keyText( K_SPACE ) == " " )
+    Assert( "ht_keyText: Enter types nothing", ht_keyText( K_ENTER ) == "" )
+    Assert( "ht_keyText: Left types nothing",  ht_keyText( K_LEFT ) == "" )
+    Assert( "ht_keyText: F2 types nothing",    ht_keyText( K_F2 ) == "" )
+    Assert( "ht_keyText: Alt+A types nothing", ht_keyText( K_ALT_A ) == "" )
+
+    o := HTLineEdit():new()
+    AEval( aKeys, {| n | o:keyEvent( HTKeyEvent():new( n ) ) } )
+    o:keyEvent( HTKeyEvent():new( Asc( "A" ) ) )
+    Assert( "HTLineEdit: CJK typed",           o:text == cHan + "A" )
+
+    /* insert in the middle: cursor arithmetic is per character */
+    o:keyEvent( HTKeyEvent():new( K_HOME ) )
+    o:keyEvent( HTKeyEvent():new( K_RIGHT ) )
+    o:keyEvent( HTKeyEvent():new( Asc( "x" ) ) )
+    Assert( "HTLineEdit: insert after 1st CJK", o:text == Left( cHan, 1 ) + "x" + SubStr( cHan, 2 ) + "A" )
+    o:keyEvent( HTKeyEvent():new( K_BS ) )
+    o:keyEvent( HTKeyEvent():new( K_BS ) )
+    Assert( "HTLineEdit: Backspace deletes a whole CJK char", o:text == SubStr( cHan, 2 ) + "A" )
+
+    t := HTTextEdit():new()
+    AEval( aKeys, {| n | t:keyEvent( HTKeyEvent():new( n ) ) } )
+    Assert( "HTTextEdit: CJK typed",           t:text == cHan )
+
+    cVal := Space( 10 )
+    g := HTGet():new()
+    g:setup( {| x | iif( x == NIL, cVal, cVal := x ) }, "Name", "", NIL, NIL, "", NIL, .F., .F., 20 )
+    g:focusInEvent( HTFocusEvent():new() )
+    AEval( aKeys, {| n | g:keyEvent( HTKeyEvent():new( n ) ) } )
+    g:focusOutEvent( HTFocusEvent():new() )
+    Assert( "HTGet: CJK typed",                Left( cVal, 4 ) == cHan )
+
+    /* screen cells: off on a text GT (gtnul) - one cell per character */
+    Assert( "wide cells off on gtnul",         ! ht_wideCells() )
+    Assert( "ht_strWidth: 1 cell per char",    ht_strWidth( cHan ) == 4 )
+
+    /* on (graphic GTs): a CJK character takes two cells */
+    ht_wideCells( .T. )
+    Assert( "ht_strWidth: CJK = 2 cells",      ht_strWidth( cHan + "A" ) == 9 )
+    Assert( "ht_cellLeft: whole chars only",   ht_cellLeft( cHan, 5 ) == Left( cHan, 2 ) )
+    Assert( "ht_cellPadR: pads to cells",      ht_cellPadR( Left( cHan, 2 ), 6 ) == Left( cHan, 2 ) + "  " )
+    Assert( "ht_cellPadR: cuts, fills gap",    ht_cellPadR( cHan, 5 ) == Left( cHan, 2 ) + " " )
+    Assert( "ht_cellPadL",                     ht_cellPadL( Left( cHan, 1 ), 4 ) == "  " + Left( cHan, 1 ) )
+    Assert( "ht_cellPos: 2nd cell of 1st char", ht_cellPos( cHan, 1 ) == 1 )
+    Assert( "ht_cellPos: 3rd cell = 2nd char", ht_cellPos( cHan, 2 ) == 2 )
+    Assert( "ht_cellPos: past the end",        ht_cellPos( cHan, 20 ) == 5 )
+    Assert( "ht_cellCol: after 2 chars",       ht_cellCol( cHan, 1, 3 ) == 4 )
+    Assert( "ht_cellCol: past the end",        ht_cellCol( "ab", 1, 5 ) == 4 )
+    /* 4 CJK chars (8 cells) + cursor after the end in a 6-cell field:
+       the first 2 chars scroll out, 2 chars (4 cells) + cursor cell fit */
+    Assert( "ht_scrollToCursor: CJK",          ht_scrollToCursor( cHan, 1, 5, 6 ) == 3 )
+    Assert( "ht_scrollToCursor: ASCII",        ht_scrollToCursor( "abcdefgh", 1, 9, 6 ) == 4 )
+
+    o:setText( cHan )
+    Assert( "HTLineEdit: text kept with wide cells", o:text == cHan )
+    ht_wideCells( .F. )
+
+    /* the window stack saves/restores screen areas: with Clipper 2-byte
+       cells (HB_GTI_COMPATBUFFER) every CJK character came back as "?" */
+    Assert( "UTF8EX: extended SaveScreen cells", ! hb_gtInfo( HB_GTI_COMPATBUFFER ) )
+    DispOutAt( 0, 0, cHan )
+    cScr := SaveScreen( 0, 0, 0, 3 )
+    DispOutAt( 0, 0, "    " )
+    RestScreen( 0, 0, 0, 3, cScr )
+    cScr := SaveScreen( 0, 0, 0, 0 )
+    Assert( "SaveScreen/RestScreen keep U+7E41", hb_BCode( hb_BSubStr( cScr, 1, 1 ) ) == 0x41 .AND. ;
+                                                hb_BCode( hb_BSubStr( cScr, 2, 1 ) ) == 0x7E )
+
+    Assert( "ht_glyph: symbol in UTF8EX",      ht_glyph( 0x00D7, "x" ) == hb_UChar( 0x00D7 ) )
+    hb_cdpSelect( "EN" )
+    Assert( "ht_glyph: fallback in CP437",     ht_glyph( 0x00D7, "x" ) == "x" )
+    Assert( "ht_glyph: CP437 has the check",   ht_glyph( 0x221A, "x" ) == Chr( 251 ) )
+
+    hb_cdpSelect( cOldCP )
 
 RETURN

@@ -103,7 +103,7 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTListBox
 
     nRow := 0
     FOR i := ::FtopIndex TO Min( ::FtopIndex + nVisibleRows - 1, nItemCount )
-        cText := PadR( ::Fitems[ i ], Max( 0, nMaxCol ) )
+        cText := ht_cellPadR( ::Fitems[ i ], Max( 0, nMaxCol ) )
 
         /* proportional scrollbar on right edge */
         IF nItemCount > nVisibleRows .AND. nMaxCol >= 0
@@ -243,7 +243,7 @@ METHOD PROCEDURE addItem( cText, xData ) CLASS HTListBox
     IF ::FcurrentIndex = 0
         ::FcurrentIndex := 1
     ENDIF
-    ::Fwidth := Max( ::Fwidth, Len( cText ) )
+    ::Fwidth := Max( ::Fwidth, ht_strWidth( cText ) )
 RETURN
 
 /** Removes the item at the given index.

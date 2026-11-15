@@ -41,7 +41,7 @@ METHOD new( ... ) CLASS HTCheckBox
     ::setFocusPolicy( HT_FOCUS_STRONG )
     ::FisVisible := .T.
     ::Fheight := 1
-    ::Fwidth := Len( ::Ftext ) + 4
+    ::Fwidth := ht_strWidth( ::Ftext ) + 4
 
 RETURN self
 
@@ -56,7 +56,7 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTCheckBox
 
     HB_SYMBOL_UNUSED( paintEvent )
 
-    cMark := IIF( ::Fchecked, e"\xFB", " " )
+    cMark := IIF( ::Fchecked, ht_glyph( 0x221A, "x" ), " " )   /* √ in any codepage */
     cDisplay := "[" + cMark + "] " + ::Ftext
     cColor := IIF( ::hasFocus(), HTTheme():getColor( HT_CLR_CHECK_FOCUSED ), HTTheme():getColor( HT_CLR_CHECK_NORMAL ) )
 

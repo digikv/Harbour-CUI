@@ -203,6 +203,10 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTBrowse
     ::FoBrowse:refreshAll()
     ::FoBrowse:forceStable()
 
+    /* TBrowse writes one character per cell: give CJK characters their
+       second cell (the whole browse was just redrawn - see ht_widenRegion) */
+    ht_widenRegion( ::FoBrowse:nTop, ::FoBrowse:nLeft, ::FoBrowse:nBottom, ::FoBrowse:nRight )
+
     /* inline editor over the current cell. TBrowse (core RTL, absolute
        coordinates) leaves the cursor on the current cell after
        forceStable(); DispOutAt here is relative to this browse's viewport,
@@ -218,15 +222,10 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTBrowse
 
         /* scroll the buffer so the edit cursor stays inside the cell */
         nPos := ::FoEditGet:pos
-        IF nPos < ::FnEditOffset
-            ::FnEditOffset := nPos
-        ELSEIF nPos > ::FnEditOffset + nWidth - 1
-            ::FnEditOffset := nPos - nWidth + 1
-        ENDIF
-        ::FnEditOffset := Max( 1, ::FnEditOffset )
+        ::FnEditOffset := ht_scrollToCursor( cBuffer, ::FnEditOffset, nPos, nWidth )
 
         DispOutAt( ::FnEditRow, ::FnEditCol, ;
-            PadR( SubStr( cBuffer, ::FnEditOffset ), nWidth ), ;
+            ht_cellPadR( SubStr( cBuffer, ::FnEditOffset ), nWidth ), ;
             HTTheme():getColor( HT_CLR_GET_FOCUSED ) )
     ENDIF
 
@@ -338,7 +337,7 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS HTBrowse
         RETURN
     OTHERWISE
         /* start editing on printable character */
-        IF ::Feditable .AND. Len( hb_keyChar( keyEvent:key ) ) = 1 .AND. Asc( hb_keyChar( keyEvent:key ) ) >= 32
+        IF ::Feditable .AND. ! ht_keyText( keyEvent:key ) == ""
             ::beginEdit( keyEvent:key )
             keyEvent:accept()
             RETURN
@@ -701,8 +700,8 @@ METHOD FUNCTION editKey( nKey ) CLASS HTBrowse
         Set( _SET_INSERT, ! Set( _SET_INSERT ) )
         EXIT
     OTHERWISE
-        cChar := hb_keyChar( nKey )
-        IF Len( cChar ) = 1 .AND. Asc( cChar ) >= 32
+        cChar := ht_keyText( nKey )
+        IF ! cChar == ""
             IF Set( _SET_INSERT )
                 ::FoEditGet:insert( cChar )
             ELSE
@@ -721,7 +720,7 @@ METHOD FUNCTION cursorPos() CLASS HTBrowse
 
     IF ::FlEditing .AND. ::FoEditGet != NIL .AND. ::hasFocus() .AND. ;
        HB_ISNUMERIC( ::FoEditGet:pos ) .AND. ::FoEditGet:pos > 0
-        RETURN { ::FnEditRow, ::FnEditCol + ::FoEditGet:pos - ::FnEditOffset }
+        RETURN { ::FnEditRow, ::FnEditCol + ht_cellCol( ::FoEditGet:buffer, ::FnEditOffset, ::FoEditGet:pos ) }
     ENDIF
 
 RETURN NIL

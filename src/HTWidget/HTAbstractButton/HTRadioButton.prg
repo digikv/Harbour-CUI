@@ -42,7 +42,7 @@ METHOD new( ... ) CLASS HTRadioButton
     ::setFocusPolicy( HT_FOCUS_STRONG )
     ::FisVisible := .T.
     ::Fheight := 1
-    ::Fwidth := Len( ::Ftext ) + 4
+    ::Fwidth := ht_strWidth( ::Ftext ) + 4
 
 RETURN self
 

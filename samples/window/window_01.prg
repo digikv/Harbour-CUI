@@ -1,7 +1,7 @@
 /*
  * Floating top-level windows on the desktop.
- * Title bar: drag to move, [_]=hide, [#]=maximize, [x]=close.
- * Bottom-right "/" = resize.
+ * Title bar: drag to move, ─ = hide, □ = maximize (▫ = restore), × = close.
+ * Bottom-right ┘ = resize. (ASCII _ # x / on a codepage without them.)
  *
  *   Window 1 "Dialog"    - form with two GETs (name, amount) + OK / Cancel
  *   Window 2 "Products"  - HTBrowse over an array
@@ -95,7 +95,12 @@ PROCEDURE Main()
     main:setWindowTitle( "Window Demo" )
     main:show()
 
-    HTLabel():new( "Drag title = move   / = resize   # = maximize   _ = minimize   x = close" + ;
+    /* same symbols as HTWidget's title bar (ASCII on a codepage without them) */
+    HTLabel():new( "Drag title = move   " + ;
+        ht_glyph( 0x2518, "/" ) + " = resize   " + ;
+        ht_glyph( 0x25A1, "#" ) + " = maximize   " + ;
+        ht_glyph( 0x2500, "_" ) + " = minimize   " + ;
+        ht_glyph( 0x00D7, "x" ) + " = close" + ;
         "   Ctrl+F6 = next window   F2 = edit cell", main ):move( 2, 1 )
 
     s_oMainStatus := HTStatusBar():new( main )

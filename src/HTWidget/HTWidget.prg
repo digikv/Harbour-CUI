@@ -8,7 +8,7 @@
 #include "hbtui.ch"
 #include "inkey.ch"
 
-#define _DESKTOP_CHAR   e"\xB1"
+#define _DESKTOP_CHAR   ht_glyph( 0x2592, e"\xB1" )   /* ▒ */
 #define _WIDGET_CHAR    e"\x20"
 #define _WIDGET_SHADOW  -1   /* popups enable HT_SHADOW_ATTR explicitly */
 
@@ -120,10 +120,12 @@ PUBLIC:
     METHOD windowType() INLINE hb_bitAnd( ::windowFlags, 0x000000ff )
 
     PROPERTY backgroundColor WRITE setBackgroundColor
-    PROPERTY charWidgetClose    INIT "x"    /* CUI close */
-    PROPERTY charWidgetHide     INIT "_"    /* floating windows; MainWindow clears */
-    PROPERTY charWidgetMaximize INIT "#"    /* maximize toggle; MainWindow clears */
-    PROPERTY charWidgetResize   INIT "/"    /* bottom-right grip; MainWindow clears */
+    /* title bar buttons: Unicode symbols, ASCII when the codepage lacks them */
+    PROPERTY charWidgetClose    INIT ht_glyph( 0x00D7, "x" )   /* × close */
+    PROPERTY charWidgetHide     INIT ht_glyph( 0x2500, "_" )   /* ─ minimize toggle; MainWindow clears */
+    PROPERTY charWidgetMaximize INIT ht_glyph( 0x25A1, "#" )   /* □ maximize; MainWindow clears */
+    PROPERTY charWidgetRestore  INIT ht_glyph( 0x25AB, "#" )   /* ▫ shown while maximized */
+    PROPERTY charWidgetResize   INIT ht_glyph( 0x2518, "/" )   /* ┘ bottom-right grip; MainWindow clears */
     PROPERTY clearA READ getClearA WRITE setClearA
     PROPERTY clearB READ getClearB WRITE setClearB
     PROPERTY color READ getColor WRITE SetColor
@@ -1066,7 +1068,7 @@ RETURN
 /** Draws CUI title bar and fills the client area (no DispBox border). */
 METHOD PROCEDURE drawCuiChrome() CLASS HTWidget
 
-    LOCAL n, nRight, nTitleWidth
+    LOCAL n, nRight, nTitleWidth, nBtn
     LOCAL cTitle
     LOCAL cTitleColor := HTTheme():getColor( HT_CLR_TITLEBAR )
     LOCAL cBtnColor   := HTTheme():getColor( HT_CLR_TITLEBTN )
@@ -1078,33 +1080,37 @@ METHOD PROCEDURE drawCuiChrome() CLASS HTWidget
 
     DispOutAt( 0, 0, Space( ::Fwidth ), cTitleColor )
 
-    /* system buttons on the right: hide, maximize, close (Windows order) */
+    /* system buttons on the right: hide, maximize, close (Windows order).
+       Each is three cells wide (" × ") - easier to read and to hit - and
+       one cell on narrow windows, so the title keeps some room. */
+    nBtn := IIF( ::Fwidth >= 24, 3, 1 )
     nRight := ::Fwidth - 1
 
     IF ::charWidgetClose != NIL
-        ::FbtnClosePos := { nRight, nRight }
-        DispOutAt( 0, nRight, ::charWidgetClose, cBtnColor )
-        nRight--
+        ::FbtnClosePos := { nRight - nBtn + 1, nRight }
+        DispOutAt( 0, nRight - nBtn + 1, ht_cellPadC( ::charWidgetClose, nBtn ), cBtnColor )
+        nRight -= nBtn
     ENDIF
 
     IF ::charWidgetMaximize != NIL
-        ::FbtnMaximizePos := { nRight, nRight }
-        DispOutAt( 0, nRight, ::charWidgetMaximize, cBtnColor )
-        nRight--
+        ::FbtnMaximizePos := { nRight - nBtn + 1, nRight }
+        DispOutAt( 0, nRight - nBtn + 1, ;
+            ht_cellPadC( IIF( ::FlMaximized .AND. ::charWidgetRestore != NIL, ::charWidgetRestore, ::charWidgetMaximize ), nBtn ), ;
+            cBtnColor )
+        nRight -= nBtn
     ENDIF
 
     IF ::charWidgetHide != NIL
-        ::FBtnHidePos := { nRight, nRight }
-        DispOutAt( 0, nRight, ::charWidgetHide, cBtnColor )
-        nRight--
+        ::FBtnHidePos := { nRight - nBtn + 1, nRight }
+        DispOutAt( 0, nRight - nBtn + 1, ht_cellPadC( ::charWidgetHide, nBtn ), cBtnColor )
+        nRight -= nBtn
     ENDIF
 
     nTitleWidth := nRight + 1
-    cTitle := ' ' + PadR( ::FwindowTitle, Max( 0, nTitleWidth - 1 ) )
-    IF Len( cTitle ) > nTitleWidth
-        cTitle := Left( cTitle, nTitleWidth )
+    IF nTitleWidth > 0
+        cTitle := ht_cellPadR( ' ' + ::FwindowTitle, nTitleWidth )
+        DispOutAt( 0, 0, cTitle, cTitleColor )
     ENDIF
-    DispOutAt( 0, 0, cTitle, cTitleColor )
 
     IF ::Fheight > 1
         FOR n := 1 TO ::Fheight - 1
@@ -1113,7 +1119,7 @@ METHOD PROCEDURE drawCuiChrome() CLASS HTWidget
     ENDIF
 
     IF ::charWidgetResize != NIL .AND. ::Fheight > 1
-        nRight := Len( ::charWidgetResize )
+        nRight := ht_strWidth( ::charWidgetResize )
         ::FbtnResizePos := { ::Fwidth - nRight, ::Fwidth - 1 }
         DispOutAt( ::Fheight - 1, ::FbtnResizePos[ 1 ], ::charWidgetResize, ::color )
     ENDIF

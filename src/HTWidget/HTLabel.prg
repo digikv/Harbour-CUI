@@ -56,7 +56,7 @@ METHOD new( ... ) CLASS HTLabel
             ::Ftext := text
         ENDIF
         ::Fheight := 1
-        ::Fwidth := Len( ::Ftext )
+        ::Fwidth := ht_strWidth( ::Ftext )   /* screen cells: CJK takes two */
         ::FisVisible := .T.
     ELSE
         ::PARAM_ERROR()
@@ -77,20 +77,18 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTLabel
     cDisplay := ::Ftext
 
     /* truncate if wider than viewport */
-    IF Len( cDisplay ) > nMaxCol + 1
-        cDisplay := Left( cDisplay, nMaxCol + 1 )
-    ENDIF
+    cDisplay := ht_cellLeft( cDisplay, nMaxCol + 1 )
 
     /* apply alignment */
     SWITCH ::Falignment
     CASE HT_ALIGN_CENTER
-        cDisplay := PadC( cDisplay, nMaxCol + 1 )
+        cDisplay := ht_cellPadC( cDisplay, nMaxCol + 1 )
         EXIT
     CASE HT_ALIGN_RIGHT
-        cDisplay := PadL( cDisplay, nMaxCol + 1 )
+        cDisplay := ht_cellPadL( cDisplay, nMaxCol + 1 )
         EXIT
     OTHERWISE
-        cDisplay := PadR( cDisplay, nMaxCol + 1 )
+        cDisplay := ht_cellPadR( cDisplay, nMaxCol + 1 )
     ENDSWITCH
 
     DispOutAt( 0, 0, cDisplay, ::color )
@@ -102,5 +100,5 @@ RETURN
  */
 METHOD PROCEDURE setText( text ) CLASS HTLabel
     ::Ftext := text
-    ::Fwidth := Len( text )
+    ::Fwidth := ht_strWidth( text )
 RETURN

@@ -55,7 +55,7 @@ METHOD PROCEDURE show( cMessage, nDurationMs, nColorCategory ) CLASS HTToast
 
     /* flat toast: padding row + text row + padding row, no box border */
     nToastHeight := 3
-    nToastWidth  := Min( Len( cMessage ) + 4, 60 )
+    nToastWidth  := Min( ht_strWidth( cMessage ) + 4, 60 )
 
     /* get screen dimensions from desktop window */
     nPrevWin := wSelect()
@@ -82,7 +82,7 @@ METHOD PROCEDURE show( cMessage, nDurationMs, nColorCategory ) CLASS HTToast
     FOR n := 0 TO nToastHeight - 1
         DispOutAt( n, 0, Space( nToastWidth ), cColor )
     NEXT
-    DispOutAt( 1, 1, PadR( cMessage, nToastWidth - 2 ), cColor )
+    DispOutAt( 1, 1, ht_cellPadR( cMessage, nToastWidth - 2 ), cColor )
 
     /* store toast info */
     AAdd( ::FaToasts, { nWinId, Seconds(), nDurationMs / 1000 } )

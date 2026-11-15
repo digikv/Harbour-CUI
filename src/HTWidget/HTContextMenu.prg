@@ -97,7 +97,7 @@ METHOD FUNCTION popup( nRow, nCol ) CLASS HTContextMenu
     nMaxWidth := 4
     FOR EACH itm IN ::Factions
         IF ! itm:isSeparator
-            nMaxWidth := Max( nMaxWidth, Len( itm:text ) + 4 )
+            nMaxWidth := Max( nMaxWidth, ht_strWidth( itm:text ) + 4 )
         ENDIF
     NEXT
 
@@ -282,12 +282,12 @@ METHOD PROCEDURE paintPopup() CLASS HTContextMenu
 
     FOR EACH itm IN ::Factions
         IF itm:isSeparator
-            DispOutAt( nRow, 0, Replicate( e"\xC4", nMaxCol + 1 ), HTTheme():getColor( HT_CLR_CTXMENU_SEP ) )
+            DispOutAt( nRow, 0, Replicate( ht_glyph( 0x2500, "-" ), nMaxCol + 1 ), HTTheme():getColor( HT_CLR_CTXMENU_SEP ) )
         ELSE
             cColor := IIF( itm:__enumIndex() = ::FactiveItem, ;
                 HTTheme():getColor( HT_CLR_CTXMENU_SELECTED ), ;
                 HTTheme():getColor( HT_CLR_CTXMENU_NORMAL ) )
-            DispOutAt( nRow, 0, PadR( " " + itm:text, nMaxCol + 1 ), cColor )
+            DispOutAt( nRow, 0, ht_cellPadR( " " + itm:text, nMaxCol + 1 ), cColor )
         ENDIF
         nRow++
     NEXT

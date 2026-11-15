@@ -11,6 +11,13 @@
  *   RegisterHtOnEventMouseDown  -> PROCEDURE HtOnEventMouseDown( nKey, nRow, nCol )
  *   RegisterHtOnEventLBDblClick -> PROCEDURE HtOnEventLBDblClick( nKey, nRow, nCol )
  *
+ * The subclass is installed with the WIDE (...W) API on purpose. hbmk2
+ * compiles user C code as ANSI by default, so a bare SetWindowLongPtr()
+ * would be SetWindowLongPtrA(): Windows then marks the gtwvt window as an
+ * ANSI window and narrows every WM_CHAR to the system ANSI code page before
+ * gtwvt sees it. Characters outside that code page (Chinese/Japanese/Korean
+ * from an IME, Cyrillic on a Western system, ...) arrive as '?'.
+ *
  * Non-Windows: stubs; EventLoop falls back to Inkey + position polling.
  */
 
@@ -24,6 +31,9 @@
 #if defined( HB_OS_WIN )
 
 #include <windows.h>
+
+/* set by ht_viewport.c once a wide (CJK) character was written */
+extern HB_BOOL ht_fWideWritten;
 
 #ifndef HB_GTI_WINHANDLE
 #define HB_GTI_WINHANDLE  69
@@ -133,11 +143,27 @@ static LRESULT CALLBACK ht_WndProc( HWND hWnd, UINT message, WPARAM wParam, LPAR
    LRESULT lResult;
    int nKey, nRow, nCol;
 
-   /* Let gtwvt update its mouse state first */
+   /* Wide (CJK) characters spill over their filler cell (ht_viewport.c).
+      gtwvt repaints only the changed part of a row; when that part starts
+      on a filler cell, its opaque background erases the right half of the
+      glyph. Once wide text was written, repaint whole rows instead. */
+   if( message == WM_PAINT && ht_fWideWritten )
+   {
+      RECT rcUpd, rcClient;
+
+      if( GetUpdateRect( hWnd, &rcUpd, FALSE ) && GetClientRect( hWnd, &rcClient ) )
+      {
+         rcUpd.left  = rcClient.left;
+         rcUpd.right = rcClient.right;
+         InvalidateRect( hWnd, &rcUpd, FALSE );
+      }
+   }
+
+   /* Let gtwvt update its mouse state first (W: keeps WM_CHAR in UTF-16) */
    if( s_oldProc )
-      lResult = CallWindowProc( s_oldProc, hWnd, message, wParam, lParam );
+      lResult = CallWindowProcW( s_oldProc, hWnd, message, wParam, lParam );
    else
-      lResult = DefWindowProc( hWnd, message, wParam, lParam );
+      lResult = DefWindowProcW( hWnd, message, wParam, lParam );
 
    nKey = ht_msg_to_key( message );
    if( nKey != 0 )
@@ -197,7 +223,9 @@ HB_FUNC( HT_WINMOUSEINSTALL )
       return;
    }
 
-   s_oldProc = ( WNDPROC ) SetWindowLongPtr( hWnd, GWLP_WNDPROC, ( LONG_PTR ) ht_WndProc );
+   /* W, not A: an ANSI subclass turns the window into an ANSI window and
+      IME / Unicode characters reach gtwvt as '?' (see the header comment) */
+   s_oldProc = ( WNDPROC ) SetWindowLongPtrW( hWnd, GWLP_WNDPROC, ( LONG_PTR ) ht_WndProc );
    if( ! s_oldProc )
    {
       hb_retl( HB_FALSE );
@@ -214,7 +242,7 @@ HB_FUNC( HT_WINMOUSEINSTALL )
 HB_FUNC( HT_WINMOUSEUNINSTALL )
 {
    if( s_fInstalled && s_hWnd && s_oldProc && IsWindow( s_hWnd ) )
-      SetWindowLongPtr( s_hWnd, GWLP_WNDPROC, ( LONG_PTR ) s_oldProc );
+      SetWindowLongPtrW( s_hWnd, GWLP_WNDPROC, ( LONG_PTR ) s_oldProc );
 
    s_oldProc = NULL;
    s_hWnd = NULL;

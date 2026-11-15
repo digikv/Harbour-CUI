@@ -84,10 +84,10 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTSeparator
 
     IF ::Forientation = HT_SEPARATOR_VERTICAL
         FOR i := 0 TO nMaxRow
-            DispOutAt( i, 0, e"\xB3", ::color )
+            DispOutAt( i, 0, ht_glyph( 0x2502, "|" ), ::color )
         NEXT
     ELSE
-        cLine := Replicate( e"\xC4", nMaxCol + 1 )
+        cLine := Replicate( ht_glyph( 0x2500, "-" ), nMaxCol + 1 )
         DispOutAt( 0, 0, cLine, ::color )
     ENDIF
 

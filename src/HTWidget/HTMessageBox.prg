@@ -80,7 +80,7 @@ METHOD FUNCTION showDialog( cTitle, cMessage, cColor, lQuestion ) CLASS HTMessag
         cMessage := ""
     ENDIF
 
-    nMsgWidth  := Max( Len( cMessage ), Len( cTitle ) + 4 )
+    nMsgWidth  := Max( ht_strWidth( cMessage ), ht_strWidth( cTitle ) + 4 )
     nMsgWidth  := Max( nMsgWidth, IIF( lQuestion, 20, 10 ) )
     nWinWidth  := nMsgWidth + 4
     nWinHeight := 5   /* title + pad + message + pad + buttons */
@@ -95,12 +95,12 @@ METHOD FUNCTION showDialog( cTitle, cMessage, cColor, lQuestion ) CLASS HTMessag
 
     /* CUI chrome: title bar + client fill (no box border) */
     DispOutAt( 0, 0, Space( nWinWidth ), cTitleColor )
-    DispOutAt( 0, 0, " " + PadR( cTitle, nWinWidth - 2 ), cTitleColor )
+    DispOutAt( 0, 0, " " + ht_cellPadR( cTitle, nWinWidth - 2 ), cTitleColor )
     FOR n := 1 TO nWinHeight - 1
         DispOutAt( n, 0, Space( nWinWidth ), cColor )
     NEXT
 
-    DispOutAt( 2, 1, PadR( cMessage, nWinWidth - 2 ), cColor )
+    DispOutAt( 2, 1, ht_cellPadR( cMessage, nWinWidth - 2 ), cColor )
 
     /* flat padded buttons (same as HTPushButton) */
     IF lQuestion

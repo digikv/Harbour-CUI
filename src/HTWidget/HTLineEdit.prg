@@ -25,7 +25,7 @@ PUBLIC:
     METHOD paintEvent( event )
     METHOD keyEvent( keyEvent )
     METHOD mouseEvent( eventMouse )
-    METHOD cursorPos() INLINE IIF( ::hasFocus(), { 0, ::FcursorPos - ::FdispOffset }, NIL )
+    METHOD cursorPos() INLINE IIF( ::hasFocus(), { 0, ht_cellCol( ::Ftext, ::FdispOffset, ::FcursorPos ) }, NIL )
     METHOD enterMovesFocus() INLINE .T.   /* Enter = next field */
 
     METHOD setText( text )
@@ -84,37 +84,34 @@ METHOD PROCEDURE paintEvent( event ) CLASS HTLineEdit
 
     cColor := IIF( ::hasFocus(), HTTheme():getColor( HT_CLR_LINEEDIT_FOCUSED ), HTTheme():getColor( HT_CLR_LINEEDIT_NORMAL ) )
 
-    /* ensure cursor is visible within display window */
-    IF ::FcursorPos < ::FdispOffset
-        ::FdispOffset := ::FcursorPos
-    ENDIF
-    IF ::FcursorPos > ::FdispOffset + nVisibleWidth - 1
-        ::FdispOffset := ::FcursorPos - nVisibleWidth + 1
-    ENDIF
+    /* ensure cursor is visible within display window (in screen cells:
+       a CJK character takes two) */
+    ::FdispOffset := ht_scrollToCursor( ::Ftext, ::FdispOffset, ::FcursorPos, nVisibleWidth )
 
     /* extract visible portion of text */
-    cDisplay := PadR( SubStr( ::Ftext, ::FdispOffset ), nVisibleWidth )
+    cDisplay := ht_cellPadR( SubStr( ::Ftext, ::FdispOffset ), nVisibleWidth )
 
     /* paint with selection highlighting if active */
     IF ::hasSelection() .AND. ::hasFocus()
         nSelL := Min( ::FselStart, ::FselEnd )
         nSelR := Max( ::FselStart, ::FselEnd )
 
-        /* convert to visible coordinates (0-based) */
+        /* convert to visible character positions (0-based) */
         nVisSelL := Max( nSelL - ::FdispOffset, 0 )
-        nVisSelR := Min( nSelR - ::FdispOffset, nVisibleWidth )
+        nVisSelR := Min( nSelR - ::FdispOffset, Len( cDisplay ) )
 
-        IF nVisSelL < nVisibleWidth .AND. nVisSelR > 0
+        IF nVisSelL < Len( cDisplay ) .AND. nVisSelR > 0
             cPre  := Left( cDisplay, nVisSelL )
             cSel  := SubStr( cDisplay, nVisSelL + 1, nVisSelR - nVisSelL )
             cPost := SubStr( cDisplay, nVisSelR + 1 )
 
+            /* segments start at screen cells, not character counts */
             IF Len( cPre ) > 0
                 DispOutAt( 0, 0, cPre, cColor )
             ENDIF
-            DispOutAt( 0, nVisSelL, cSel, HTTheme():getColor( HT_CLR_LINEEDIT_SELECTED ) )
+            DispOutAt( 0, ht_strWidth( cPre ), cSel, HTTheme():getColor( HT_CLR_LINEEDIT_SELECTED ) )
             IF Len( cPost ) > 0
-                DispOutAt( 0, nVisSelR, cPost, cColor )
+                DispOutAt( 0, ht_strWidth( cPre ) + ht_strWidth( cSel ), cPost, cColor )
             ENDIF
         ELSE
             DispOutAt( 0, 0, cDisplay, cColor )
@@ -125,7 +122,7 @@ METHOD PROCEDURE paintEvent( event ) CLASS HTLineEdit
 
     /* position cursor if focused */
     IF ::hasFocus()
-        nCursorCol := ::FcursorPos - ::FdispOffset
+        nCursorCol := ht_cellCol( ::Ftext, ::FdispOffset, ::FcursorPos )
         SetPos( 0, nCursorCol )
     ENDIF
 
@@ -230,13 +227,13 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS HTLineEdit
         EXIT
     OTHERWISE
         /* printable character */
-        cChar := hb_keyChar( keyEvent:key )
-        IF Len( cChar ) = 1 .AND. Asc( cChar ) >= 32
+        cChar := ht_keyText( keyEvent:key )
+        IF ! cChar == ""
             IF ::hasSelection()
                 ::deleteSelection()
             ENDIF
             ::Ftext := Left( ::Ftext, ::FcursorPos - 1 ) + cChar + SubStr( ::Ftext, ::FcursorPos )
-            ::FcursorPos++
+            ::FcursorPos += Len( cChar )
             lChanged := .T.
         ELSE
             RETURN
@@ -266,7 +263,7 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTLineEdit
     IF eventMouse:nKey = K_LBUTTONDOWN
         nClickCol := eventMouse:mouseCol
         IF nClickCol >= 0
-            ::FcursorPos := Min( ::FdispOffset + nClickCol, Len( ::Ftext ) + 1 )
+            ::FcursorPos := Min( ::FdispOffset - 1 + ht_cellPos( SubStr( ::Ftext, ::FdispOffset ), nClickCol ), Len( ::Ftext ) + 1 )
             ::clearSelection()
             parent := ::parent()
             IF parent != NIL .AND. parent:isDerivedFrom( "HTWidget" )

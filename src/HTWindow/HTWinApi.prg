@@ -209,6 +209,13 @@ FUNCTION ht_cuiSetupDisplay( nRows, nCols )
     SetMode( nRows, nCols )
 #else
     hb_gtInfo( HB_GTI_FONTNAME, "Consolas" )
+    /* Consolas has no CJK glyphs. With gtwvt's default OEM charset GDI draws
+       them as empty boxes; DEFAULT_CHARSET lets it fall back to a system CJK
+       font (MingLiU, Microsoft JhengHei, SimSun, ...). The wide-cell
+       DispOutAt (ht_viewport.c) gives each of them two cells. */
+    IF hb_cdpIsUTF8()
+        hb_gtInfo( HB_GTI_CODEPAGE, 1 )   /* DEFAULT_CHARSET */
+    ENDIF
     hb_gtInfo( HB_GTI_SELECTCOPY, "Select and Copy" )
     hb_gtInfo( HB_GTI_RESIZEMODE, HB_GTI_RESIZEMODE_FONT )
     hb_gtInfo( HB_GTI_FONTQUALITY, HB_GTI_FONTQ_HIGH )
@@ -219,7 +226,10 @@ FUNCTION ht_cuiSetupDisplay( nRows, nCols )
     /* Digi/awin: borderless client = full desktop (no OS title-bar frame) */
     hb_gtInfo( HB_GTI_ISFULLSCREEN, .T. )
     hb_gtInfo( HB_GTI_ALTENTER, .T. )
-    hb_gtInfo( HB_GTI_COMPATBUFFER, .T. )
+    /* Clipper 2-byte cells only for single-byte codepages: they store one
+       byte per character, so SaveScreen()/RestScreen() (the window stack)
+       would turn Unicode text into "?" */
+    hb_gtInfo( HB_GTI_COMPATBUFFER, ! hb_cdpIsUTF8() )
 
     SetMode( nRows, nCols )
 

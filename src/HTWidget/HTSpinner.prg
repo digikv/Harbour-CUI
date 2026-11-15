@@ -78,7 +78,7 @@ METHOD PROCEDURE setup( cLabel, nMin, nMax, nStep, nInitial ) CLASS HTSpinner
 
     IF cLabel != NIL
         ::FcLabel := cLabel
-        ::FnLabelWidth := Len( cLabel ) + 2
+        ::FnLabelWidth := ht_strWidth( cLabel ) + 2
     ENDIF
     IF nMin != NIL
         ::FnMinimum := nMin
@@ -116,7 +116,7 @@ METHOD PROCEDURE paintEvent( event ) CLASS HTSpinner
     ENDIF
 
     /* build value box: right-justified value with arrows */
-    nBoxWidth := MaxCol() + 1 - Len( cLabel )
+    nBoxWidth := MaxCol() + 1 - ht_strWidth( cLabel )
     IF nBoxWidth < 5
         nBoxWidth := 5
     ENDIF

@@ -83,9 +83,7 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTFrame
 
     /* draw title in the top-left if provided */
     IF Len( cTitle ) > 0
-        IF Len( cTitle ) > nMaxCol - 3
-            cTitle := Left( cTitle, nMaxCol - 3 )
-        ENDIF
+        cTitle := ht_cellLeft( cTitle, nMaxCol - 3 )
         DispOutAt( 0, 2, " " + cTitle + " ", HTTheme():getColor( HT_CLR_FRAME ) )
     ENDIF
 

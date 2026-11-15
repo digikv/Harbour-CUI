@@ -172,7 +172,7 @@ METHOD PROCEDURE setup( xVar, cLabel, cPicture, bValid, bWhen, cHelpLine, bOnCha
 
     /* calculate label width: label text + 1 space separator */
     IF Len( cLabel ) > 0
-        ::FlabelWidth := Len( cLabel ) + 1
+        ::FlabelWidth := ht_strWidth( cLabel ) + 1
     ELSE
         ::FlabelWidth := 0
     ENDIF
@@ -212,7 +212,7 @@ METHOD PROCEDURE paintEvent( event ) CLASS HTGet
 
     /* draw label at (0, 0) */
     IF ::FlabelWidth > 0
-        DispOutAt( 0, 0, PadR( ::Flabel, ::FlabelWidth ), HTTheme():getColor( HT_CLR_GET_LABEL ) )
+        DispOutAt( 0, 0, ht_cellPadR( ::Flabel, ::FlabelWidth ), HTTheme():getColor( HT_CLR_GET_LABEL ) )
     ENDIF
 
     /* determine input color */
@@ -246,24 +246,19 @@ METHOD PROCEDURE paintEvent( event ) CLASS HTGet
 
     /* ensure cursor is visible within display window */
     IF nCursorPos > 0
-        IF nCursorPos < ::FdispOffset
-            ::FdispOffset := nCursorPos
-        ENDIF
-        IF nCursorPos > ::FdispOffset + nVisibleWidth - 1
-            ::FdispOffset := nCursorPos - nVisibleWidth + 1
-        ENDIF
+        ::FdispOffset := ht_scrollToCursor( cTransformed, ::FdispOffset, nCursorPos, nVisibleWidth )
     ELSE
         ::FdispOffset := 1
     ENDIF
 
     /* extract visible portion of text */
-    cDisplay := PadR( SubStr( cTransformed, ::FdispOffset ), nVisibleWidth )
+    cDisplay := ht_cellPadR( SubStr( cTransformed, ::FdispOffset ), nVisibleWidth )
 
     DispOutAt( 0, ::FlabelWidth, cDisplay, cColor )
 
     /* position cursor if focused */
     IF ::hasFocus() .AND. ! ::FreadOnly .AND. nCursorPos > 0
-        nCursorCol := ::FlabelWidth + nCursorPos - ::FdispOffset
+        nCursorCol := ::FlabelWidth + ht_cellCol( cTransformed, ::FdispOffset, nCursorPos )
         SetPos( 0, nCursorCol )
     ENDIF
 
@@ -324,8 +319,8 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS HTGet
         Set( _SET_INSERT, ! Set( _SET_INSERT ) )
         EXIT
     OTHERWISE
-        cChar := hb_keyChar( keyEvent:key )
-        IF Len( cChar ) = 1 .AND. Asc( cChar ) >= 32
+        cChar := ht_keyText( keyEvent:key )
+        IF ! cChar == ""
             IF Set( _SET_INSERT )
                 ::FoGet:insert( cChar )
             ELSE
@@ -366,7 +361,7 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTGet
 
         /* only react to clicks on the input area */
         IF nClickCol >= ::FlabelWidth .AND. ::FoGet != NIL .AND. ::FlGetActive
-            nNewPos := ::FdispOffset + ( nClickCol - ::FlabelWidth )
+            nNewPos := ::FdispOffset - 1 + ht_cellPos( SubStr( ::FoGet:buffer, ::FdispOffset ), nClickCol - ::FlabelWidth )
             /* a click past the typed text lands right after it, not in the blanks */
             nNewPos := Min( nNewPos, Len( RTrim( ::FoGet:buffer ) ) + 1 )
             IF nNewPos >= 1
@@ -458,7 +453,8 @@ METHOD FUNCTION cursorPos() CLASS HTGet
 
     IF ::FlGetActive .AND. ::FoGet != NIL .AND. ! ::FreadOnly .AND. ::hasFocus() .AND. ;
        HB_ISNUMERIC( ::FoGet:pos ) .AND. ::FoGet:pos > 0
-        RETURN { 0, ::FlabelWidth + ::FoGet:pos - ::FdispOffset }
+        RETURN { 0, ::FlabelWidth + ht_cellCol( IIF( ::Fhide, Replicate( "*", Len( ::FoGet:buffer ) ), ::FoGet:buffer ), ;
+                                                ::FdispOffset, ::FoGet:pos ) }
     ENDIF
 
 RETURN NIL
@@ -492,7 +488,7 @@ METHOD PROCEDURE setLabel( cLabel ) CLASS HTGet
 
     ::Flabel := cLabel
     IF Len( cLabel ) > 0
-        ::FlabelWidth := Len( cLabel ) + 1
+        ::FlabelWidth := ht_strWidth( cLabel ) + 1
     ELSE
         ::FlabelWidth := 0
     ENDIF

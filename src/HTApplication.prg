@@ -8,6 +8,9 @@
 #include "inkey.ch"
 #include "hbgtinfo.ch"
 
+/* Unicode text by default (see HTApplication:new()) */
+REQUEST HB_CODEPAGE_UTF8EX
+
 STATIC s_lDebug := .F.
 STATIC s_aFormatStack := {}
 
@@ -45,12 +48,34 @@ PUBLIC:
     
 ENDCLASS
 
-/** Creates the application singleton and initializes the desktop. */
+/** Creates the application singleton and initializes the desktop.
+ *
+ * Codepage: when the application has not selected one (Harbour's default
+ * "EN" is still active), switches the VM to "UTF8EX" so editors can hold
+ * any Unicode text - Chinese/Japanese/Korean from an IME, Cyrillic, etc.
+ * "EN" (CP437) has no room for them: such keys would type nothing. UTF8EX
+ * keeps Len()/SubStr()/Left() character-indexed, which the editors' cursor
+ * arithmetic relies on (plain "UTF8" is byte-indexed). Box frames are not
+ * affected: the GT draws them through its own box codepage (CP437).
+ * An application that selected a codepage (hb_cdpSelect( "SR852" ), ...)
+ * before this call keeps it; to stay on "EN", select it after this call.
+ *
+ * Under a UTF-8 codepage the GT also switches SaveScreen() buffers to the
+ * extended cell format (HB_GTI_COMPATBUFFER .F.): the Clipper format keeps
+ * one byte per character, so every window restore (raise, move, close)
+ * would turn Unicode text into "?".
+ */
 METHOD new() CLASS HTApplication
 
     LOCAL desktop
 
     IF ::Fdesktop = NIL
+        IF hb_cdpSelect() == "EN"
+            hb_cdpSelect( "UTF8EX" )
+        ENDIF
+        IF hb_cdpIsUTF8()
+            hb_gtInfo( HB_GTI_COMPATBUFFER, .F. )
+        ENDIF
         desktop := HTDesktop():new()
         desktop:setAsDesktopWidget()
         ::Fdesktop := desktop

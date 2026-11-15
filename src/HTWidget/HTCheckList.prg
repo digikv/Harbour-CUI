@@ -104,9 +104,9 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTCheckList
 
     nRow := 0
     FOR i := ::FtopIndex TO Min( ::FtopIndex + nVisibleRows - 1, nItemCount )
-        cCheckMark := IIF( ::FitemChecked[ i ], Chr( 251 ), " " )
+        cCheckMark := IIF( ::FitemChecked[ i ], ht_glyph( 0x221A, "x" ), " " )   /* √ in any codepage */
         cLine := "[" + cCheckMark + "] " + ::Fitems[ i ]
-        cText := PadR( cLine, Max( 0, nMaxCol ) )
+        cText := ht_cellPadR( cLine, Max( 0, nMaxCol ) )
 
         /* proportional scrollbar on right edge */
         IF nItemCount > nVisibleRows .AND. nMaxCol >= 0

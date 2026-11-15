@@ -11,6 +11,9 @@
 #include "hbapiitm.h"
 #include "hbapistr.h"
 #include "hbvm.h"
+#include "hbgtinfo.ch"
+
+#include <string.h>
 
 static HB_BOOL s_fActive = HB_FALSE;
 static int     s_iOffRow  = 0;
@@ -46,6 +49,232 @@ static int ht_abs_row( int iRel )
 static int ht_abs_col( int iRel )
 {
    return s_fActive ? iRel + s_iOffCol : iRel;
+}
+
+/* ---- Wide (East Asian) characters ------------------------------------
+ *
+ * A GT keeps one character per screen cell, but Chinese, Japanese and
+ * Korean characters are drawn two cells wide (like in any terminal). gtwvt
+ * draws each of them into a single cell, so neighbouring glyphs overlap and
+ * the text is unreadable. When "wide cells" are on, the DispOutAt remap
+ * below writes every wide character followed by a filler space: the glyph
+ * spills over its own filler cell and the grid stays aligned. Output is
+ * clipped at the right edge of the active viewport (the painted widget),
+ * so a widget never paints over its neighbours - padding is cut first.
+ * Editors use HT_STRWIDTH() for cursor columns and scrolling.
+ *
+ * Auto mode turns wide cells on for graphic GTs (gtwvt, gtxwc) and off for
+ * text GTs (gttrm, gtnul, ...), where the terminal does the job or there
+ * is no display. HT_WIDECELLS( lOn ) overrides it.
+ */
+
+static int s_iWide = -1;   /* -1 = auto (graphic GT), 0 = off, 1 = on */
+
+/* a wide character was written: ht_winmouse.c then repaints whole rows */
+HB_BOOL ht_fWideWritten = HB_FALSE;
+
+static HB_BOOL ht_wc_iswide( HB_WCHAR wc )
+{
+   return wc >= 0x1100 && (
+          wc <= 0x115F ||                       /* Hangul Jamo initials */
+          ( wc >= 0x2E80 && wc <= 0x303E ) ||   /* CJK radicals .. CJK symbols and punctuation */
+          ( wc >= 0x3041 && wc <= 0x33FF ) ||   /* kana, Bopomofo, Hangul compat., enclosed/compat. CJK */
+          ( wc >= 0x3400 && wc <= 0x4DBF ) ||   /* CJK extension A */
+          ( wc >= 0x4E00 && wc <= 0x9FFF ) ||   /* CJK unified ideographs */
+          ( wc >= 0xA000 && wc <= 0xA4CF ) ||   /* Yi */
+          ( wc >= 0xA960 && wc <= 0xA97F ) ||   /* Hangul Jamo extended A */
+          ( wc >= 0xAC00 && wc <= 0xD7A3 ) ||   /* Hangul syllables */
+          ( wc >= 0xF900 && wc <= 0xFAFF ) ||   /* CJK compatibility ideographs */
+          ( wc >= 0xFE10 && wc <= 0xFE19 ) ||   /* vertical forms */
+          ( wc >= 0xFE30 && wc <= 0xFE6F ) ||   /* CJK compatibility forms, small forms */
+          ( wc >= 0xFF00 && wc <= 0xFF60 ) ||   /* fullwidth forms */
+          ( wc >= 0xFFE0 && wc <= 0xFFE6 ) );   /* fullwidth signs */
+}
+
+static HB_BOOL ht_wide_on( void )
+{
+   if( s_iWide < 0 )
+   {
+      HB_GT_INFO gtInfo;
+
+      memset( &gtInfo, 0, sizeof( gtInfo ) );
+      gtInfo.pResult = hb_itemNew( NULL );
+      hb_gtInfo( HB_GTI_ISGRAPHIC, &gtInfo );
+      s_iWide = hb_itemGetL( gtInfo.pResult ) ? 1 : 0;
+      hb_itemRelease( gtInfo.pResult );
+   }
+   return s_iWide == 1;
+}
+
+/* screen cells taken by a string; *pfWide reports a wide character */
+static HB_SIZE ht_str_cells( const char * szText, HB_SIZE nLen, HB_BOOL * pfWide )
+{
+   PHB_CODEPAGE cdp = hb_vmCDP();
+   HB_SIZE nIndex = 0, nCells = 0;
+   HB_WCHAR wc;
+
+   *pfWide = HB_FALSE;
+   if( ! HB_CDP_ISCUSTOM( cdp ) )   /* single-byte codepage: no wide chars */
+      return nLen;
+
+   while( HB_CDPCHAR_GET( cdp, szText, nLen, &nIndex, &wc ) )
+   {
+      if( ht_wc_iswide( wc ) )
+      {
+         *pfWide = HB_TRUE;
+         nCells += 2;
+      }
+      else
+         ++nCells;
+   }
+   return nCells;
+}
+
+/* hb_gtWriteAt() with wide cells: a filler space after each wide char,
+   output clipped to iAvail cells (a wide char that does not fit becomes
+   one space) */
+static void ht_write_wide( int iRow, int iCol, const char * szText, HB_SIZE nLen, int iAvail )
+{
+   PHB_CODEPAGE cdp = hb_vmCDP();
+   char * pBuf = ( char * ) hb_xgrab( nLen * 2 + 1 );
+   HB_SIZE nIndex = 0, nPrev = 0, nOut = 0;
+   int iCells = 0;
+   HB_WCHAR wc;
+
+   while( iCells < iAvail && HB_CDPCHAR_GET( cdp, szText, nLen, &nIndex, &wc ) )
+   {
+      if( ht_wc_iswide( wc ) )
+      {
+         if( iCells + 2 > iAvail )
+         {
+            pBuf[ nOut++ ] = ' ';
+            ++iCells;
+            break;
+         }
+         memcpy( pBuf + nOut, szText + nPrev, nIndex - nPrev );
+         nOut += nIndex - nPrev;
+         pBuf[ nOut++ ] = ' ';
+         iCells += 2;
+      }
+      else
+      {
+         memcpy( pBuf + nOut, szText + nPrev, nIndex - nPrev );
+         nOut += nIndex - nPrev;
+         ++iCells;
+      }
+      nPrev = nIndex;
+   }
+
+   ht_fWideWritten = HB_TRUE;
+   hb_gtWriteAt( iRow, iCol, pBuf, nOut );
+   hb_xfree( pBuf );
+}
+
+/* DispOutAt body: iRelCol is the viewport-relative column */
+static void ht_write_at( int iRow, int iCol, int iRelCol, const char * szText, HB_SIZE nLen )
+{
+   HB_BOOL fWide = HB_FALSE;
+
+   if( ht_wide_on() )
+      ht_str_cells( szText, nLen, &fWide );
+
+   if( fWide )
+   {
+      int iAvail = hb_gtMaxCol() - iCol + 1;
+
+      if( s_fActive && s_iMaxCol - iRelCol + 1 < iAvail )
+         iAvail = s_iMaxCol - iRelCol + 1;
+      if( iAvail > 0 )
+         ht_write_wide( iRow, iCol, szText, nLen, iAvail );
+   }
+   else
+      hb_gtWriteAt( iRow, iCol, szText, nLen );
+}
+
+/* HT_WIDECELLS( [ lOn ] ) -> lOld  (wide cells in effect before the call) */
+HB_FUNC( HT_WIDECELLS )
+{
+   HB_BOOL fOld = ht_wide_on();
+
+   if( HB_ISLOG( 1 ) )
+      s_iWide = hb_parl( 1 ) ? 1 : 0;
+
+   hb_retl( fOld );
+}
+
+/* HT_STRWIDTH( cText ) -> nCells  (screen cells the text takes) */
+HB_FUNC( HT_STRWIDTH )
+{
+   const char * szText = hb_parc( 1 );
+
+   if( szText )
+   {
+      HB_SIZE nLen = hb_parclen( 1 );
+      HB_BOOL fWide;
+
+      if( ht_wide_on() )
+         hb_retns( ( HB_ISIZ ) ht_str_cells( szText, nLen, &fWide ) );
+      else
+         hb_retns( ( HB_ISIZ ) hb_cdpTextLen( hb_vmCDP(), szText, nLen ) );
+   }
+   else
+      hb_retni( 0 );
+}
+
+/* HT_WIDENREGION( nTop, nLeft, nBottom, nRight )  (screen coordinates)
+ * Wide cells for text painted by Harbour core code that bypasses the
+ * DispOutAt remap (TBrowse): every wide character gets the next cell as its
+ * filler; the rest of its field moves one cell right and the field's last
+ * cell is dropped. A field ends at a color change or at a cell drawn with
+ * DispOutAtBox() (TBrowse column separators), so columns stay in place.
+ * Must run only right after the whole region was redrawn - running it
+ * twice over the same text would widen it twice. */
+HB_FUNC( HT_WIDENREGION )
+{
+   int iTop = hb_parni( 1 ), iLeft = hb_parni( 2 );
+   int iBottom = hb_parni( 3 ), iRight = hb_parni( 4 );
+   int iRow, iCol, iEnd, i;
+   int iColor, iColor2;
+   HB_BYTE bAttr, bAttr2;
+   HB_USHORT usChar, usChar2;
+
+   if( ! ht_wide_on() || ! HB_CDP_ISCUSTOM( hb_vmCDP() ) )
+      return;
+
+   if( iRight > hb_gtMaxCol() )
+      iRight = hb_gtMaxCol();
+   if( iBottom > hb_gtMaxRow() )
+      iBottom = hb_gtMaxRow();
+
+   for( iRow = HB_MAX( iTop, 0 ); iRow <= iBottom; ++iRow )
+   {
+      for( iCol = HB_MAX( iLeft, 0 ); iCol < iRight; ++iCol )
+      {
+         if( hb_gtGetScrChar( iRow, iCol, &iColor, &bAttr, &usChar ) != HB_SUCCESS ||
+             ( bAttr & HB_GT_ATTR_BOX ) != 0 || ! ht_wc_iswide( ( HB_WCHAR ) usChar ) )
+            continue;
+
+         /* last cell of this field */
+         for( iEnd = iCol + 1; iEnd <= iRight; ++iEnd )
+         {
+            if( hb_gtGetScrChar( iRow, iEnd, &iColor2, &bAttr2, &usChar2 ) != HB_SUCCESS ||
+                iColor2 != iColor || ( bAttr2 & HB_GT_ATTR_BOX ) != 0 )
+               break;
+         }
+         --iEnd;
+         if( iEnd <= iCol )
+            continue;   /* no room: the glyph stays squeezed into one cell */
+
+         for( i = iEnd; i > iCol + 1; --i )
+         {
+            hb_gtGetScrChar( iRow, i - 1, &iColor2, &bAttr2, &usChar2 );
+            hb_gtPutScrChar( iRow, i, iColor2, bAttr2, usChar2 );
+         }
+         hb_gtPutScrChar( iRow, iCol + 1, iColor, 0, ' ' );
+         ht_fWideWritten = HB_TRUE;
+         ++iCol;   /* skip the filler */
+      }
+   }
 }
 
 static char * ht_item_string_con( PHB_ITEM pItem, HB_SIZE * pnLen, HB_BOOL * pfFreeReq )
@@ -108,7 +337,7 @@ HB_FUNC( HT_DISPOUTAT )
       hb_gtSetColorStr( hb_parc( 4 ) );
 
       pszString = ht_item_string_con( hb_param( 3, HB_IT_ANY ), &nLen, &bFreeReq );
-      hb_gtWriteAt( iRow, iCol, pszString, nLen );
+      ht_write_at( iRow, iCol, hb_parni( 2 ), pszString, nLen );
 
       if( bFreeReq )
          hb_xfree( pszString );
@@ -118,7 +347,7 @@ HB_FUNC( HT_DISPOUTAT )
    else if( hb_pcount() >= 3 )
    {
       pszString = ht_item_string_con( hb_param( 3, HB_IT_ANY ), &nLen, &bFreeReq );
-      hb_gtWriteAt( iRow, iCol, pszString, nLen );
+      ht_write_at( iRow, iCol, hb_parni( 2 ), pszString, nLen );
 
       if( bFreeReq )
          hb_xfree( pszString );

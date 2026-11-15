@@ -142,7 +142,7 @@ METHOD FUNCTION addButtonBar( ... ) CLASS HTDialog
     /* right-align buttons */
     nBtnX := ::Fwidth - 3
     FOR i := Len( aLabels ) TO 1 STEP -1
-        nBtnWidth := Max( Len( aLabels[ i ] ) + 4, 8 )
+        nBtnWidth := Max( ht_strWidth( aLabels[ i ] ) + 4, 8 )
         nBtnX -= nBtnWidth + 2
         oBtn := HTPushButton():new( aLabels[ i ], self )
         oBtn:setGeometry( Max( 1, nBtnX ), nBarRow, nBtnWidth, 1 )

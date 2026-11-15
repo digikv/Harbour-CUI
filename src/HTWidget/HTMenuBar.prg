@@ -212,7 +212,7 @@ METHOD PROCEDURE paintEvent( event ) CLASS HTMenuBar
             cColor := IIF( nIdx = ::FactiveMenu, HTTheme():getColor( HT_CLR_MENU_BAR_SEL ), HTTheme():getColor( HT_CLR_MENU_BAR ) )
             itm:move( 0, ++y )
             DispOutAt( 0, y, " " + itm:title + " ", cColor )
-            y += Len( itm:title ) + 2
+            y += ht_strWidth( itm:title ) + 2
         ENDIF
     NEXT
     wFormat()
@@ -432,7 +432,7 @@ METHOD PROCEDURE openMenu( nIndex ) CLASS HTMenuBar
     /* find menu's horizontal position */
     nMenuLeft := 0
     FOR itm := 1 TO nIndex - 1
-        nMenuLeft += Len( aMenus[ itm ]:title ) + 3
+        nMenuLeft += ht_strWidth( aMenus[ itm ]:title ) + 3
     NEXT
     nMenuLeft++
 
@@ -587,12 +587,12 @@ METHOD PROCEDURE paintMenuWindow( oMenu, nWinId, nActive ) CLASS HTMenuBar
     FOR EACH itm IN oMenu:items()
         nIdx++
         IF ht_menuIsSep( itm )
-            DispOutAt( nRow, 0, Replicate( e"\xC4", nMaxCol + 1 ), HTTheme():getColor( HT_CLR_MENU_SEP ) )
+            DispOutAt( nRow, 0, Replicate( ht_glyph( 0x2500, "-" ), nMaxCol + 1 ), HTTheme():getColor( HT_CLR_MENU_SEP ) )
         ELSE
             cColor := IIF( nIdx = nActive, HTTheme():getColor( HT_CLR_MENU_ITEM_SEL ), HTTheme():getColor( HT_CLR_MENU_ITEM ) )
-            cText  := PadR( " " + ht_menuText( itm ), nMaxCol + 1 )
+            cText  := ht_cellPadR( " " + ht_menuText( itm ), nMaxCol + 1 )
             IF ht_menuIsSub( itm )
-                cText := Left( cText, nMaxCol - 1 ) + Chr( 16 ) + " "   /* ► */
+                cText := ht_cellPadR( cText, nMaxCol - 1 ) + Chr( 16 ) + " "   /* ► */
             ENDIF
             DispOutAt( nRow, 0, cText, cColor )
         ENDIF
@@ -636,7 +636,7 @@ METHOD FUNCTION handleClick( nRow, nCol ) CLASS HTMenuBar
     /* determine which menu title was clicked */
     nLeft := 1
     FOR i := 1 TO nMenuCount
-        nWidth := Len( aMenus[ i ]:title ) + 2
+        nWidth := ht_strWidth( aMenus[ i ]:title ) + 2
         nRight := nLeft + nWidth - 1
         IF nCol >= nLeft .AND. nCol <= nRight
             IF ::FactiveMenu = i .AND. ::FmenuOpen
@@ -808,7 +808,7 @@ STATIC FUNCTION ht_menuWidth( aItems )
 
     FOR EACH itm IN aItems
         IF ! ht_menuIsSep( itm )
-            nWidth := Max( nWidth, Len( ht_menuText( itm ) ) + IIF( ht_menuIsSub( itm ), 6, 4 ) )
+            nWidth := Max( nWidth, ht_strWidth( ht_menuText( itm ) ) + IIF( ht_menuIsSub( itm ), 6, 4 ) )
         ENDIF
     NEXT
 

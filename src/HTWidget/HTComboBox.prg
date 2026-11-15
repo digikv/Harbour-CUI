@@ -95,7 +95,7 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTComboBox
         cDisplay := ::Fitems[ ::FcurrentIndex ]
     ENDIF
 
-    cDisplay := PadR( cDisplay, Max( 0, nMaxCol ) ) + cArrow
+    cDisplay := ht_cellPadR( cDisplay, Max( 0, nMaxCol ) ) + cArrow
 
     IF Len( cDisplay ) > nMaxCol + 1
         cDisplay := Left( cDisplay, nMaxCol + 1 )
@@ -332,7 +332,7 @@ METHOD PROCEDURE paintDropdown() CLASS HTComboBox
 
     nRow := 0
     FOR i := ::FdropTopIndex TO Min( ::FdropTopIndex + nVisibleRows - 1, Len( ::Fitems ) )
-        cText := PadR( ::Fitems[ i ], nMaxCol + 1 )
+        cText := ht_cellPadR( ::Fitems[ i ], nMaxCol + 1 )
         cColor := IIF( i = ::FcurrentIndex, HTTheme():getColor( HT_CLR_COMBO_DROP_S ), HTTheme():getColor( HT_CLR_COMBO_DROP_N ) )
         DispOutAt( nRow, 0, cText, cColor )
         nRow++
@@ -446,7 +446,7 @@ METHOD FUNCTION typeSearch( cChar ) CLASS HTComboBox
 
     LOCAL i, nNow
 
-    IF ! hb_isString( cChar ) .OR. Len( cChar ) != 1 .OR. Asc( cChar ) < 32
+    IF ! hb_isString( cChar ) .OR. cChar == "" .OR. hb_BCode( cChar ) < 32
         RETURN .F.
     ENDIF
 

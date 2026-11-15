@@ -44,14 +44,14 @@ METHOD new( ... ) CLASS HTPushButton
     ::setFocusPolicy( HT_FOCUS_STRONG )
     ::FisVisible := .T.
     ::Fheight := 1
-    ::Fwidth  := Len( ::Ftext ) + 4
+    ::Fwidth  := ht_strWidth( ::Ftext ) + 4
 
 RETURN self
 
 /** Keep width in sync when label changes. */
 METHOD PROCEDURE setText( cText ) CLASS HTPushButton
     ::super:setText( cText )
-    ::Fwidth := Len( ::Ftext ) + 4
+    ::Fwidth := ht_strWidth( ::Ftext ) + 4
 RETURN
 
 METHOD FUNCTION faceText() CLASS HTPushButton

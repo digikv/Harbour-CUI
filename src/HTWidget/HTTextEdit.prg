@@ -48,6 +48,7 @@ PUBLIC:
     METHOD keyEvent( keyEvent )
     METHOD mouseEvent( eventMouse )
     METHOD cursorPos()
+    METHOD curLine() INLINE IIF( ::FnCurRow >= 1 .AND. ::FnCurRow <= Len( ::FaLines ), ::FaLines[ ::FnCurRow ], "" )
 
     METHOD getText()
     METHOD setText( cText )
@@ -221,33 +222,30 @@ METHOD PROCEDURE paintEvent( event ) CLASS HTTextEdit
     IF ::FnCurRow > ::FnTopRow + nVisRows - 1
         ::FnTopRow := ::FnCurRow - nVisRows + 1
     ENDIF
-    IF ::FnCurCol < ::FnLeftCol
-        ::FnLeftCol := ::FnCurCol
-    ENDIF
-    IF ::FnCurCol > ::FnLeftCol + nVisCols - 1
-        ::FnLeftCol := ::FnCurCol - nVisCols + 1
-    ENDIF
+    /* horizontal scroll in screen cells (a CJK character takes two) */
+    ::FnLeftCol := ht_scrollToCursor( ::curLine(), ::FnLeftCol, ::FnCurCol, nVisCols )
 
     /* paint visible lines */
     nRow := 0
     FOR i := ::FnTopRow TO Min( ::FnTopRow + nVisRows - 1, Len( ::FaLines ) )
         cLine := ::FaLines[ i ]
-        cDisplay := PadR( SubStr( cLine, ::FnLeftCol ), nVisCols )
+        cDisplay := ht_cellPadR( SubStr( cLine, ::FnLeftCol ), nVisCols )
 
         IF aRange != NIL .AND. i >= nSelR1 .AND. i <= nSelR2
             /* this line has selection — render in segments */
+            /* character positions in cDisplay; segments start at screen cells */
             nSelStart := IIF( i = nSelR1, Max( nSelC1 - ::FnLeftCol, 0 ), 0 )
-            nSelEnd   := IIF( i = nSelR2, Min( nSelC2 - ::FnLeftCol, nVisCols ), nVisCols )
+            nSelEnd   := IIF( i = nSelR2, Min( nSelC2 - ::FnLeftCol, Len( cDisplay ) ), Len( cDisplay ) )
             IF nSelStart < nSelEnd
                 /* before selection */
                 IF nSelStart > 0
                     DispOutAt( nRow, 0, Left( cDisplay, nSelStart ), cColor )
                 ENDIF
                 /* selected portion */
-                DispOutAt( nRow, nSelStart, SubStr( cDisplay, nSelStart + 1, nSelEnd - nSelStart ), cSelColor )
+                DispOutAt( nRow, ht_strWidth( Left( cDisplay, nSelStart ) ), SubStr( cDisplay, nSelStart + 1, nSelEnd - nSelStart ), cSelColor )
                 /* after selection */
-                IF nSelEnd < nVisCols
-                    DispOutAt( nRow, nSelEnd, SubStr( cDisplay, nSelEnd + 1 ), cColor )
+                IF nSelEnd < Len( cDisplay )
+                    DispOutAt( nRow, ht_strWidth( Left( cDisplay, nSelEnd ) ), SubStr( cDisplay, nSelEnd + 1 ), cColor )
                 ENDIF
             ELSE
                 DispOutAt( nRow, 0, cDisplay, cColor )
@@ -267,7 +265,7 @@ METHOD PROCEDURE paintEvent( event ) CLASS HTTextEdit
     /* position cursor */
     IF ::hasFocus()
         nCursorRow := ::FnCurRow - ::FnTopRow
-        nCursorCol := ::FnCurCol - ::FnLeftCol
+        nCursorCol := ht_cellCol( ::curLine(), ::FnLeftCol, ::FnCurCol )
         IF nCursorRow >= 0 .AND. nCursorRow <= nMaxRow .AND. nCursorCol >= 0 .AND. nCursorCol <= nMaxCol
             SetPos( nCursorRow, nCursorCol )
         ENDIF
@@ -284,7 +282,7 @@ METHOD FUNCTION cursorPos() CLASS HTTextEdit
 
     IF ::hasFocus()
         nRow := ::FnCurRow - ::FnTopRow
-        nCol := ::FnCurCol - ::FnLeftCol
+        nCol := ht_cellCol( ::curLine(), ::FnLeftCol, ::FnCurCol )
         IF nRow >= 0 .AND. nRow < ::Fheight .AND. nCol >= 0 .AND. nCol < ::Fwidth
             RETURN { nRow, nCol }
         ENDIF
@@ -514,14 +512,14 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS HTTextEdit
     OTHERWISE
         /* printable character */
         IF ! ::FreadOnly
-            cChar := hb_keyChar( keyEvent:key )
-            IF Len( cChar ) = 1 .AND. Asc( cChar ) >= 32
+            cChar := ht_keyText( keyEvent:key )
+            IF ! cChar == ""
                 IF ::hasSelection()
                     ::deleteSelection()
                 ENDIF
                 cLine := ::FaLines[ ::FnCurRow ]
                 ::FaLines[ ::FnCurRow ] := Left( cLine, ::FnCurCol - 1 ) + cChar + SubStr( cLine, ::FnCurCol )
-                ::FnCurCol++
+                ::FnCurCol += Len( cChar )
                 lChanged := .T.
             ELSE
                 RETURN
@@ -560,7 +558,8 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTTextEdit
             nLine := ::FnTopRow + nClickRow
             IF nLine >= 1 .AND. nLine <= Len( ::FaLines )
                 ::FnCurRow := nLine
-                ::FnCurCol := Min( ::FnLeftCol + nClickCol, Len( ::FaLines[ ::FnCurRow ] ) + 1 )
+                ::FnCurCol := Min( ::FnLeftCol - 1 + ht_cellPos( SubStr( ::FaLines[ ::FnCurRow ], ::FnLeftCol ), nClickCol ), ;
+                                   Len( ::FaLines[ ::FnCurRow ] ) + 1 )
                 parent := ::parent()
                 IF parent != NIL .AND. parent:isDerivedFrom( "HTWidget" )
                     parent:repaintChild( self )

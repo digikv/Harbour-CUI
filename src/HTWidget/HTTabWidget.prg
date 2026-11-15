@@ -134,7 +134,7 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTTabWidget
         IF i > 1
             /* separator */
             IF nCol <= nMaxCol
-                DispOutAt( 0, nCol, hb_UTF8ToStr( Chr( 9474 ) ), HTTheme():getColor( HT_CLR_TAB_BAR ) )
+                DispOutAt( 0, nCol, ht_glyph( 0x2502, "|" ), HTTheme():getColor( HT_CLR_TAB_BAR ) )
                 nCol++
             ENDIF
         ENDIF
@@ -142,13 +142,13 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTTabWidget
         cLabel := " " + ::FaTabs[ i ][ 1 ] + " "
         cColor := IIF( i == ::FnActiveTab, HTTheme():getColor( HT_CLR_TAB_ACTIVE ), HTTheme():getColor( HT_CLR_TAB_INACTIVE ) )
 
-        IF nCol + Len( cLabel ) - 1 <= nMaxCol
+        IF nCol + ht_strWidth( cLabel ) - 1 <= nMaxCol
             DispOutAt( 0, nCol, cLabel, cColor )
         ELSEIF nCol <= nMaxCol
-            DispOutAt( 0, nCol, Left( cLabel, nMaxCol - nCol + 1 ), cColor )
+            DispOutAt( 0, nCol, ht_cellLeft( cLabel, nMaxCol - nCol + 1 ), cColor )
         ENDIF
 
-        nCol += Len( cLabel )
+        nCol += ht_strWidth( cLabel )
 
     NEXT
 
@@ -258,7 +258,7 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTTabWidget
 
                 cLabel := " " + ::FaTabs[ i ][ 1 ] + " "
                 nTabStart := nCol
-                nTabEnd   := nCol + Len( cLabel ) - 1
+                nTabEnd   := nCol + ht_strWidth( cLabel ) - 1
 
                 IF nClickCol >= nTabStart .AND. nClickCol <= nTabEnd
                     ::setActiveTab( i )
@@ -266,7 +266,7 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTTabWidget
                     RETURN
                 ENDIF
 
-                nCol += Len( cLabel )
+                nCol += ht_strWidth( cLabel )
 
             NEXT
 

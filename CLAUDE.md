@@ -26,7 +26,12 @@ GT driver: `gtxwc` on Linux (X11 window), `gtwvt` on Windows. Tests use `gttrm` 
 Platform code is split with `#ifdef __PLATFORM__WINDOWS` (note: Harbour defines only the
 upper-case form; `__PLATFORM__Windows` is never defined):
 - `HTEventLoop:poll()` — Win32 WndProc mouse queue (Windows) vs portable `Inkey()` path
-- `HTApplication:exec()` — installs the Win32 mouse bridge (`ht_winmouse.c`, stubs elsewhere)
+- `HTApplication:exec()` — installs the Win32 mouse bridge (`ht_winmouse.c`, stubs elsewhere).
+  It subclasses the gtwvt window with the **W** API (`SetWindowLongPtrW`/`CallWindowProcW`):
+  hbmk2 compiles C as ANSI by default, and an ANSI subclass turns the window into an ANSI
+  window — IME/Unicode `WM_CHAR` (Chinese, Cyrillic on a Western system, …) then reaches
+  gtwvt as `?`. Its `WM_PAINT` hook also widens the repaint to whole rows once wide (CJK)
+  text was written (see Unicode below)
 - `ht_cuiSetupDisplay()` — gtwvt fullscreen + Consolas font fit (Windows) vs a resizable
   `SetMode( nRows, nCols )` window in the GT's own font (Linux)
 - `HTApplication:exec()` event mask — non-Windows adds `HB_INKEY_GTEVENT`, so gtxwc's
@@ -117,6 +122,39 @@ HTGet wraps Harbour's core `Get` class for full Clipper-compatible input editing
 - `HTGridLayout`: 2D grid with row/column spans, spacing, margins
 - Size policies: `minimumWidth/Height`, `maximumWidth/Height` on HTWidget
 
+### Unicode / CJK (Chinese, Japanese, Korean)
+
+- **Codepage**: `HTApplication:new()` switches the VM to `UTF8EX` when the app left Harbour's
+  default `"EN"` (an app that called `hb_cdpSelect()` first keeps its codepage). UTF8EX keeps
+  `Len()/SubStr()/Left()` character-indexed — the editors' cursor arithmetic relies on that
+  (plain `"UTF8"` is byte-indexed). Box frames still go through the GT box codepage (CP437).
+- **SaveScreen cells**: under a UTF-8 codepage `HB_GTI_COMPATBUFFER` must be `.F.` (set in
+  `HTApplication:new()` and `ht_cuiSetupDisplay()`): Clipper 2-byte cells store one byte per
+  character, so every window restore of the SaveScreen window stack turned Unicode into `?`.
+- **Typing**: `ht_keyText( nKey )` (HTKeyEvent.prg) is the text a key types, `""` for
+  non-printing keys. One character but possibly several bytes — insert the whole string and
+  advance the cursor by `Len()`; never test `Len( hb_keyChar( n ) ) = 1`.
+- **Wide cells** (`ht_viewport.c`): a CJK character takes two screen cells. The `DispOutAt`
+  remap writes it followed by a filler space (the glyph spills over it) and clips at the
+  viewport's right edge. Auto on for graphic GTs (gtwvt/gtxwc), off for text GTs (gttrm,
+  gtnul); `ht_wideCells( lOn )` overrides. TBrowse paints through the core RTL, so
+  `HTBrowse:paintEvent()` calls `ht_widenRegion()` right after `forceStable()` (fields end at
+  a color change or a `DispOutAtBox` column separator; must only run on a freshly redrawn area).
+- **Measure on-screen text in cells** (`src/HTCells.prg`): `ht_strWidth()`, `ht_cellLeft()`,
+  `ht_cellPadR/L/C()` instead of `PadR/PadL/PadC()`, `ht_cellCol()` (cursor column),
+  `ht_cellPos()` (mouse click → character), `ht_scrollToCursor()` (horizontal scroll offset).
+  Character positions in the text stay `Len()`-based.
+- **gtwvt font**: `ht_cuiSetupDisplay()` sets `HB_GTI_CODEPAGE` to `DEFAULT_CHARSET` (1) under
+  UTF-8 — with the default OEM charset Consolas draws CJK as empty boxes; DEFAULT lets GDI fall
+  back to a system CJK font. gtwvt repaints only changed cells; a repaint starting on a filler
+  cell would erase the right half of the glyph, hence the whole-row `WM_PAINT` in `ht_winmouse.c`.
+- **Symbols**: `ht_glyph( nUnicode, cFallback )` — Unicode symbol when the codepage has it, else
+  ASCII. Title bar buttons `─ □/▫ ×` (3 cells each from width 24), resize grip `┘`, `√`, `─│`.
+  Never write CP437 bytes (`e"\xC4"`, `Chr(251)`) through `DispOutAt` — under UTF8EX they are
+  invalid UTF-8 (`DispOutAtBox`/`DispBox`/TBrowse separators are fine: box codepage).
+- Known limit: Korean Hangul drifts right in gtwvt (Windows draws the fallback glyphs with their
+  own advance); Chinese and Japanese align. gtxwc (Linux) CJK rendering is not verified.
+
 ### Coordinate Convention
 
 `move(x, y)` where **x = column, y = row**. `HTPoint(x, y)` same. `wOpen(top, left, bottom, right)` takes row-first. In `paintTopLevelWindow()`, `wOpen(::Fx, ::Fy, ...)` passes x(col) as top(row) — this works because `move()` stores x=col in Fx, and the window position happens to be correct, but the naming is misleading.
@@ -160,12 +198,18 @@ Four coordinate spaces used in the event system:
 - `K_HOME = K_CTRL_A = 1`, `K_PGDN = K_CTRL_C = 3`, `K_DOWN = K_CTRL_X = 24` — same key codes, can't have both in SWITCH. Use `hb_gtInfo(HB_GTI_KBDSHIFTS)` + `HB_GTI_KBD_CTRL` to detect Ctrl modifier.
 - Callback properties MUST use `READWRITE` or `WRITE setter` — plain `PROPERTY onFoo` is read-only
 - `PROPERTY readOnly ...` is broken: the preprocessor parses `FreadOnly` as `F` + scope keyword `READONLY`, naming the DATA `"F"` instead of `"FreadOnly"`. Workaround: declare `DATA FreadOnly INIT .F.` explicitly in `PROTECTED:` and use `METHOD readOnly() INLINE ::FreadOnly` + `METHOD _readOnly(b) INLINE ::FreadOnly := b` in `PUBLIC:`. Same issue would affect any property whose name case-insensitively matches a scope keyword: `EXPORTED`, `EXPORT`, `VISIBLE`, `PUBLIC`, `PROTECTED`, `HIDDEN`, `PRIVATE`, `READONLY`, `RO`, `PUBLISHED`.
+- The compiler folds `Len()`, `Chr()`, `PadR()` … of **literals** at compile time, in bytes:
+  `Len( "王小明" )` is 9 even under UTF8EX and `Chr( 9474 )` is `Chr( 2 )`. Measure strings at
+  runtime (variables) and build symbols with `hb_UChar()` / `ht_glyph()`.
+- Binary strings (SaveScreen buffers, file data) under UTF8EX: use `hb_BLen()/hb_BSubStr()/
+  hb_BCode()` — `Len()/SubStr()` count UTF-8 characters.
 
 ## Source Layout
 
 ```
 include/          hbtui.ch (constants, color categories, alignment), property.ch (macros)
-src/              Core classes (HTBase, HTObject, HTApplication, HTEventLoop), layouts, C API
+src/              Core classes (HTBase, HTObject, HTApplication, HTEventLoop), layouts, C API,
+                  HTCells.prg (screen-cell text helpers for wide CJK characters, ht_glyph)
 src/HTWindow/     SaveScreen window API (HTWinApi) + viewport C helpers (ht_viewport.c)
 src/HTEvent/      Event classes (HTEvent, HTKeyEvent, HTMouseEvent, etc.)
 src/HTWidget/     Widget classes (25+ widgets, HTGetBackend, HTToast)
@@ -193,6 +237,8 @@ samples/          Demo applications (human-facing, require a display)
                   "Customers" (HTBrowse grids). Exercises the window stack:
                   drag/resize/maximize/minimize, click-to-raise, shadows,
                   Ctrl+F6 window cycling, Enter-to-next-field, cursor restore
+  unicode/        Chinese/Japanese/Korean/Cyrillic text: IME input in HTGet, HTLineEdit,
+                  HTTextEdit and the HTBrowse editor, wide (2-cell) characters
   showcase/       Full controls demo with all features
 tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_basic      HTPoint, HTSize, all HTEvent subclasses
@@ -201,7 +247,9 @@ tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_theme      HTTheme singleton, all 4 themes, invalid index fallback
   test_widgets    HTLabel, HTLineEdit, HTCheckBox, HTPushButton, HTListBox,
                   HTComboBox, HTCheckList, HTSpinner, HTProgressBar, HTScrollBar,
-                  HTTextEdit, HTContextMenu, HTMenu:items() (submenu order)
+                  HTTextEdit, HTContextMenu, HTMenu:items() (submenu order),
+                  Unicode: UTF8EX default, CJK typing (ht_keyText, editors, HTGet),
+                  wide-cell helpers, SaveScreen keeping Unicode, ht_glyph
   test_browse     HTBrowse column management, navigation blocks, callbacks,
                   inline cell editing (F2/typing, Enter/Esc, typed numeric save)
   test_get        HTGet setup/getValue/setValue, label/picture/width, readOnly,

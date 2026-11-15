@@ -67,7 +67,7 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTStatusBar
         cBar += ::Fsections[ i ]
     NEXT
 
-    cBar := PadR( cBar, nBarWidth )
+    cBar := ht_cellPadR( cBar, nBarWidth )
 
     DispOutAt( 0, 0, cBar, ::color )
 
