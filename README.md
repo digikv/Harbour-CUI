@@ -34,7 +34,7 @@ Older standalone CUI helpers (`win.prg`, `cui.ch`) are kept under [`legacy/`](le
 
 **Window stack** — overlapping SaveScreen windows composed in z-order over the desktop (`src/HTWindow/HTWinApi.prg`):
 
-- Title-bar chrome: drag the title to move, `/` resizes (content repaints live while the mouse button is held), `#` maximizes, `_` minimizes, `x` closes.
+- Title-bar chrome: drag the title to move, `┘` resizes (content repaints live while the mouse button is held), `□` maximizes (`▫` restores), `─` minimizes, `×` closes. The buttons are three cells wide from a window width of 24; on a codepage without these symbols they fall back to `/ # _ x`.
 - A click anywhere in a window brings it to the front (`widget:raise()`). The fullscreen `HTMainWindow` stays underneath as the application shell, and closing it ends the application.
 - Ctrl+F6 / Ctrl+Shift+F6 activate the next / previous window from the keyboard (Alt+Tab is taken by Windows itself).
 - Drop shadows follow every move and resize. A window covered by others paints into its own layer and never over the windows above it.
@@ -42,7 +42,41 @@ Older standalone CUI helpers (`win.prg`, `cui.ch`) are kept under [`legacy/`](le
 - In `HTGet` and `HTLineEdit`, Enter moves to the next field like Tab (Clipper READ style); a failing VALID keeps the focus.
 - Window repaints are buffered (`DispBegin`/`DispEnd`) and a focus change repaints only the two affected controls, so clicks don't make the screen flicker.
 
-**Theme system** — `HTTheme` singleton with multiple built-in themes (Default, Dark, High Contrast, Mono).
+**Unicode and East Asian text** — Chinese (traditional and simplified), Japanese and Korean can be typed with the Windows IME and are shown in every widget, as are Cyrillic, Greek and other scripts.
+
+- `HTApplication():new()` switches the VM to the `UTF8EX` codepage when the application kept Harbour's default (`EN`). An application that selects its own codepage before that call keeps it; choose `UTF8EX` for CJK text.
+- Data in an older codepage needs no conversion in your code: tell the RDD the table's codepage (`USE customers CODEPAGE "HR852"`, or `Set( _SET_DBCODEPAGE, "HR852" )` for all tables) and it translates on every read and write. The file stays in that codepage, so older programs can keep using it.
+- A Chinese, Japanese or Korean character takes two screen cells, as in a terminal. Editors, GETs, labels, menus, window titles and HTBrowse columns measure text in cells, so the cursor, mouse clicks and columns stay aligned (`ht_strWidth()`, `ht_cellPadR()`, … in `src/HTCells.prg`).
+- On Windows, gtwvt draws CJK characters through a fallback font. Windows lays out Korean Hangul by its own glyph width, so the cell after a Hangul character holds a zero width space instead of a space: Chinese, Japanese and Korean all line up on the same grid.
+- `samples/unicode` shows labels, GETs, editors and a browse in Chinese, Japanese, Korean, Cyrillic and Greek.
+- On Linux (`gtxwc`) the Unicode code builds and passes the tests; CJK display has not been checked on screen yet.
+
+**Themes** — every widget takes its colors from the `HTTheme` singleton when it paints. A theme is one color per category (`HT_CLR_WINDOW`, `HT_CLR_BROWSE_FOCUSED`, …) plus its palette: the 16 RGB colors that the color indexes 0–15 show on screen (gtwvt and gtxwc). So the same `"0/9"` is gray in one theme and dark slate in another.
+
+| Theme | Look |
+|-------|------|
+| `Classic` (default) | gray windows, pastel blue title and highlight, white fields |
+| `Blue` | the classic blue DOS look: white on blue, green browse with a red cursor |
+| `Light` | Classic with a lighter palette |
+| `Dark` | dark gray, blue highlight |
+| `Amber` | for the night: warm amber on near black, little blue light |
+| `HighContrast` | white and yellow on black |
+| `Mono` | grays only |
+
+The first five are the color schemes of Digi knjigovodstvo, palette included; `Blue` is its original look, still a favorite of many users.
+
+```harbour
+HTTheme():loadTheme( "Blue" )          // or loadBlue(), loadDark(), ...
+HTApplication():repaintAll()           // show it on every window
+
+// an own theme: start from a built-in one, change colors and palette, keep it
+HTTheme():loadTheme( "Classic" )
+HTTheme():setColor( HT_CLR_TITLEBAR, "15/1" )
+HTTheme():setPaletteColor( 14, ht_rgb( 255, 220, 120 ) )
+HTTheme():saveTheme( "My theme" )      // built-in themes stay as they are
+```
+
+`addTheme()`, `removeTheme()`, `themeNames()`, `themeColors()` and `themePalette()` manage own themes. `samples/theme_editor` edits the colors and the palette interactively, saves own themes and keeps them in `themes.json` for the next start.
 
 ## Quick Start
 
@@ -68,7 +102,9 @@ cd samples/hello && hbmk2 hello.prg hbmk.hbm && ./hello
 | `editor` | HTLineEdit + HTTextEdit |
 | `menu` | HTMenuBar + HTMenu |
 | `progress` | Animated HTProgressBar |
-| `theme` | Theme switching |
+| `theme` | Switching among the seven built-in themes (F1–F7) |
+| `theme_editor` | Change theme colors and the palette, add own themes, save them to `themes.json` |
+| `unicode` | Chinese, Japanese, Korean, Cyrillic and Greek text: IME input, two-cell characters |
 | `toast` | HTToast notifications |
 | `showcase` | Full controls demo |
 

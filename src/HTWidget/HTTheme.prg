@@ -7,8 +7,8 @@
  * COLORREF values, see ht_rgb()). Loading a theme sets both, so the same
  * "0/9" can be gray in one theme and dark slate in another.
  *
- * Built-in themes. The first five come from Digi knjigovodstvo (boje.prg),
- * where users have long chosen among them:
+ * Built-in themes. The first five are the color schemes of Digi
+ * knjigovodstvo (boje.prg); Blue is its original look:
  *   Classic       gray windows, pastel blue title and highlight (default)
  *   Blue          the old blue DOS look: white on blue, green browse
  *   Light         Classic with a lighter palette
