@@ -33,6 +33,7 @@ PUBLIC:
     METHOD currentData()    INLINE IIF( ::FcurrentIndex > 0 .AND. ::FcurrentIndex <= Len( ::FitemData ), ::FitemData[ ::FcurrentIndex ], NIL )
     METHOD setCurrentIndex( n )
     METHOD itemText( n )    INLINE IIF( n > 0 .AND. n <= Len( ::Fitems ), ::Fitems[ n ], "" )
+    METHOD setItemText( n, cText )
     METHOD firstLetterSearch( cLetter )
 
     PROPERTY onChanged READWRITE                 /* {|nIndex| ... } */
@@ -258,6 +259,17 @@ METHOD PROCEDURE removeItem( nIndex ) CLASS HTListBox
         IF ::FcurrentIndex > Len( ::Fitems )
             ::FcurrentIndex := Len( ::Fitems )
         ENDIF
+    ENDIF
+RETURN
+
+/** Replaces the text of an item; selection and scroll position stay.
+ * Shown on the next paint (parent:repaintChild( list )).
+ * @param n     1-based item index
+ * @param cText New text
+ */
+METHOD PROCEDURE setItemText( n, cText ) CLASS HTListBox
+    IF HB_ISNUMERIC( n ) .AND. n >= 1 .AND. n <= Len( ::Fitems ) .AND. HB_ISSTRING( cText )
+        ::Fitems[ n ] := cText
     ENDIF
 RETURN
 

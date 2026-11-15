@@ -144,30 +144,12 @@ FUNCTION ht_SyncViewport()
 
 RETURN NIL
 
-/** Applies Windows/CUI RGB palette slots 9-15 (harbour-cui Application:New).
- * Values are Windows COLORREF (0x00BBGGRR), not RRGGBB.
+/** Shows the palette of the current theme (HTTheme). A GT that does not
+ * report its palette (some terminals) keeps its own colors. gtwvt and gtxwc
+ * take Windows COLORREF (0x00BBGGRR) values, not RRGGBB.
  */
 FUNCTION ht_cuiApplyPalette()
-    LOCAL aPal
-
-    /* keep defaults for 0-8, override 9-15 like harbour-cui. A GT that does
-       not report its palette (some terminals) keeps its own colors: setting
-       a made-up array would turn slots 0-8 black. gtwvt and gtxwc report it;
-       both take Windows COLORREF (0x00BBGGRR) values. */
-    aPal := hb_gtInfo( HB_GTI_PALETTE )
-    IF ! HB_ISARRAY( aPal ) .OR. Len( aPal ) != 16
-        RETURN NIL
-    ENDIF
-
-    aPal[ 10 ] := ht_rgb( 160, 160, 160 )  /* 9  window gray */
-    aPal[ 11 ] := ht_rgb( 240, 240, 240 )  /* 10 menu bar */
-    aPal[ 12 ] := ht_rgb( 153, 180, 209 )  /* 11 active title (Windows blue) */
-    aPal[ 13 ] := ht_rgb( 171, 171, 171 )  /* 12 app workspace */
-    aPal[ 14 ] := ht_rgb( 128, 128, 128 )  /* 13 dark gray */
-    aPal[ 15 ] := ht_rgb( 166, 202, 240 )  /* 14 pastel blue */
-    aPal[ 16 ] := ht_rgb( 169, 169, 169 )  /* 15 gray */
-
-    hb_gtInfo( HB_GTI_PALETTE, aPal )
+    HTTheme():applyPalette()
 RETURN NIL
 
 /** Windows COLORREF from R,G,B (0..255). */

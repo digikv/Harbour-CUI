@@ -13,3 +13,4 @@ lib
 .claude/
 .hbmk/
 deps/
+samples/theme_editor/themes.json

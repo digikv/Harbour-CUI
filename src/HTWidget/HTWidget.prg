@@ -78,6 +78,7 @@ PUBLIC:
     CONSTRUCTOR new( ... )
 
     METHOD actions()
+    METHOD activate()
     METHOD addAction( action )
     METHOD addEvent( event, priority )
     METHOD destroy()
@@ -1463,6 +1464,15 @@ METHOD PROCEDURE show() CLASS HTWidget
     ::addEvent( HTFocusEvent():new( HT_EVENT_TYPE_FOCUSIN ), HT_EVENT_PRIORITY_LOW )
     ::addEvent( HTShowEvent():new(), HT_EVENT_PRIORITY_LOW )
 
+RETURN
+
+/** Makes this top-level window the keyboard target (and raises it, except
+ * the HTMainWindow shell, which stays beneath). Queued behind the pending
+ * show() events, so it also works right after creating other windows:
+ * windows open only when app:exec() handles their show().
+ */
+METHOD PROCEDURE activate() CLASS HTWidget
+    ::addEvent( HTFocusEvent():new( HT_EVENT_TYPE_FOCUSIN ), HT_EVENT_PRIORITY_LOW )
 RETURN
 
 /** Handles a show event by accepting it. Override for custom show behavior.

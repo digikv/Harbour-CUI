@@ -37,6 +37,7 @@ PUBLIC:
     METHOD getTopLevelWindowFromWindowId( windowId )
     METHOD queueEvent( event, priority )
     METHOD quit() INLINE ::Fexecute := .F.
+    METHOD repaintAll()
     METHOD setDebug( lEnable )
     METHOD setDisplaySize( nRows, nCols )
     METHOD syncCursor()
@@ -57,7 +58,7 @@ ENDCLASS
  * keeps Len()/SubStr()/Left() character-indexed, which the editors' cursor
  * arithmetic relies on (plain "UTF8" is byte-indexed). Box frames are not
  * affected: the GT draws them through its own box codepage (CP437).
- * An application that selected a codepage (hb_cdpSelect( "SR852" ), ...)
+ * An application that selected a codepage (hb_cdpSelect( "HR852" ), ...)
  * before this call keeps it; to stay on "EN", select it after this call.
  *
  * Under a UTF-8 codepage the GT also switches SaveScreen() buffers to the
@@ -329,6 +330,34 @@ METHOD FUNCTION getTopLevelWindowFromWindowId( windowId ) CLASS HTApplication
     ENDIF
 
 RETURN NIL
+
+/** Repaints the desktop and every top-level window in place, e.g. after
+ * HTTheme():loadTheme() or setColor(): widgets take the theme colors at
+ * paint time. Window positions and the stacking order stay as they are. */
+METHOD PROCEDURE repaintAll() CLASS HTApplication
+
+    LOCAL nOldWin := wSelect()
+    LOCAL window, key
+
+    DispBegin()
+
+    IF ::Fdesktop != NIL
+        wSelect( 0 )
+        ::Fdesktop:paintEvent( HTPaintEvent():new() )
+        ht_winCompose( 0 )   /* lay the windows back over the fresh desktop */
+    ENDIF
+
+    FOR EACH key IN hb_hKeys( ::FtopLevelWindows )
+        window := ::FtopLevelWindows[ key ]
+        IF key != 0 .AND. window != NIL .AND. window:isDerivedFrom( "HTWidget" )
+            window:repaint()
+        ENDIF
+    NEXT
+
+    DispEnd()
+    wSelect( nOldWin, .F. )
+
+RETURN
 
 /** Enqueues an event at the given priority level. Auto-assigns priority
  * based on widget visibility if not specified.

@@ -62,7 +62,8 @@ HTBase
       HTMenuBar, HTMenu, HTContextMenu (right-click popup)
       HTMessageBox (singleton), HTScrollBar, HTSpinner, HTCheckList
       HTTabWidget, HTToolBar
-      HTTheme (singleton, 4 themes: default/dark/high-contrast/mono)
+      HTTheme (singleton: named themes with palettes; Classic/Blue/Light/Dark/Amber from
+               Digi knjigovodstvo, HighContrast, Mono; own themes)
       HTToast (singleton, non-blocking notifications with auto-dismiss)
     HTAction (menu item with onTriggered callback)
     HTLayout → HTBoxLayout → HTHBoxLayout, HTVBoxLayout
@@ -91,6 +92,10 @@ HTContextMenu (right-click popup menu, inherits HTObject)
 **Event flow**: `HTApplication:exec()` → `getEvent()` (Inkey) → queue by priority (HIGH/NORMAL/LOW) → `widget:event()` → type-based dispatch → handler method. Keyboard events go to `activeWindow()`, mouse events to window under cursor. Right-click dispatches to `contextMenu:popup()`.
 
 **Focus chain**: `HTWidget:FfocusWidget` tracks the focused child. Tab/Shift+Tab cycles via `focusNextChild()`/`focusPrevChild()`. Mouse click focuses via `childAt()` hit-testing. Focus policy: NONE/TAB/CLICK/STRONG.
+`show()` only queues paint/focus/show events (LOW priority): a top-level window opens — and
+becomes the keyboard target — when `app:exec()` handles them, so the last window shown wins.
+`win:activate()` queues a focus-in behind them (the HTMainWindow shell is selected but stays
+beneath); a `wSelect()` before `exec()` is overridden.
 
 **Signal/callbacks**: Harbour code blocks on READWRITE properties. `btn:onClicked := {|| Save() }`, `chk:onToggled := {|l| ... }`, `cmb:onChanged := {|n| ... }`, `brw:onActivated := {|r,c| ... }`, `action:onTriggered := {|| ... }`.
 
@@ -98,7 +103,22 @@ HTContextMenu (right-click popup menu, inherits HTObject)
 
 **Targeted repaint**: `parent:repaintChild(self)` repaints a single child without clearing the entire window. Used by all controls for state changes.
 
-**Theme system**: `HTTheme()` singleton with 50 color categories. All widgets use `HTTheme():getColor(HT_CLR_xxx)` instead of hardcoded colors. Four built-in themes: `loadDefault()`, `loadDark()`, `loadHighContrast()`, `loadMono()`.
+**Theme system**: `HTTheme()` singleton, `HT_CLR_MAX` (57) color categories. All widgets use `HTTheme():getColor(HT_CLR_xxx)` instead of hardcoded colors, at paint time.
+- A theme = one color string per category + optionally a **palette** (16 COLORREF values, `ht_rgb()`:
+  what indexes 0..15 look like). `loadTheme( cName )` sets both; `applyPalette()` pushes the palette
+  to the GT only when the GT reports one (gtwvt/gtxwc; not gtnul/most terminals).
+  `ht_cuiApplyPalette()` = `HTTheme():applyPalette()`.
+- Built-in, in this order: `Classic` (default), `Blue`, `Light`, `Dark`, `Amber` — ported from the
+  Digi knjigovodstvo color schemes (`boje.prg`: palette + screen attributes; Blue = the old blue DOS
+  look, white on blue with a green browse) — then `HighContrast`, `Mono` (DOS palette).
+  `loadDefault()/loadClassic()/loadBlue()/loadLight()/loadDark()/loadAmber()/loadHighContrast()/loadMono()`.
+  The Digi themes are built from a few roles (`ht_themeFromRoles()`: window, field, focus, list,
+  select, browse, menu, status, title, …); built-in themes cannot be replaced or removed.
+- Own themes: `setColor()` / `setPaletteColor()` change the current colors, `saveTheme( cName )` keeps
+  them; `addTheme( cName, aColors, aPalette )`, `removeTheme()`, `themeNames()`, `themeColors()`,
+  `themePalette()`, `isBuiltIn()`, `categoryName( nCat )`. Names are case-insensitive.
+- After a change call `HTApplication():repaintAll()` (desktop + every top-level window in place).
+  A palette change alone repaints by itself (the GT exposes the whole screen).
 
 **Debug logging**: `ht_debugLog(cMessage)` writes to stderr when enabled via `HTApplication():setDebug(.T.)`. Capture with `./myapp 2>debug.log`.
 
@@ -233,7 +253,10 @@ samples/          Demo applications (human-facing, require a display)
   layout/         HTVBoxLayout demo (spacing, stretch, nesting)
   menu/           HTMenuBar + HTMenu + HTAction with keyboard shortcuts
   progress/       Animated HTProgressBar with scheduleRepeat()
-  theme/          Theme switching demo (4 themes, F-keys + buttons)
+  theme/          Theme switching demo (7 built-in themes, F1-F7, theme list + buttons)
+  theme_editor/   Theme editor: change category colors (Text/Back spinners or a color string) and
+                  the 16-color palette (R G B), save as own themes, themes.json persistence,
+                  preview window (GET, combo, buttons, progress, browse), toasts, message box
   toast/          HTToast non-blocking notifications (4 styles, stacking)
   window/         window_01.prg: overlapping floating windows over an HTMainWindow
                   shell — "Dialog" (2 HTGets + OK/Cancel), "Products" and
@@ -247,7 +270,8 @@ tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_basic      HTPoint, HTSize, all HTEvent subclasses
   test_eventloop  HTEventLoop schedule, scheduleRepeat, cancelTask, runPendingTasks
   test_layout     HTBoxLayout, HTGridLayout item management
-  test_theme      HTTheme singleton, all 4 themes, invalid index fallback
+  test_theme      HTTheme singleton, all built-in themes and palettes, own themes (save/add/
+                  replace/remove, built-ins protected), category names, invalid index fallback
   test_widgets    HTLabel, HTLineEdit, HTCheckBox, HTPushButton, HTListBox,
                   HTComboBox, HTCheckList, HTSpinner, HTProgressBar, HTScrollBar,
                   HTTextEdit, HTContextMenu, HTMenu:items() (submenu order),
