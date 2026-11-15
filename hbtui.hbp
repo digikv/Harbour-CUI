@@ -21,4 +21,3 @@ src/HTWidget/HTAbstractButton/*.prg
 src/types/*.prg
 
 $hb_pkg_dynlib.hbm
-$hb_pkg_install.hbm
