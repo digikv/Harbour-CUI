@@ -135,8 +135,12 @@ HTGet wraps Harbour's core `Get` class for full Clipper-compatible input editing
   non-printing keys. One character but possibly several bytes — insert the whole string and
   advance the cursor by `Len()`; never test `Len( hb_keyChar( n ) ) = 1`.
 - **Wide cells** (`ht_viewport.c`): a CJK character takes two screen cells. The `DispOutAt`
-  remap writes it followed by a filler space (the glyph spills over it) and clips at the
-  viewport's right edge. Auto on for graphic GTs (gtwvt/gtxwc), off for text GTs (gttrm,
+  remap writes it followed by a filler cell (the glyph spills over it) and clips at the
+  viewport's right edge. The filler is a space, except after Hangul on Windows: there it is
+  a zero width space (U+200B), because GDI ignores gtwvt's per-cell widths for Hangul and
+  advances by the glyph's own two cells (a space made it three, and the run drifted right).
+  A zero width space after Chinese/Japanese would pull the next glyph onto it — keep the space.
+  Auto on for graphic GTs (gtwvt/gtxwc), off for text GTs (gttrm,
   gtnul); `ht_wideCells( lOn )` overrides. TBrowse paints through the core RTL, so
   `HTBrowse:paintEvent()` calls `ht_widenRegion()` right after `forceStable()` (fields end at
   a color change or a `DispOutAtBox` column separator; must only run on a freshly redrawn area).
@@ -152,8 +156,7 @@ HTGet wraps Harbour's core `Get` class for full Clipper-compatible input editing
   ASCII. Title bar buttons `─ □/▫ ×` (3 cells each from width 24), resize grip `┘`, `√`, `─│`.
   Never write CP437 bytes (`e"\xC4"`, `Chr(251)`) through `DispOutAt` — under UTF8EX they are
   invalid UTF-8 (`DispOutAtBox`/`DispBox`/TBrowse separators are fine: box codepage).
-- Known limit: Korean Hangul drifts right in gtwvt (Windows draws the fallback glyphs with their
-  own advance); Chinese and Japanese align. gtxwc (Linux) CJK rendering is not verified.
+- Known limit: gtxwc (Linux) CJK rendering is not verified on screen.
 
 ### Coordinate Convention
 

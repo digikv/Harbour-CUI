@@ -525,7 +525,21 @@ STATIC PROCEDURE TestUnicodeInput()
 
     o:setText( cHan )
     Assert( "HTLineEdit: text kept with wide cells", o:text == cHan )
+
+    /* filler cells: a space after Chinese; after Korean a zero width space
+       on Windows (GDI draws Hangul two cells wide by itself, a space after
+       it made three) */
+    DispOutAt( 0, 0, hb_UChar( 0xD55C ) + Left( cHan, 1 ) )
+    cScr := SaveScreen( 0, 0, 0, 3 )
     ht_wideCells( .F. )
+    Assert( "wide cells: Hangul, filler, Han",  ScrCell( cScr, 1 ) == 0xD55C .AND. ;
+                                                ScrCell( cScr, 3 ) == hb_UCode( Left( cHan, 1 ) ) )
+    Assert( "filler after Han: space",          ScrCell( cScr, 4 ) == 32 )
+#ifdef __PLATFORM__WINDOWS
+    Assert( "filler after Hangul: U+200B",      ScrCell( cScr, 2 ) == 0x200B )
+#else
+    Assert( "filler after Hangul: space",       ScrCell( cScr, 2 ) == 32 )
+#endif
 
     /* the window stack saves/restores screen areas: with Clipper 2-byte
        cells (HB_GTI_COMPATBUFFER) every CJK character came back as "?" */
@@ -546,3 +560,11 @@ STATIC PROCEDURE TestUnicodeInput()
     hb_cdpSelect( cOldCP )
 
 RETURN
+
+/* Unicode character of cell n (1-based) in a 4-cell extended SaveScreen()
+   buffer: the cell starts with the character, 16-bit little endian */
+STATIC FUNCTION ScrCell( cScr, n )
+
+    LOCAL nPos := ( n - 1 ) * ( hb_BLen( cScr ) / 4 ) + 1
+
+RETURN hb_BCode( hb_BSubStr( cScr, nPos, 1 ) ) + hb_BCode( hb_BSubStr( cScr, nPos + 1, 1 ) ) * 256

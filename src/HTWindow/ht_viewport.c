@@ -57,8 +57,8 @@ static int ht_abs_col( int iRel )
  * Korean characters are drawn two cells wide (like in any terminal). gtwvt
  * draws each of them into a single cell, so neighbouring glyphs overlap and
  * the text is unreadable. When "wide cells" are on, the DispOutAt remap
- * below writes every wide character followed by a filler space: the glyph
- * spills over its own filler cell and the grid stays aligned. Output is
+ * below writes every wide character followed by a filler cell (ht_filler()):
+ * the glyph spills over it and the grid stays aligned. Output is
  * clipped at the right edge of the active viewport (the painted widget),
  * so a widget never paints over its neighbours - padding is cut first.
  * Editors use HT_STRWIDTH() for cursor columns and scrolling.
@@ -69,6 +69,37 @@ static int ht_abs_col( int iRel )
  */
 
 static int s_iWide = -1;   /* -1 = auto (graphic GT), 0 = off, 1 = on */
+
+#if defined( HB_OS_WIN )
+/* Korean (Hangul syllables, jamo, compatibility and parenthesized/circled
+   Hangul) */
+static HB_BOOL ht_wc_ishangul( HB_WCHAR wc )
+{
+   return ( wc >= 0x1100 && wc <= 0x11FF ) || ( wc >= 0x3130 && wc <= 0x318F ) ||
+          ( wc >= 0x3200 && wc <= 0x321E ) || ( wc >= 0x3260 && wc <= 0x327E ) ||
+          ( wc >= 0xA960 && wc <= 0xA97F ) || ( wc >= 0xAC00 && wc <= 0xD7FF );
+}
+#endif
+
+/* The filler cell after a wide character. gtwvt draws a row as runs of
+ * same-colored cells with ExtTextOut() and gives every character one cell
+ * width (lpDx). Windows ignores that width for Hangul and advances by the
+ * glyph's own width, two cells: Hangul + a filler space took three cells
+ * and the rest of the run drifted right. After Hangul the filler is a zero
+ * width space, so the glyph's two cells are all. Other wide characters keep
+ * the space: they do get one cell, and a zero width space after them pulls
+ * the next glyph onto them. Measured on Windows 11 with Consolas 8..17 px
+ * wide, every CJK block, alone and mixed in one run. */
+static HB_WCHAR ht_filler( HB_WCHAR wc )
+{
+#if defined( HB_OS_WIN )
+   if( ht_wc_ishangul( wc ) )
+      return 0x200B;   /* ZERO WIDTH SPACE */
+#else
+   HB_SYMBOL_UNUSED( wc );
+#endif
+   return ' ';
+}
 
 /* a wide character was written: ht_winmouse.c then repaints whole rows */
 HB_BOOL ht_fWideWritten = HB_FALSE;
@@ -130,13 +161,14 @@ static HB_SIZE ht_str_cells( const char * szText, HB_SIZE nLen, HB_BOOL * pfWide
    return nCells;
 }
 
-/* hb_gtWriteAt() with wide cells: a filler space after each wide char,
+/* hb_gtWriteAt() with wide cells: a filler cell after each wide char,
    output clipped to iAvail cells (a wide char that does not fit becomes
    one space) */
 static void ht_write_wide( int iRow, int iCol, const char * szText, HB_SIZE nLen, int iAvail )
 {
    PHB_CODEPAGE cdp = hb_vmCDP();
-   char * pBuf = ( char * ) hb_xgrab( nLen * 2 + 1 );
+   HB_SIZE nSize = nLen * 3 + 8;   /* text + a filler (at most 3 bytes) per wide char */
+   char * pBuf = ( char * ) hb_xgrab( nSize );
    HB_SIZE nIndex = 0, nPrev = 0, nOut = 0;
    int iCells = 0;
    HB_WCHAR wc;
@@ -153,7 +185,8 @@ static void ht_write_wide( int iRow, int iCol, const char * szText, HB_SIZE nLen
          }
          memcpy( pBuf + nOut, szText + nPrev, nIndex - nPrev );
          nOut += nIndex - nPrev;
-         pBuf[ nOut++ ] = ' ';
+         if( ! HB_CDPCHAR_PUT( cdp, pBuf, nSize, &nOut, ht_filler( wc ) ) )
+            pBuf[ nOut++ ] = ' ';
          iCells += 2;
       }
       else
@@ -270,7 +303,7 @@ HB_FUNC( HT_WIDENREGION )
             hb_gtGetScrChar( iRow, i - 1, &iColor2, &bAttr2, &usChar2 );
             hb_gtPutScrChar( iRow, i, iColor2, bAttr2, usChar2 );
          }
-         hb_gtPutScrChar( iRow, iCol + 1, iColor, 0, ' ' );
+         hb_gtPutScrChar( iRow, iCol + 1, iColor, 0, ht_filler( ( HB_WCHAR ) usChar ) );
          ht_fWideWritten = HB_TRUE;
          ++iCol;   /* skip the filler */
       }
