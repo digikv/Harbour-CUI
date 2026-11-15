@@ -89,15 +89,25 @@ static HB_BOOL ht_wc_ishangul( HB_WCHAR wc )
  * width space, so the glyph's two cells are all. Other wide characters keep
  * the space: they do get one cell, and a zero width space after them pulls
  * the next glyph onto them. Measured on Windows 11 with Consolas 8..17 px
- * wide, every CJK block, alone and mixed in one run. */
+ * wide, every CJK block, alone and mixed in one run.
+ *
+ * gtxwc with the "Unifont Cell" font (tools/unifont-cell.sh): every glyph
+ * advances one cell and a wide one spills over the next, so the filler is
+ * one of the font's blank glyphs U+E100..U+F0FF chosen by the character
+ * (U+E040..U+E076 are the GTs' own box symbols).
+ * gtxwc repaints only changed cells: with a plain space, a new character
+ * over an old one kept the old glyph's right half in the unchanged filler
+ * cell. ht_cuiSetupDisplay() turns this on (HT_WIDEFILLERBASE). */
+static HB_WCHAR s_wcFillerBase = 0;
+
 static HB_WCHAR ht_filler( HB_WCHAR wc )
 {
 #if defined( HB_OS_WIN )
    if( ht_wc_ishangul( wc ) )
       return 0x200B;   /* ZERO WIDTH SPACE */
-#else
-   HB_SYMBOL_UNUSED( wc );
 #endif
+   if( s_wcFillerBase )
+      return ( HB_WCHAR ) ( s_wcFillerBase + ( wc & 0x0FFF ) );
    return ' ';
 }
 
@@ -233,6 +243,17 @@ HB_FUNC( HT_WIDECELLS )
       s_iWide = hb_parl( 1 ) ? 1 : 0;
 
    hb_retl( fOld );
+}
+
+/* HT_WIDEFILLERBASE( [ nBase ] ) -> nOld
+ * First of 4096 blank glyphs the filler cells use (0xE100 for gtxwc with
+ * "Unifont Cell"); 0 = the plain space filler. */
+HB_FUNC( HT_WIDEFILLERBASE )
+{
+   hb_retni( s_wcFillerBase );
+
+   if( HB_ISNUM( 1 ) )
+      s_wcFillerBase = ( HB_WCHAR ) hb_parni( 1 );
 }
 
 /* HT_STRWIDTH( cText ) -> nCells  (screen cells the text takes) */

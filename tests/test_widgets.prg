@@ -574,6 +574,17 @@ STATIC PROCEDURE TestUnicodeInput()
     Assert( "filler after Hangul: space",       ScrCell( cScr, 2 ) == 32 )
 #endif
 
+    /* gtxwc with "Unifont Cell": the filler is a blank glyph chosen by the
+       character, so a new character over an old one repaints the filler too */
+    ht_wideCells( .T. )
+    ht_wideFillerBase( 0xE100 )
+    DispOutAt( 0, 0, Left( cHan, 1 ) + "A" )
+    cScr := SaveScreen( 0, 0, 0, 3 )
+    Assert( "filler base: U+E100 + low 12 bits", ScrCell( cScr, 2 ) == 0xE100 + hb_bitAnd( hb_UCode( Left( cHan, 1 ) ), 0x0FFF ) .AND. ;
+                                                ScrCell( cScr, 3 ) == Asc( "A" ) )
+    Assert( "filler base: old value back",      ht_wideFillerBase( 0 ) == 0xE100 )
+    ht_wideCells( .F. )
+
     /* the window stack saves/restores screen areas: with Clipper 2-byte
        cells (HB_GTI_COMPATBUFFER) every CJK character came back as "?" */
     Assert( "UTF8EX: extended SaveScreen cells", ! hb_gtInfo( HB_GTI_COMPATBUFFER ) )

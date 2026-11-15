@@ -188,6 +188,19 @@ FUNCTION ht_cuiSetupDisplay( nRows, nCols )
        terminal SetMode() cannot resize, so the terminal's size is used. */
     hb_gtInfo( HB_GTI_CLOSABLE, .T. )
     hb_gtInfo( HB_GTI_RESIZABLE, .T. )
+    /* gtxwc draws with one X core font. Its default "fixed" has no Chinese,
+       Japanese or Korean glyphs (empty boxes); "Unifont Cell" has them, made
+       to fit the wide cells (tools/unifont-cell.sh installs it). Without it
+       gtxwc keeps "fixed": FONTSEL changes nothing for a missing font. */
+    IF hb_cdpIsUTF8() .AND. hb_gtVersion() == "XWC"
+        /* once: a FONTSEL on an open window recreates it */
+        IF ! "unifontcell" $ Lower( hb_CStr( hb_gtInfo( HB_GTI_FONTSEL ) ) )
+            hb_gtInfo( HB_GTI_FONTSEL, "-hbtui-unifontcell-medium-r-normal-*-16-*-*-*-*-*-iso10646-1" )
+        ENDIF
+        IF "unifontcell" $ Lower( hb_CStr( hb_gtInfo( HB_GTI_FONTSEL ) ) )
+            ht_wideFillerBase( 0xE100 )
+        ENDIF
+    ENDIF
     SetMode( nRows, nCols )
 #else
     hb_gtInfo( HB_GTI_FONTNAME, "Consolas" )

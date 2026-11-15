@@ -49,7 +49,14 @@ Older standalone CUI helpers (`win.prg`, `cui.ch`) are kept under [`legacy/`](le
 - A Chinese, Japanese or Korean character takes two screen cells, as in a terminal. Editors, GETs, labels, menus, window titles and HTBrowse columns measure text in cells, so the cursor, mouse clicks and columns stay aligned (`ht_strWidth()`, `ht_cellPadR()`, … in `src/HTCells.prg`).
 - On Windows, gtwvt draws CJK characters through a fallback font. Windows lays out Korean Hangul by its own glyph width, so the cell after a Hangul character holds a zero width space instead of a space: Chinese, Japanese and Korean all line up on the same grid.
 - `samples/unicode` shows labels, GETs, editors and a browse in Chinese, Japanese, Korean, Cyrillic and Greek.
-- On Linux (`gtxwc`) the Unicode code builds and passes the tests; CJK display has not been checked on screen yet.
+- On Linux, `gtxwc` draws with a single X font, and its default `fixed` has no Chinese, Japanese or Korean glyphs: they show as empty boxes (Cyrillic, Greek and accented Latin are fine). Install the "Unifont Cell" font once and every application picks it up by itself:
+
+  ```bash
+  sudo apt install xfonts-unifont pcf2bdf xfonts-utils python3
+  sudo sh tools/unifont-cell.sh
+  ```
+
+  The script builds it from the installed GNU Unifont: the same glyphs, each advancing one cell, so the two-cell CJK characters line up on the grid.
 
 **Themes** — every widget takes its colors from the `HTTheme` singleton when it paints. A theme is one color per category (`HT_CLR_WINDOW`, `HT_CLR_BROWSE_FOCUSED`, …) plus its palette: the 16 RGB colors that the color indexes 0–15 show on screen (gtwvt and gtxwc). So the same `"0/9"` is gray in one theme and dark slate in another.
 

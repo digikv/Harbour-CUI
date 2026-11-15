@@ -176,7 +176,17 @@ HTGet wraps Harbour's core `Get` class for full Clipper-compatible input editing
   ASCII. Title bar buttons `─ □/▫ ×` (3 cells each from width 24), resize grip `┘`, `√`, `─│`.
   Never write CP437 bytes (`e"\xC4"`, `Chr(251)`) through `DispOutAt` — under UTF8EX they are
   invalid UTF-8 (`DispOutAtBox`/`DispBox`/TBrowse separators are fine: box codepage).
-- Known limit: gtxwc (Linux) CJK rendering is not verified on screen.
+- **gtxwc (Linux)** draws with one X core font; its default `fixed` has no CJK glyphs (empty
+  boxes). `tools/unifont-cell.sh` (root; needs `xfonts-unifont pcf2bdf xfonts-utils python3`)
+  builds "Unifont Cell" from the installed GNU Unifont: every glyph advances one 8-px cell (wide
+  ones spill over their filler; gtxwc sizes cells by the widest advance and draws runs with each
+  glyph's own advance) plus 4096 blank filler glyphs U+E100..U+F0FF. `ht_cuiSetupDisplay()` selects
+  it with `HB_GTI_FONTSEL` when installed (UTF-8 only; FONTSEL leaves `fixed` for a missing font)
+  and calls `ht_wideFillerBase( 0xE100 )`: filler = U+E100 + (char & 0xFFF). gtxwc repaints only
+  changed cells, so a filler that changes with its character also repaints the glyph's right half
+  (a plain space left the old glyph's half behind). Never put anything drawn at U+E040..U+E076:
+  the Harbour GTs draw their own box/arrow symbols there. Unifont has no zero-width glyph (ZWSP and
+  the other format characters are visible 16-px boxes).
 
 ### Coordinate Convention
 
@@ -238,6 +248,7 @@ src/HTEvent/      Event classes (HTEvent, HTKeyEvent, HTMouseEvent, etc.)
 src/HTWidget/     Widget classes (25+ widgets, HTGetBackend, HTToast)
 src/types/        HTPoint, HTSize, HT
 legacy/         Prior win.prg / cui.ch kept for reference
+tools/            unifont-cell.sh/.py: builds the "Unifont Cell" X font (CJK in gtxwc)
 docs/             Documentation
   EVENT_SYSTEM.md HTEventLoop guide, event types, routing, focus, tasks, coordinates
 samples/          Demo applications (human-facing, require a display)
@@ -284,3 +295,4 @@ tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_integration Focus cycle (flat + nested layouts), layout geometry,
                   childAt recursion, repaintChild delegation
 ```
+Posle svake završene izmene radim commit i push na main. 
