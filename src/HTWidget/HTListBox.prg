@@ -194,43 +194,56 @@ RETURN
  */
 METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTListBox
 
-    LOCAL nClickRow, nIndex
+    LOCAL nOldIndex := ::FcurrentIndex
+    LOCAL lRepaint := .F.
+    LOCAL nIndex
     LOCAL parent
 
     SWITCH eventMouse:nKey
     CASE K_LBUTTONDOWN
         /* mouseRow is child-relative (translated by parent's dispatch) */
-        nClickRow := eventMouse:mouseRow
-        IF nClickRow >= 0
-            nIndex := ::FtopIndex + nClickRow
+        IF eventMouse:mouseRow >= 0
+            nIndex := ::FtopIndex + eventMouse:mouseRow
             IF nIndex >= 1 .AND. nIndex <= Len( ::Fitems )
                 ::FcurrentIndex := nIndex
-                parent := ::parent()
-                IF parent != NIL .AND. parent:isDerivedFrom( "HTWidget" )
-                    parent:repaintChild( self )
-                ENDIF
+                lRepaint := .T.
             ENDIF
         ENDIF
         EXIT
+    CASE K_LDBLCLK
+        /* the first click already selected the item */
+        IF ::FonActivated != NIL .AND. ::FcurrentIndex > 0
+            Eval( ::FonActivated, ::FcurrentIndex )
+        ENDIF
+        RETURN
     CASE K_MWFORWARD
         IF ::FcurrentIndex > 1
             ::FcurrentIndex--
-            parent := ::parent()
-            IF parent != NIL .AND. parent:isDerivedFrom( "HTWidget" )
-                parent:repaintChild( self )
-            ENDIF
         ENDIF
         EXIT
     CASE K_MWBACKWARD
         IF ::FcurrentIndex < Len( ::Fitems )
             ::FcurrentIndex++
-            parent := ::parent()
-            IF parent != NIL .AND. parent:isDerivedFrom( "HTWidget" )
-                parent:repaintChild( self )
-            ENDIF
         ENDIF
         EXIT
+    OTHERWISE
+        RETURN
     ENDSWITCH
+
+    /* like the keyboard: a new current item reports onChanged */
+    IF ::FcurrentIndex != nOldIndex
+        IF ::FonChanged != NIL
+            Eval( ::FonChanged, ::FcurrentIndex )
+        ENDIF
+        lRepaint := .T.
+    ENDIF
+
+    IF lRepaint
+        parent := ::parent()
+        IF parent != NIL .AND. parent:isDerivedFrom( "HTWidget" )
+            parent:repaintChild( self )
+        ENDIF
+    ENDIF
 
 RETURN
 

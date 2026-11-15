@@ -155,6 +155,7 @@ RETURN
 STATIC PROCEDURE TestListBox()
 
     LOCAL o
+    LOCAL aChanged, nActivated
 
     o := HTListBox():new()
     Assert( "HTListBox:count empty",    o:count() == 0 )
@@ -178,9 +179,41 @@ STATIC PROCEDURE TestListBox()
     o:setCurrentIndex( 99 )  /* out of range: no change */
     Assert( "HTListBox:setCurrentIndex oob stays 2", o:currentIndex() == 2 )
 
+    o:setItemText( 2, "Beta 2" )
+    Assert( "HTListBox:setItemText",        o:itemText( 2 ) == "Beta 2" .AND. o:currentIndex() == 2 )
+
+    /* the mouse reports a new current item like the keyboard does */
+    o:setCurrentIndex( 1 )
+    aChanged := {}
+    nActivated := 0
+    o:onChanged := {| n | AAdd( aChanged, n ) }
+    o:onActivated := {| n | nActivated := n }
+    ListMouse( o, K_LBUTTONDOWN, 2 )
+    Assert( "HTListBox: click selects row 3", o:currentIndex() == 3 )
+    Assert( "HTListBox: click -> onChanged",  Len( aChanged ) == 1 .AND. aChanged[ 1 ] == 3 )
+    ListMouse( o, K_LBUTTONDOWN, 2 )
+    Assert( "HTListBox: same row, no onChanged", Len( aChanged ) == 1 )
+    ListMouse( o, K_LBUTTONDOWN, 7 )
+    Assert( "HTListBox: click below the items", o:currentIndex() == 3 .AND. Len( aChanged ) == 1 )
+    ListMouse( o, K_MWFORWARD, 0 )
+    Assert( "HTListBox: wheel -> onChanged",  o:currentIndex() == 2 .AND. ATail( aChanged ) == 2 )
+    ListMouse( o, K_LDBLCLK, 1 )
+    Assert( "HTListBox: double click -> onActivated", nActivated == 2 )
+
     o:clear()
     Assert( "HTListBox:clear count 0",          o:count() == 0 )
     Assert( "HTListBox:clear currentIndex 0",   o:currentIndex() == 0 )
+
+RETURN
+
+/* a mouse event on row nRow of a list (child-relative, as the parent passes it) */
+STATIC PROCEDURE ListMouse( oList, nKey, nRow )
+
+    LOCAL oEvent := HTMouseEvent():new( nKey, nRow, 0 )
+
+    oEvent:mouseRow := nRow
+    oEvent:mouseCol := 0
+    oList:mouseEvent( oEvent )
 
 RETURN
 
