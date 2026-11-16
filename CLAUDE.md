@@ -198,7 +198,11 @@ HTGet wraps Harbour's core `Get` class for full Clipper-compatible input editing
 - **gtwvt font**: `ht_cuiSetupDisplay()` sets `HB_GTI_CODEPAGE` to `DEFAULT_CHARSET` (1) under
   UTF-8 — with the default OEM charset Consolas draws CJK as empty boxes; DEFAULT lets GDI fall
   back to a system CJK font. gtwvt repaints only changed cells; a repaint starting on a filler
-  cell would erase the right half of the glyph, hence the whole-row `WM_PAINT` in `ht_winmouse.c`.
+  cell would erase the right half of the glyph, hence the whole-row repaint in `ht_winmouse.c`:
+  every partial-width rectangle of the update region (`GetUpdateRgn`, not the bounding
+  `GetUpdateRect`) is collected and invalidated as whole rows by a posted message, after
+  `WM_PAINT` returned. Never call `InvalidateRect()` inside `WM_PAINT`: Windows then repaints the
+  whole window with background erase (every caret blink flashed the screen, a loop at ~20 Hz).
 - **IME** (`ht_winmouse.c`): on `WM_IME_STARTCOMPOSITION` / `WM_IME_COMPOSITION` /
   `IMN_OPENCANDIDATE` the composition window goes to the caret (gtwvt keeps the system caret
   on the GT cursor) and the candidate list below the cursor row (imm32 loaded at run time).

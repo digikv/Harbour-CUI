@@ -144,6 +144,68 @@ static int ht_msg_to_key( UINT message )
    return 0;
 }
 
+/* rows to repaint whole once WM_PAINT returned (see ht_WndProc) */
+static RECT    s_rcRows;
+static HB_BOOL s_fRowsPending = HB_FALSE;
+
+static UINT ht_rows_msg( void )
+{
+   static UINT s_uMsg = 0;
+
+   if( s_uMsg == 0 )
+      s_uMsg = RegisterWindowMessageW( L"HbTuiRepaintRows" );
+   return s_uMsg;
+}
+
+/* adds the rows of every partial-width rectangle of the update region to
+   s_rcRows and posts the repaint message once */
+static void ht_rows_collect( HWND hWnd )
+{
+   RECT  rcClient;
+   HRGN  hRgn;
+   DWORD nSize;
+
+   if( ! GetClientRect( hWnd, &rcClient ) )
+      return;
+
+   hRgn = CreateRectRgn( 0, 0, 0, 0 );
+   if( hRgn == NULL )
+      return;
+
+   if( GetUpdateRgn( hWnd, hRgn, FALSE ) > NULLREGION &&
+       ( nSize = GetRegionData( hRgn, 0, NULL ) ) > 0 )
+   {
+      RGNDATA * pData = ( RGNDATA * ) hb_xgrab( nSize );
+
+      if( GetRegionData( hRgn, nSize, pData ) )
+      {
+         const RECT * pRect = ( const RECT * ) pData->Buffer;
+         DWORD i;
+
+         for( i = 0; i < pData->rdh.nCount; ++i )
+         {
+            if( pRect[ i ].left > rcClient.left || pRect[ i ].right < rcClient.right )
+            {
+               RECT rcRow = pRect[ i ];
+
+               rcRow.left  = rcClient.left;
+               rcRow.right = rcClient.right;
+               if( s_fRowsPending )
+                  UnionRect( &s_rcRows, &s_rcRows, &rcRow );
+               else
+               {
+                  s_rcRows = rcRow;
+                  s_fRowsPending = HB_TRUE;
+                  PostMessageW( hWnd, ht_rows_msg(), 0, 0 );
+               }
+            }
+         }
+      }
+      hb_xfree( pData );
+   }
+   DeleteObject( hRgn );
+}
+
 typedef HIMC ( WINAPI * HT_IMMGETCONTEXT )( HWND );
 typedef BOOL ( WINAPI * HT_IMMRELEASECONTEXT )( HWND, HIMC );
 typedef BOOL ( WINAPI * HT_IMMSETCOMPOSITIONWINDOW )( HIMC, LPCOMPOSITIONFORM );
@@ -225,17 +287,25 @@ static LRESULT CALLBACK ht_WndProc( HWND hWnd, UINT message, WPARAM wParam, LPAR
    /* Wide (CJK) characters spill over their filler cell (ht_viewport.c).
       gtwvt repaints only the changed part of a row; when that part starts
       on a filler cell, its opaque background erases the right half of the
-      glyph. Once wide text was written, repaint whole rows instead. */
+      glyph. Once wide text was written, the rows of each repaint are
+      repainted whole - but not from inside WM_PAINT: an InvalidateRect()
+      there made Windows repaint the whole window, background erase
+      included, right after (every caret blink flashed the screen; an
+      already full-width update looped ~20 times a second). The widened
+      rows are collected and invalidated once WM_PAINT has returned.
+      Each rectangle of the update region counts: the bounding rectangle
+      (GetUpdateRect) is full width as soon as one whole row is in it, and
+      the partial rows next to it would be left out. */
    if( message == WM_PAINT && ht_fWideWritten )
+      ht_rows_collect( hWnd );
+   else if( message != 0 && message == ht_rows_msg() )
    {
-      RECT rcUpd, rcClient;
-
-      if( GetUpdateRect( hWnd, &rcUpd, FALSE ) && GetClientRect( hWnd, &rcClient ) )
+      if( s_fRowsPending )
       {
-         rcUpd.left  = rcClient.left;
-         rcUpd.right = rcClient.right;
-         InvalidateRect( hWnd, &rcUpd, FALSE );
+         s_fRowsPending = HB_FALSE;
+         InvalidateRect( hWnd, &s_rcRows, FALSE );
       }
+      return 0;
    }
 
    if( message == WM_IME_STARTCOMPOSITION || message == WM_IME_COMPOSITION ||
