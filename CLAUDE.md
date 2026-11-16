@@ -171,9 +171,13 @@ HTGet wraps Harbour's core `Get` class for full Clipper-compatible input editing
   default `"EN"` (an app that called `hb_cdpSelect()` first keeps its codepage). UTF8EX keeps
   `Len()/SubStr()/Left()` character-indexed — the editors' cursor arithmetic relies on that
   (plain `"UTF8"` is byte-indexed). Box frames still go through the GT box codepage (CP437).
-- **SaveScreen cells**: under a UTF-8 codepage `HB_GTI_COMPATBUFFER` must be `.F.` (set in
-  `HTApplication:new()` and `ht_cuiSetupDisplay()`): Clipper 2-byte cells store one byte per
-  character, so every window restore of the SaveScreen window stack turned Unicode into `?`.
+- **SaveScreen cells**: under a multi-byte codepage (`ht_cdpIsMultiByte()`: UTF-8, CP950/Big5, …)
+  `HB_GTI_COMPATBUFFER` must be `.F.` (set in `HTApplication:new()` and `ht_cuiSetupDisplay()`):
+  Clipper 2-byte cells store one byte per character, so every window restore of the SaveScreen
+  window stack turned Chinese into `?`.
+- **CP950 (Big5)**: Harbour's CP950 is multi-byte but byte-indexed (`Len()` counts bytes), so the
+  editors' cursor would split a character. Keep the VM in UTF8EX and open Big5 tables with
+  `USE … CODEPAGE "CP950"` (the RDD translates fields both ways).
 - **Typing**: `ht_keyText( nKey )` (HTKeyEvent.prg) is the text a key types, `""` for
   non-printing keys. One character but possibly several bytes — insert the whole string and
   advance the cursor by `Len()`; never test `Len( hb_keyChar( n ) ) = 1`.
