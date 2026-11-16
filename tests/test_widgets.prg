@@ -16,6 +16,8 @@
 #include "inkey.ch"
 #include "hbgtinfo.ch"
 
+REQUEST HB_CODEPAGE_CP950
+
 STATIC nPass := 0
 STATIC nFail := 0
 
@@ -37,6 +39,7 @@ PROCEDURE Main()
     TestContextMenu()
     TestMenuItems()
     TestTitleButtons()
+    TestBig5Screen()
     TestUnicodeInput()   /* last: HTApplication():new() switches the codepage */
 
     nTotal := nPass + nFail
@@ -524,6 +527,38 @@ STATIC PROCEDURE TestMenuHotKeys()
     Assert( "Menu: barRow 1 by default",            oBar:barRow() == 1 )
     oBar:setBarRow( 0 )
     Assert( "Menu: setBarRow",                      oBar:barRow() == 0 )
+
+RETURN
+
+/*----------------------------------------------------------------*/
+
+/* CP950 (Big5, traditional Chinese): a multi-byte codepage, so the window
+   stack needs the extended SaveScreen() cells - the Clipper cells kept "?" */
+STATIC PROCEDURE TestBig5Screen()
+
+    LOCAL cOldCP := hb_cdpSelect()
+    LOCAL lOldCompat := hb_gtInfo( HB_GTI_COMPATBUFFER )
+    LOCAL cBig5, cScr, cBack
+
+    Assert( "ht_cdpIsMultiByte: EN is single-byte", ! ht_cdpIsMultiByte() )
+    hb_cdpSelect( "CP950" )
+    Assert( "ht_cdpIsMultiByte: CP950",             ht_cdpIsMultiByte() )
+
+    /* U+7E41 U+9AD4 U+4E2D U+6587 */
+    cBig5 := hb_Translate( e"繁體中文", "UTF8", "CP950" )
+    Assert( "CP950: 2 bytes per character",          hb_BLen( cBig5 ) == 8 )
+
+    hb_gtInfo( HB_GTI_COMPATBUFFER, ! ht_cdpIsMultiByte() )
+    DispOutAt( 0, 0, cBig5 )
+    cScr := SaveScreen( 0, 0, 0, 3 )
+    DispOutAt( 0, 0, Space( 4 ) )
+    RestScreen( 0, 0, 0, 3, cScr )
+    /* four 4-byte extended cells, the first one U+7E41 (little endian) */
+    cBack := SaveScreen( 0, 0, 0, 3 )
+    Assert( "CP950: window restore keeps Chinese",   hb_BLen( cBack ) == 16 .AND. hb_BLeft( cBack, 2 ) == e"A~" )
+
+    hb_gtInfo( HB_GTI_COMPATBUFFER, lOldCompat )
+    hb_cdpSelect( cOldCP )
 
 RETURN
 

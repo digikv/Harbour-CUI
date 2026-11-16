@@ -61,10 +61,12 @@ ENDCLASS
  * An application that selected a codepage (hb_cdpSelect( "HR852" ), ...)
  * before this call keeps it; to stay on "EN", select it after this call.
  *
- * Under a UTF-8 codepage the GT also switches SaveScreen() buffers to the
- * extended cell format (HB_GTI_COMPATBUFFER .F.): the Clipper format keeps
- * one byte per character, so every window restore (raise, move, close)
- * would turn Unicode text into "?".
+ * Under a multi-byte codepage (UTF-8, CP950/Big5, ...) the GT also switches
+ * SaveScreen() buffers to the extended cell format (HB_GTI_COMPATBUFFER .F.):
+ * the Clipper format keeps one byte per character, so every window restore
+ * (raise, move, close) would turn Chinese text into "?".
+ * CP950 is byte-indexed (Len() counts bytes): the editors' cursor would split
+ * a character. Keep UTF8EX and open Big5 tables with CODEPAGE "CP950".
  */
 METHOD new() CLASS HTApplication
 
@@ -74,7 +76,7 @@ METHOD new() CLASS HTApplication
         IF hb_cdpSelect() == "EN"
             hb_cdpSelect( "UTF8EX" )
         ENDIF
-        IF hb_cdpIsUTF8()
+        IF ht_cdpIsMultiByte()
             hb_gtInfo( HB_GTI_COMPATBUFFER, .F. )
         ENDIF
         desktop := HTDesktop():new()

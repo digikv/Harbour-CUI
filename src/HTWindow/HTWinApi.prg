@@ -210,7 +210,7 @@ FUNCTION ht_cuiSetupDisplay( nRows, nCols )
        Japanese or Korean glyphs (empty boxes); "Unifont Cell" has them, made
        to fit the wide cells (tools/unifont-cell.sh installs it). Without it
        gtxwc keeps "fixed": FONTSEL changes nothing for a missing font. */
-    IF hb_cdpIsUTF8() .AND. hb_gtVersion() == "XWC"
+    IF ht_cdpIsMultiByte() .AND. hb_gtVersion() == "XWC"
         /* once: a FONTSEL on an open window recreates it */
         IF ! "unifontcell" $ Lower( hb_CStr( hb_gtInfo( HB_GTI_FONTSEL ) ) )
             hb_gtInfo( HB_GTI_FONTSEL, "-hbtui-unifontcell-medium-r-normal-*-16-*-*-*-*-*-iso10646-1" )
@@ -226,7 +226,7 @@ FUNCTION ht_cuiSetupDisplay( nRows, nCols )
        them as empty boxes; DEFAULT_CHARSET lets it fall back to a system CJK
        font (MingLiU, Microsoft JhengHei, SimSun, ...). The wide-cell
        DispOutAt (ht_viewport.c) gives each of them two cells. */
-    IF hb_cdpIsUTF8()
+    IF ht_cdpIsMultiByte()
         hb_gtInfo( HB_GTI_CODEPAGE, 1 )   /* DEFAULT_CHARSET */
     ENDIF
     hb_gtInfo( HB_GTI_SELECTCOPY, "Select and Copy" )
@@ -242,8 +242,8 @@ FUNCTION ht_cuiSetupDisplay( nRows, nCols )
     hb_gtInfo( HB_GTI_ALTENTER, .T. )
     /* Clipper 2-byte cells only for single-byte codepages: they store one
        byte per character, so SaveScreen()/RestScreen() (the window stack)
-       would turn Unicode text into "?" */
-    hb_gtInfo( HB_GTI_COMPATBUFFER, ! hb_cdpIsUTF8() )
+       would turn Unicode / Big5 text into "?" */
+    hb_gtInfo( HB_GTI_COMPATBUFFER, ! ht_cdpIsMultiByte() )
 
     SetMode( nRows, nCols )
 

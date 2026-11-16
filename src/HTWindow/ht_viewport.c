@@ -256,6 +256,14 @@ HB_FUNC( HT_WIDEFILLERBASE )
       s_wcFillerBase = ( HB_WCHAR ) hb_parni( 1 );
 }
 
+/* HT_CDPISMULTIBYTE() -> lMulti : the VM codepage stores a character in
+ * more than one byte (UTF8, UTF8EX, CP950/BIG5, CP936, ...). Such text needs
+ * the extended SaveScreen() cell format and a font with CJK glyphs. */
+HB_FUNC( HT_CDPISMULTIBYTE )
+{
+   hb_retl( HB_CDP_ISCUSTOM( hb_vmCDP() ) );
+}
+
 /* HT_STRWIDTH( cText ) -> nCells  (screen cells the text takes) */
 HB_FUNC( HT_STRWIDTH )
 {
