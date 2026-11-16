@@ -156,6 +156,24 @@ RETURN NIL
 FUNCTION ht_rgb( nR, nG, nB )
 RETURN nR + nG * 256 + nB * 65536
 
+/** ht_fullScreen( [ lOn ] ) -> lOld : gtwvt window covers the whole screen
+ * (default). With .F. ht_cuiSetupDisplay() opens a maximized window with a
+ * title bar and the taskbar stays visible (the IME language/mode indicator
+ * of Chinese, Japanese and Korean input lives there). Call before
+ * HTApplication():exec() / ht_cuiSetupDisplay(). Alt+Enter still toggles.
+ * No effect outside Windows.
+ */
+FUNCTION ht_fullScreen( lOn )
+
+    STATIC s_lOn := .T.
+    LOCAL lOld := s_lOn
+
+    IF HB_ISLOGICAL( lOn )
+        s_lOn := lOn
+    ENDIF
+
+RETURN lOld
+
 /** Configures GT display like digikv awin.prg:
  * fullscreen (no OS chrome), SetMode, then scale Consolas to the desktop.
  * A second SetMode to DESKTOPCOLS/ROWS removes the large black side margins
@@ -218,8 +236,9 @@ FUNCTION ht_cuiSetupDisplay( nRows, nCols )
     hb_gtInfo( HB_GTI_CLOSABLE, .T. )
     hb_gtInfo( HB_GTI_MAXIMIZED, .T. )
     hb_gtInfo( HB_GTI_RESIZABLE, .T. )
-    /* Digi/awin: borderless client = full desktop (no OS title-bar frame) */
-    hb_gtInfo( HB_GTI_ISFULLSCREEN, .T. )
+    /* Digi/awin: borderless client = full desktop (no OS title-bar frame).
+       ht_fullScreen( .F. ): a maximized window, the taskbar stays visible */
+    hb_gtInfo( HB_GTI_ISFULLSCREEN, ht_fullScreen() )
     hb_gtInfo( HB_GTI_ALTENTER, .T. )
     /* Clipper 2-byte cells only for single-byte codepages: they store one
        byte per character, so SaveScreen()/RestScreen() (the window stack)
@@ -227,6 +246,14 @@ FUNCTION ht_cuiSetupDisplay( nRows, nCols )
     hb_gtInfo( HB_GTI_COMPATBUFFER, ! hb_cdpIsUTF8() )
 
     SetMode( nRows, nCols )
+
+    IF ! ht_fullScreen()
+        /* maximized: RESIZEMODE_FONT scales the font to the work area and
+           keeps the grid (the desktop fit below would size it for the whole
+           screen, taskbar included) */
+        ht_cuiApplyPalette()
+        RETURN NIL
+    ENDIF
 
     nWidth  := hb_gtInfo( HB_GTI_DESKTOPWIDTH )
     nHeight := hb_gtInfo( HB_GTI_DESKTOPHEIGHT )

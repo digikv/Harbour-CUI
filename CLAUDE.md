@@ -195,6 +195,11 @@ HTGet wraps Harbour's core `Get` class for full Clipper-compatible input editing
   UTF-8 — with the default OEM charset Consolas draws CJK as empty boxes; DEFAULT lets GDI fall
   back to a system CJK font. gtwvt repaints only changed cells; a repaint starting on a filler
   cell would erase the right half of the glyph, hence the whole-row `WM_PAINT` in `ht_winmouse.c`.
+- **IME** (`ht_winmouse.c`): on `WM_IME_STARTCOMPOSITION` / `WM_IME_COMPOSITION` /
+  `IMN_OPENCANDIDATE` the composition window goes to the caret (gtwvt keeps the system caret
+  on the GT cursor) and the candidate list below the cursor row (imm32 loaded at run time).
+  `ht_fullScreen( .F. )` before `ht_cuiSetupDisplay()`/`exec()`: a maximized window instead
+  of fullscreen, the taskbar (IME mode indicator) stays visible (the unicode sample uses it).
 - **Symbols**: `ht_glyph( nUnicode, cFallback )` — Unicode symbol when the codepage has it, else
   ASCII. Title bar buttons `─ □/▫ ×` (3 cells each from width 24), resize grip `┘`, `√`, `─│`.
   Never write CP437 bytes (`e"\xC4"`, `Chr(251)`) through `DispOutAt` — under UTF8EX they are
@@ -251,7 +256,7 @@ Four coordinate spaces used in the event system:
 - `wFormat()` with args is additive to current margins
 - `DATA Ftype INIT value` in subclass overrides parent's INIT value
 - `-es2` flag treats warnings as errors — unused variables/params will fail build
-- `K_HOME = K_CTRL_A = 1`, `K_PGDN = K_CTRL_C = 3`, `K_DOWN = K_CTRL_X = 24` — same key codes, can't have both in SWITCH. Use `hb_gtInfo(HB_GTI_KBDSHIFTS)` + `HB_GTI_KBD_CTRL` to detect Ctrl modifier.
+- `K_HOME = K_CTRL_A = 1`, `K_PGDN = K_CTRL_C = 3`, `K_DOWN = K_CTRL_X = 24`, `K_INS = K_CTRL_V = 22` — same key codes, can't have both in SWITCH. Use `hb_gtInfo(HB_GTI_KBDSHIFTS)` + `HB_GTI_KBD_CTRL` to detect Ctrl modifier.
 - Callback properties MUST use `READWRITE` or `WRITE setter` — plain `PROPERTY onFoo` is read-only
 - `PROPERTY readOnly ...` is broken: the preprocessor parses `FreadOnly` as `F` + scope keyword `READONLY`, naming the DATA `"F"` instead of `"FreadOnly"`. Workaround: declare `DATA FreadOnly INIT .F.` explicitly in `PROTECTED:` and use `METHOD readOnly() INLINE ::FreadOnly` + `METHOD _readOnly(b) INLINE ::FreadOnly := b` in `PUBLIC:`. Same issue would affect any property whose name case-insensitively matches a scope keyword: `EXPORTED`, `EXPORT`, `VISIBLE`, `PUBLIC`, `PROTECTED`, `HIDDEN`, `PRIVATE`, `READONLY`, `RO`, `PUBLISHED`.
 - The compiler folds `Len()`, `Chr()`, `PadR()` … of **literals** at compile time, in bytes:

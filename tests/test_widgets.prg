@@ -82,7 +82,7 @@ RETURN
 
 STATIC PROCEDURE TestLineEdit()
 
-    LOCAL o
+    LOCAL o, t
 
     o := HTLineEdit():new()
     Assert( "HTLineEdit:text default empty", o:text == "" )
@@ -95,6 +95,22 @@ STATIC PROCEDURE TestLineEdit()
 
     o:setText( "" )
     Assert( "HTLineEdit:setText empty",      o:text == "" )
+
+    /* K_INS = K_CTRL_V, K_PGDN = K_CTRL_C, K_DOWN = K_CTRL_X: without Ctrl
+       held (gtnul reports no shift keys) they must not touch the clipboard */
+    hb_gtInfo( HB_GTI_CLIPBOARDDATA, "PASTED" )
+    o:setText( "abc" )
+    o:keyEvent( HTKeyEvent():new( K_END ) )
+    o:keyEvent( HTKeyEvent():new( K_INS ) )
+    Assert( "HTLineEdit:Ins does not paste",  o:text == "abc" )
+    o:keyEvent( HTKeyEvent():new( K_DOWN ) )
+    o:keyEvent( HTKeyEvent():new( K_PGDN ) )
+    Assert( "HTLineEdit:Down/PgDn do not cut", o:text == "abc" )
+
+    t := HTTextEdit():new()
+    t:setText( "abc" )
+    t:keyEvent( HTKeyEvent():new( K_INS ) )
+    Assert( "HTTextEdit:Ins does not paste",  t:getText() == "abc" )
 
 RETURN
 

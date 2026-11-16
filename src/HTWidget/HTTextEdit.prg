@@ -304,8 +304,8 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS HTTextEdit
     LOCAL lShift := hb_bitAnd( nShifts, HB_GTI_KBD_SHIFT ) != 0
 
     /* --- Clipboard (handle before SWITCH to avoid key code collisions) --- */
-    IF lCtrl
-        IF keyEvent:key = K_PGDN   /* K_CTRL_C = K_PGDN = 3 */
+    IF lCtrl .OR. keyEvent:key = K_CTRL_INS
+        IF keyEvent:key = K_PGDN .OR. keyEvent:key = K_CTRL_INS   /* K_CTRL_C = K_PGDN = 3; Ctrl+Ins */
             /* copy selection (or current line if no selection) */
             IF ::hasSelection()
                 hb_gtInfo( HB_GTI_CLIPBOARDDATA, ::getSelectedText() )
@@ -478,8 +478,12 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS HTTextEdit
         ENDIF
         EXIT
 
-    /* --- Clipboard (Ctrl+V / paste) --- */
+    /* --- Clipboard (Ctrl+V / Shift+Ins paste; K_CTRL_V = K_INS = 22, so
+       a plain Ins must not paste) --- */
     CASE K_CTRL_V
+        IF ! lCtrl .AND. ! lShift
+            RETURN
+        ENDIF
         IF ! ::FreadOnly
             IF ::hasSelection()
                 ::deleteSelection()

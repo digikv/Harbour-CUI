@@ -34,6 +34,9 @@ PROCEDURE Main()
     s_cCity := "臺北市" + Space( 17 )
 
     app := HTApplication():new()
+    /* a maximized window instead of fullscreen: the taskbar (IME mode
+       indicator) stays visible; Alt+Enter switches to fullscreen */
+    ht_fullScreen( .F. )
     ht_cuiSetupDisplay( app:rows(), app:cols() )
 
     main := HTMainWindow():new()

@@ -18,6 +18,11 @@
  * gtwvt sees it. Characters outside that code page (Chinese/Japanese/Korean
  * from an IME, Cyrillic on a Western system, ...) arrive as '?'.
  *
+ * IME (Chinese / Japanese / Korean input): the composition window (the
+ * text being typed) and the candidate list are placed at the screen cursor.
+ * Left to the IME they open at the window's top-left corner or out of view
+ * on the fullscreen window. imm32 is loaded at run time (no link library).
+ *
  * Non-Windows: stubs; EventLoop falls back to Inkey + position polling.
  */
 
@@ -31,6 +36,7 @@
 #if defined( HB_OS_WIN )
 
 #include <windows.h>
+#include <imm.h>
 
 /* set by ht_viewport.c once a wide (CJK) character was written */
 extern HB_BOOL ht_fWideWritten;
@@ -138,6 +144,79 @@ static int ht_msg_to_key( UINT message )
    return 0;
 }
 
+typedef HIMC ( WINAPI * HT_IMMGETCONTEXT )( HWND );
+typedef BOOL ( WINAPI * HT_IMMRELEASECONTEXT )( HWND, HIMC );
+typedef BOOL ( WINAPI * HT_IMMSETCOMPOSITIONWINDOW )( HIMC, LPCOMPOSITIONFORM );
+typedef BOOL ( WINAPI * HT_IMMSETCANDIDATEWINDOW )( HIMC, LPCANDIDATEFORM );
+
+/* Places the IME composition window at the caret (gtwvt keeps the system
+   caret on the GT cursor) and the candidate list below the cursor row. */
+static void ht_ime_place( HWND hWnd )
+{
+   static HB_BOOL s_fLoaded = HB_FALSE;
+   static HT_IMMGETCONTEXT           s_pGetContext     = NULL;
+   static HT_IMMRELEASECONTEXT       s_pReleaseContext = NULL;
+   static HT_IMMSETCOMPOSITIONWINDOW s_pSetComposition = NULL;
+   static HT_IMMSETCANDIDATEWINDOW   s_pSetCandidate   = NULL;
+
+   POINT pt;
+   RECT  rc;
+   HIMC  hIMC;
+   int   nRows, nCellH;
+
+   if( ! s_fLoaded )
+   {
+      HMODULE hImm = LoadLibraryW( L"imm32.dll" );
+
+      s_fLoaded = HB_TRUE;
+      if( hImm )
+      {
+         s_pGetContext     = ( HT_IMMGETCONTEXT ) ( void * ) GetProcAddress( hImm, "ImmGetContext" );
+         s_pReleaseContext = ( HT_IMMRELEASECONTEXT ) ( void * ) GetProcAddress( hImm, "ImmReleaseContext" );
+         s_pSetComposition = ( HT_IMMSETCOMPOSITIONWINDOW ) ( void * ) GetProcAddress( hImm, "ImmSetCompositionWindow" );
+         s_pSetCandidate   = ( HT_IMMSETCANDIDATEWINDOW ) ( void * ) GetProcAddress( hImm, "ImmSetCandidateWindow" );
+      }
+   }
+   if( ! s_pGetContext || ! s_pReleaseContext || ! s_pSetComposition || ! s_pSetCandidate )
+      return;
+
+   /* no caret: the cursor is hidden (SC_NONE), leave the IME's own place */
+   if( ! GetCaretPos( &pt ) || ! GetClientRect( hWnd, &rc ) )
+      return;
+
+   nRows = hb_gtMaxRow() + 1;
+   nCellH = nRows > 0 ? ( rc.bottom - rc.top ) / nRows : 16;
+   if( nCellH <= 0 )
+      nCellH = 16;
+   /* gtwvt puts an underline caret at the bottom of the cell */
+   pt.y = ( pt.y / nCellH ) * nCellH;
+
+   hIMC = s_pGetContext( hWnd );
+   if( hIMC )
+   {
+      COMPOSITIONFORM cf;
+      CANDIDATEFORM   cand;
+
+      memset( &cf, 0, sizeof( cf ) );
+      cf.dwStyle = CFS_POINT;
+      cf.ptCurrentPos = pt;
+      s_pSetComposition( hIMC, &cf );
+
+      memset( &cand, 0, sizeof( cand ) );
+      cand.dwIndex = 0;
+      cand.dwStyle = CFS_EXCLUDE;
+      cand.ptCurrentPos.x = pt.x;
+      cand.ptCurrentPos.y = pt.y + nCellH;
+      cand.rcArea.left   = pt.x;
+      cand.rcArea.top    = pt.y;
+      cand.rcArea.right  = pt.x + 1;
+      cand.rcArea.bottom = pt.y + nCellH;
+      s_pSetCandidate( hIMC, &cand );
+
+      s_pReleaseContext( hWnd, hIMC );
+   }
+}
+
 static LRESULT CALLBACK ht_WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam )
 {
    LRESULT lResult;
@@ -158,6 +237,10 @@ static LRESULT CALLBACK ht_WndProc( HWND hWnd, UINT message, WPARAM wParam, LPAR
          InvalidateRect( hWnd, &rcUpd, FALSE );
       }
    }
+
+   if( message == WM_IME_STARTCOMPOSITION || message == WM_IME_COMPOSITION ||
+       ( message == WM_IME_NOTIFY && wParam == IMN_OPENCANDIDATE ) )
+      ht_ime_place( hWnd );
 
    /* Let gtwvt update its mouse state first (W: keeps WM_CHAR in UTF-16) */
    if( s_oldProc )

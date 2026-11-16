@@ -136,9 +136,23 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS HTLineEdit
     LOCAL parent
     LOCAL cChar, cPaste
     LOCAL lChanged := .F.
-    LOCAL lShift := hb_bitAnd( hb_gtInfo( HB_GTI_KBDSHIFTS ), HB_GTI_KBD_SHIFT ) != 0
+    LOCAL nShifts := hb_gtInfo( HB_GTI_KBDSHIFTS )
+    LOCAL lShift := hb_bitAnd( nShifts, HB_GTI_KBD_SHIFT ) != 0
+    LOCAL lCtrl  := hb_bitAnd( nShifts, HB_GTI_KBD_CTRL ) != 0
+    LOCAL nKey   := keyEvent:key
 
-    SWITCH keyEvent:key
+    /* K_CTRL_C = K_PGDN (3), K_CTRL_X = K_DOWN (24), K_CTRL_V = K_INS (22):
+       the clipboard keys only with Ctrl held (Ins alone pasted the
+       clipboard). Shift+Ins pastes and Ctrl+Ins copies, as in Windows */
+    IF nKey = K_CTRL_C .OR. nKey = K_CTRL_X .OR. nKey = K_CTRL_V
+        IF ! lCtrl .AND. ! ( nKey = K_INS .AND. lShift )
+            nKey := 0
+        ENDIF
+    ELSEIF nKey = K_CTRL_INS
+        nKey := K_CTRL_C
+    ENDIF
+
+    SWITCH nKey
     CASE K_LEFT
         ::updateSelection( lShift )
         IF ::FcursorPos > 1
