@@ -380,14 +380,6 @@ samples/          Demo applications (human-facing, require a display)
                   Ctrl+F6 window cycling, Enter-to-next-field, cursor restore
   unicode/        Chinese/Japanese/Korean/Cyrillic text: IME input in HTGet, HTLineEdit,
                   HTTextEdit and the HTBrowse editor, wide (2-cell) characters
-  cuibro/         CUIBro: BroPlus-style xBase browser / file manager (written from scratch,
-                  menus and keys after BroPlus 2.50): F1-F9 menus (HTMenuBar:popup), one
-                  floating window per database (title = alias + order, HTStatusBar
-                  indicators, browse, HTLabel key line), HTStatusBar bottom line;
-                  relations (Alt-R) with master-detail scope - demo CUSTOMER -> ORDERS
-                  made next to the exe (git-ignored). Keys of a database window reach
-                  the main window's menu bar first (WindowKey); tiled windows leave a
-                  row for the shadow
   showcase/       Full controls demo with all features
 tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_basic      HTPoint, HTSize, all HTEvent subclasses
