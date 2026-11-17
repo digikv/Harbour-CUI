@@ -92,6 +92,11 @@ HTContextMenu (right-click popup menu, inherits HTObject)
 
 **Event flow**: `HTApplication:exec()` → `getEvent()` (Inkey) → queue by priority (HIGH/NORMAL/LOW) → `widget:event()` → type-based dispatch → handler method. Keyboard events go to `activeWindow()`, mouse events to window under cursor. Right-click dispatches to `contextMenu:popup()`.
 
+**Mouse grab**: a widget whose `mouseDragWanted()` returns .T. (drawing, dragging) gets, after a left
+or right button down on it, every `K_MOUSEMOVE` and the button up from its window
+(`HTWidget:FmouseGrab`, `forwardToGrab()`), in its own coordinates even outside it. Other children
+get clicks only; right-click otherwise goes to a context menu.
+
 **Focus chain**: `HTWidget:FfocusWidget` tracks the focused child. Tab/Shift+Tab cycles via `focusNextChild()`/`focusPrevChild()`. Mouse click focuses via `childAt()` hit-testing. Focus policy: NONE/TAB/CLICK/STRONG.
 `show()` only queues paint/focus/show events (LOW priority): a top-level window opens — and
 becomes the keyboard target — when `app:exec()` handles them, so the last window shown wins.
@@ -350,6 +355,9 @@ samples/          Demo applications (human-facing, require a display)
   layout/         HTVBoxLayout demo (spacing, stretch, nesting)
   menu/           HTMenuBar + HTMenu + HTAction with keyboard shortcuts
   progress/       Animated HTProgressBar with scheduleRepeat()
+  fonteditor/     Pixel font editor for .glyphs files: list, pixel grid (mouse draw/erase with drag,
+                  keys), 1:1 + 2:1 preview, transforms, undo, copy/paste, new character / sprite
+                  dialog, Build = ht_glyphsBuild() (TTF + X11 fonts, no external tools)
   game/           NEBULA RAID: fixed-screen shooter drawn only with its own 8x8 font (nebula8.ttf
                   from nebula.glyphs via ht_glyphsBuild()): ZX Spectrum style 32x24 cells,
                   16-color palette, ht_fontLoad() + ht_keyDown(); DPI-aware manifest (nebula.rc);
@@ -374,7 +382,7 @@ tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_layout     HTBoxLayout, HTGridLayout item management
   test_theme      HTTheme singleton, all built-in themes and palettes, own themes (save/add/
                   replace/remove, built-ins protected), category names, invalid index fallback
-  test_widgets    HTLabel, HTLineEdit, HTCheckBox, HTPushButton, HTListBox, HTSparkline, HTBarChart,
+  test_widgets    HTLabel, HTLineEdit, HTCheckBox, HTPushButton, HTListBox, HTSparkline, HTBarChart, HTPixelFont (.glyphs, TTF checksum, BDF),
                   HTComboBox, HTCheckList, HTSpinner, HTProgressBar, HTScrollBar,
                   HTTextEdit, HTContextMenu, HTMenu:items() (submenu order),
                   HTMenuBar hot keys / Alt / shortcuts, setTitleButtons,
@@ -386,6 +394,6 @@ tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_get        HTGet setup/getValue/setValue, label/picture/width, readOnly, Shift+arrow selection,
                   Enter moves to the next field (VALID rejection keeps focus)
   test_integration Focus cycle (flat + nested layouts), layout geometry,
-                  childAt recursion, repaintChild delegation
+                  childAt recursion, repaintChild delegation, mouse grab (mouseDragWanted)
 ```
 Posle svake završene izmene radim commit i push na main. 

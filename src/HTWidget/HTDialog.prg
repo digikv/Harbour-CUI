@@ -17,8 +17,6 @@
 #include "hbtui.ch"
 #include "inkey.ch"
 
-#define HT_DIALOG_ACCEPTED  1
-#define HT_DIALOG_REJECTED  0
 
 CLASS HTDialog FROM HTWidget
 

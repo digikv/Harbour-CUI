@@ -41,6 +41,7 @@ PROTECTED:
     DATA FlMaximized        INIT .F.
     DATA FlMinimized        INIT .F.
     DATA FrestoreRect       INIT NIL   /* { x, y, width, height } before max/min */
+    DATA FmouseGrab                    /* child that holds the mouse from a button down to its up */
 
     METHOD childAt( nRow, nCol )
     METHOD displayLayout()
@@ -55,6 +56,7 @@ PROTECTED:
     METHOD drawCuiChrome()
     METHOD paintTopLevelWindow()
     METHOD paintWidget()
+    METHOD forwardToGrab( eventMouse )
     METHOD setClearA( clearA ) INLINE ::FclearA := clearA
     METHOD setClearB( clearB ) INLINE ::FclearB := clearB
     METHOD SetColor( color ) INLINE ::Fcolor := color
@@ -79,6 +81,11 @@ PUBLIC:
     /* .T. for form input fields: Enter moves to the next field like Tab
        (Clipper READ style). Widgets that use Enter themselves keep .F. */
     METHOD enterMovesFocus() INLINE .F.
+
+    /* .T. for widgets that follow the mouse while a button is held (drawing,
+       dragging): after a left or right button down on it the window sends it
+       every mouse move and the button up, wherever the mouse goes. */
+    METHOD mouseDragWanted() INLINE .F.
 
     CONSTRUCTOR new( ... )
 
@@ -899,12 +906,26 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTWidget
                 eventMouse:mouseRow := nContentRow - oHitChild:y
                 eventMouse:mouseCol := nContentCol - oHitChild:x
                 oHitChild:mouseEvent( eventMouse )
+                IF oHitChild:mouseDragWanted()
+                    ::FmouseGrab := oHitChild
+                ENDIF
             ENDIF
         ENDIF
 
         EXIT
 
     CASE K_LBUTTONUP
+    CASE K_RBUTTONUP
+
+        IF ::FmouseGrab != NIL
+            /* the child that took the button down gets its up, wherever it is */
+            ::forwardToGrab( eventMouse )
+            ::FmouseGrab := NIL
+            EXIT
+        ENDIF
+        IF eventMouse:nKey == K_RBUTTONUP
+            EXIT
+        ENDIF
 
         ::FposDown := NIL
         ::FposUp := HTPoint():new( eventMouse:mouseCol, eventMouse:mouseRow )
@@ -933,7 +954,11 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTWidget
         EXIT
 
     CASE K_MOUSEMOVE
-        /* title-bar drag and corner resize are blocking (ht_winDrag / ht_winResize) */
+        /* title-bar drag and corner resize are blocking (ht_winDrag / ht_winResize);
+           a child holding the mouse (mouseDragWanted) follows it */
+        IF ::FmouseGrab != NIL
+            ::forwardToGrab( eventMouse )
+        ENDIF
         EXIT
 
     CASE K_LDBLCLK
@@ -960,7 +985,13 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTWidget
 
         IF nContentRow >= 0 .AND. nContentCol >= 0
             oHitChild := ::childAt( nContentRow, nContentCol )
-            IF oHitChild != NIL .AND. oHitChild:contextMenu != NIL
+            IF oHitChild != NIL .AND. oHitChild:contextMenu == NIL .AND. oHitChild:mouseDragWanted()
+                /* a drawing widget uses the right button itself (e.g. erase) */
+                eventMouse:mouseRow := nContentRow - oHitChild:y
+                eventMouse:mouseCol := nContentCol - oHitChild:x
+                oHitChild:mouseEvent( eventMouse )
+                ::FmouseGrab := oHitChild
+            ELSEIF oHitChild != NIL .AND. oHitChild:contextMenu != NIL
                 oHitChild:contextMenu:popup( mRow( .T. ), mCol( .T. ) )
                 ::repaint()
             ELSEIF ::FcontextMenu != NIL
@@ -973,6 +1004,16 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTWidget
         ENDIF
 
     ENDSWITCH
+
+RETURN
+
+/** Hands a mouse event to the child holding the mouse (FmouseGrab), in its
+ * coordinates - which may be outside it while the button is held. */
+METHOD PROCEDURE forwardToGrab( eventMouse ) CLASS HTWidget
+
+    eventMouse:mouseRow := eventMouse:mouseRow - 1 - ::FmouseGrab:y   /* content starts below the title */
+    eventMouse:mouseCol := eventMouse:mouseCol - ::FmouseGrab:x
+    ::FmouseGrab:mouseEvent( eventMouse )
 
 RETURN
 

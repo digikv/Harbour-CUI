@@ -108,6 +108,10 @@
 #define HT_CLR_MAX              59
 
 /* alignment flags (can be combined with hb_bitOr) */
+/* HTDialog:exec() / HTMessageBox results */
+#define HT_DIALOG_ACCEPTED      1
+#define HT_DIALOG_REJECTED      0
+
 #define HT_ALIGN_LEFT           0
 #define HT_ALIGN_CENTER         1
 #define HT_ALIGN_HCENTER        1

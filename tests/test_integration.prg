@@ -25,6 +25,7 @@ PROCEDURE Main()
     TestLayoutGeometry()
     TestNestedFocusCycleCoversAll()
     TestRepaintChildDelegation()
+    TestMouseGrab()
 
     nTotal := nPass + nFail
     QOut( "" )
@@ -253,4 +254,82 @@ STATIC PROCEDURE TestRepaintChildDelegation()
     xWinWinId := win:windowId
     Assert( "repaintChild: win has no windowId (no paint)", xWinWinId == NIL )
 
+RETURN
+
+/*----------------------------------------------------------------*/
+
+/* A child that wants mouse drags (HTWidget:mouseDragWanted) gets the button
+   down, every move and the button up from its window - also outside it -
+   in its own coordinates; the right button too. Other children get no moves. */
+STATIC PROCEDURE TestMouseGrab()
+
+    LOCAL win, oDraw, oPlain
+
+    win := HTWidget():new()
+    win:resize( 40, 12 )
+    oDraw := TGrabChild():new( win )
+    oDraw:move( 5, 2 )
+    oDraw:resize( 4, 2 )
+    oDraw:lWants := .T.
+    oPlain := TGrabChild():new( win )
+    oPlain:move( 20, 2 )
+    oPlain:resize( 4, 2 )
+
+    /* window coordinates: content row = mouse row - 1 (title bar) */
+    WinMouse( win, K_LBUTTONDOWN, 3, 6 )
+    WinMouse( win, K_MOUSEMOVE, 8, 30 )
+    WinMouse( win, K_LBUTTONUP, 8, 30 )
+    Assert( "mouse grab: down, move, up", Len( oDraw:aLog ) == 3 )
+    Assert( "mouse grab: down in child coords", Len( oDraw:aLog ) >= 1 .AND. hb_ValToExp( oDraw:aLog[ 1 ] ) == hb_ValToExp( { K_LBUTTONDOWN, 0, 1 } ) )
+    Assert( "mouse grab: move outside the child", Len( oDraw:aLog ) >= 2 .AND. hb_ValToExp( oDraw:aLog[ 2 ] ) == hb_ValToExp( { K_MOUSEMOVE, 5, 25 } ) )
+    Assert( "mouse grab: up ends it", Len( oDraw:aLog ) >= 3 .AND. oDraw:aLog[ 3 ][ 1 ] == K_LBUTTONUP )
+
+    WinMouse( win, K_MOUSEMOVE, 4, 7 )
+    Assert( "mouse grab: no moves after the up", Len( oDraw:aLog ) == 3 )
+
+    WinMouse( win, K_RBUTTONDOWN, 3, 7 )
+    WinMouse( win, K_MOUSEMOVE, 4, 8 )
+    WinMouse( win, K_RBUTTONUP, 4, 8 )
+    Assert( "mouse grab: right button", Len( oDraw:aLog ) == 6 .AND. oDraw:aLog[ 4 ][ 1 ] == K_RBUTTONDOWN .AND. oDraw:aLog[ 6 ][ 1 ] == K_RBUTTONUP )
+
+    oPlain:aLog := {}
+    WinMouse( win, K_LBUTTONDOWN, 3, 21 )
+    WinMouse( win, K_MOUSEMOVE, 3, 22 )
+    WinMouse( win, K_LBUTTONUP, 3, 22 )
+    Assert( "mouse grab: a plain child gets the click only", Len( oPlain:aLog ) == 1 .AND. oPlain:aLog[ 1 ][ 1 ] == K_LBUTTONDOWN )
+
+RETURN
+
+STATIC PROCEDURE WinMouse( win, nKey, nRow, nCol )
+
+    LOCAL e := HTMouseEvent():new( nKey, nRow, nCol )
+
+    e:mouseRow := nRow
+    e:mouseCol := nCol
+    win:mouseEvent( e )
+
+RETURN
+
+CLASS TGrabChild FROM HTWidget
+
+    DATA aLog INIT {}
+    DATA lWants INIT .F.
+
+    METHOD new( parent )
+    METHOD mouseDragWanted() INLINE ::lWants
+    METHOD mouseEvent( e )
+
+ENDCLASS
+
+METHOD new( parent ) CLASS TGrabChild
+
+    ::super:new( parent )
+    ::aLog := {}
+    ::setFocusPolicy( HT_FOCUS_CLICK )
+    ::FisVisible := .T.
+
+RETURN self
+
+METHOD PROCEDURE mouseEvent( e ) CLASS TGrabChild
+    AAdd( ::aLog, { e:nKey, e:mouseRow, e:mouseCol } )
 RETURN

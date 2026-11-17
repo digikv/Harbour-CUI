@@ -16,7 +16,6 @@
 #include "hbtui.ch"
 #include "inkey.ch"
 
-#define HT_DIALOG_ACCEPTED  1
 
 PROCEDURE Main()
 
