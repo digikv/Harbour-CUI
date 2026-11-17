@@ -362,8 +362,10 @@ samples/          Demo applications (human-facing, require a display)
                   dialog, Build = ht_glyphsBuild() (TTF + X11 fonts, no external tools)
   game/           NEBULA RAID: fixed-screen shooter drawn only with its own 8x8 font (nebula8.ttf
                   from nebula.glyphs via ht_glyphsBuild()): ZX Spectrum style 32x24 cells,
-                  16-color palette, ht_fontLoad() + ht_keyDown(); DPI-aware manifest (nebula.rc);
-                  Linux: X11 bitmap fonts in x11/ (gtxwc)
+ 16-color palette, ht_fontLoad() + ht_keyDown(); DPI-aware manifest (nebula.rc);
+ Linux: X11 bitmap fonts in x11/ (gtxwc). Sound: 8-bit WAVs synthesized at start,
+ played async (PlaySound from memory / aplay; Tone() blocks the frame); high
+ scores in nebula.hi (git-ignored); diving mantas from wave 3
   charts/         HTSparkline (live, 4 rows; 1 row in its own color) + HTBarChart, F1-F7 themes
   theme/          Theme switching demo (7 built-in themes, F1-F7, theme list + buttons)
   theme_editor/   Theme editor: change category colors (Text/Back spinners or a color string) and

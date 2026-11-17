@@ -14,3 +14,4 @@ lib
 .hbmk/
 deps/
 samples/theme_editor/themes.json
+samples/game/nebula.hi

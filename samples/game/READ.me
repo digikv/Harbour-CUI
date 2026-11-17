@@ -25,6 +25,17 @@ This sample demonstrates several low-level and visual capabilities of `Harbour-C
 * **Custom 16-Color Retro Palette:** Redefines the standard GT color palette to match classic 8-bit home computer luminance levels (84% standard, 100% bright).
 * **Arcade-Grade Input (`ht_keyDown`):** Bypasses standard terminal key-repeat delays by reading real-time held key states, enabling smooth simultaneous movement and firing (with an `Inkey()` frame-counter fallback on unsupported platforms).
 * **Sub-Cell Projectile Precision:** Player shots and alien bombs move in half-row increments using dedicated upper/lower cell glyphs for smoother vertical motion.
+* **Arcade Sound Without Stalls:** Square-wave and noise effects (laser, explosions, comet, the formation's four-note heartbeat) are synthesized at start as 8-bit WAV images and played asynchronously (`PlaySound` from memory on Windows, `aplay` elsewhere) - `Tone()` would freeze the game for every beep.
+* **High Score Table:** The top five scores with three initials, entered the arcade way, are kept in `nebula.hi` next to the program.
+
+## 👾 Gameplay
+
+* Aliens are hit across their whole width (both cells).
+* From wave 3, mantas break formation and dive at the player (Galaxian style), dropping bombs; shot while diving they are worth 60. One that misses comes back from the top to its place.
+* After each wave, every bunker cell gets one step of wear repaired.
+* An extra life every 5,000 points (up to 6).
+* Held down, the ship speeds up after a third of a second; a tap still moves exactly one cell.
+* A slowly drifting starfield in two layers, with twinkling near stars.
 
 ---
 
@@ -35,6 +46,7 @@ This sample demonstrates several low-level and visual capabilities of `Harbour-C
 | **Left / Right** or **Z / X** | Move ship left / right |
 | **Space** or **Up Arrow** | Fire laser |
 | **P** | Pause / Resume game |
+| **S** | Sound on / off |
 | **Alt + Enter** | Toggle fullscreen (Windows) |
 | **Esc** | Quit to title / Exit |
 

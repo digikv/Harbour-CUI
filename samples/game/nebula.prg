@@ -10,9 +10,14 @@
  *
  * Font: samples/game/nebula.glyphs -> ht_glyphsBuild() (fonteditor, tools/pixelfont) -> nebula8.ttf + x11/
  *
- * Keys:  Left/Right or Z/X move, Space or Up fire, P pause, Esc quit
+ * Keys:  Left/Right or Z/X move, Space or Up fire, P pause, S sound, Esc quit
  * Windows (gtwvt): nebula8.ttf. Linux (gtxwc): the X11 bitmap fonts in x11/,
  * added to the X server's font path by ht_fontLoad().
+ *
+ * Sound: square waves and noise made at start as 8-bit WAV images, played
+ * without waiting (Windows: PlaySound from memory; elsewhere aplay, when
+ * installed) - Tone() would stop the game for every beep.
+ * High scores: nebula.hi next to the program.
  */
 
 #include "inkey.ch"
@@ -34,6 +39,24 @@ REQUEST HB_CODEPAGE_UTF8EX
 #define ALIEN_ROWS    5
 #define ALIEN_COLS    8
 
+#define EXTRA_LIFE    5000            /* a life every 5000 points */
+#define MAX_LIVES     6
+#define DIVE_POINTS   60              /* a manta shot while diving */
+#define HISCORES      5
+
+#define SND_RATE      22050
+#define SND_SHOT      1
+#define SND_HIT       2
+#define SND_ZAP       3               /* the shot meets a bomb */
+#define SND_COMET     4
+#define SND_UFO       5               /* comet passing */
+#define SND_DIVE      6
+#define SND_DEATH     7
+#define SND_LIFE      8
+#define SND_WAVE      9
+#define SND_OVER      10
+#define SND_BEAT      11              /* +0..+3: the formation's steps */
+
 /* glyphs: offsets from U+E000 (see nebula.glyphs) */
 #define G_SHIP        0x00
 #define G_LIFE        0x02
@@ -50,20 +73,27 @@ REQUEST HB_CODEPAGE_UTF8EX
 #define G_SHIELD_TR   0x2B
 #define G_GROUND      0x2C
 #define G_WRECK       0x30
+#define G_STAR        0x32
+#define G_STAR_BRIGHT 0x33
 
 /* game state */
-STATIC s_nScore, s_nHi := 0, s_nLives, s_nLevel, s_nFrame
-STATIC s_aAlive, s_nFx, s_nFy, s_nDir, s_nStepWait, s_nAnim
-STATIC s_nPx, s_nMoveWait
+STATIC s_nScore, s_nHi := 0, s_nLives, s_nLevel, s_nFrame, s_nNextLife
+STATIC s_aAlive, s_nFx, s_nFy, s_nDir, s_nStepWait, s_nAnim, s_nBeat := 0
+STATIC s_aDivers                             /* { r, c, nCol, nRow, lReturn, nWait, nSteps } */
+STATIC s_nPx, s_nMoveWait, s_nHeld           /* s_nHeld: frames held, < 0 left */
 STATIC s_lShot, s_nShotCol, s_nShotHy        /* Hy: half rows */
 STATIC s_aBombs                              /* { nCol, nHy } */
 STATIC s_aBursts                             /* { nCol, nRow, nTtl, cText } */
 STATIC s_aShield                             /* [ row ][ col ]: 0 none, 1..4 wear */
 STATIC s_lComet, s_nCometCol, s_nCometDir, s_nCometWait, s_nCometNext
 STATIC s_nDead                               /* frames left of the player's wreck */
-STATIC s_nBanner                             /* frames left of "WAVE n" */
+STATIC s_nBanner, s_cBanner, s_cBanner2      /* frames left of "WAVE n", "EXTRA LIFE", ... */
 STATIC s_lKeyState
 STATIC s_nKeyLeft, s_nKeyRight, s_nKeyFire   /* Inkey fallback: frames a key counts */
+STATIC s_aStars, s_nStarTick := 0            /* { nCol, nRow, nWait, lNear } */
+STATIC s_aHiScores, s_nLastRank := 0         /* { nScore, cInitials }, best first */
+STATIC s_aSounds := {}, s_lSound := .T.      /* { nPriority, cWav, nMs, cFile } */
+STATIC s_nSndPrio := 0, s_nSndEnd := 0, s_hSndProc
 
 PROCEDURE Main()
 
@@ -82,10 +112,15 @@ PROCEDURE Main()
 
     SetupScreen()
     s_lKeyState := ht_keyStateAvailable()
+    LoadHiScores()
+    InitSound()
+    NewStars()
 
     DO WHILE TitleScreen()
         PlayGame()
     ENDDO
+
+    DoneSound()
 
 RETURN
 
@@ -168,14 +203,17 @@ STATIC FUNCTION ReadKeys()
 
     LOCAL nKey, nLast := 0
 
-    /* drain the keyboard buffer (Esc, P, Space on the title; fallback moves) */
+    /* drain the keyboard buffer (Esc, P, Space on the title; fallback moves).
+       Fallback: a single press moves one cell; a key still counting when the
+       next one comes is held down (auto-repeat) and counts until the next
+       repeat is due, so the ship stops soon after the key is let go */
     DO WHILE ( nKey := Inkey() ) != 0
         nLast := nKey
         DO CASE
         CASE nKey == K_LEFT .OR. Upper( hb_keyChar( nKey ) ) == "Z"
-            s_nKeyLeft := 6 ; s_nKeyRight := 0
+            s_nKeyLeft := IIF( s_nKeyLeft > 0, 5, 2 ) ; s_nKeyRight := 0
         CASE nKey == K_RIGHT .OR. Upper( hb_keyChar( nKey ) ) == "X"
-            s_nKeyRight := 6 ; s_nKeyLeft := 0
+            s_nKeyRight := IIF( s_nKeyRight > 0, 5, 2 ) ; s_nKeyLeft := 0
         CASE nKey == K_SPACE .OR. nKey == K_UP
             s_nKeyFire := 2
         ENDCASE
@@ -207,7 +245,8 @@ RETURN
 /* .T. = play, .F. = quit */
 STATIC FUNCTION TitleScreen()
 
-    LOCAL nStart, aKeys, n := 0
+    /* after a new high score the table comes first */
+    LOCAL nStart, aKeys, n := IIF( s_nLastRank > 0, 180, 0 ), i
 
     s_nKeyLeft := s_nKeyRight := s_nKeyFire := 0
     hb_keyClear()
@@ -219,20 +258,33 @@ STATIC FUNCTION TitleScreen()
             RETURN .F.
         ELSEIF aKeys[ 4 ] == K_SPACE .OR. aKeys[ 4 ] == K_ENTER
             RETURN .T.
+        ELSEIF Upper( hb_keyChar( aKeys[ 4 ] ) ) == "S"
+            ToggleSound()
         ENDIF
+        MoveStars()
 
         DispBegin()
         CLS
+        DrawStars()
         PutC( 2, "NEBULA RAID", "GR+/N" )
         PutC( 3, "-----------", "R+/N" )
 
-        Put(  6, 9, G( G_MANTA + IIF( n % 30 < 15, 0, 2 ), 2 ) + " = 30", "RB+/N" )
-        Put(  8, 9, G( G_BEETLE + IIF( n % 30 < 15, 0, 2 ), 2 ) + " = 20", "BG+/N" )
-        Put( 10, 9, G( G_DRONE + IIF( n % 30 < 15, 0, 2 ), 2 ) + " = 10", "G+/N" )
-        Put( 12, 9, G( G_COMET, 2 ) + " = ???", "R+/N" )
+        IF Int( n / 180 ) % 2 == 0           /* 6 seconds each: points, high scores */
+            Put(  6, 9, G( G_MANTA + IIF( n % 30 < 15, 0, 2 ), 2 ) + " = 30", "RB+/N" )
+            Put(  8, 9, G( G_BEETLE + IIF( n % 30 < 15, 0, 2 ), 2 ) + " = 20", "BG+/N" )
+            Put( 10, 9, G( G_DRONE + IIF( n % 30 < 15, 0, 2 ), 2 ) + " = 10", "G+/N" )
+            Put( 12, 9, G( G_COMET, 2 ) + " = ???", "R+/N" )
+        ELSE
+            PutC( 6, "HIGH SCORES", "W+/N" )
+            FOR i := 1 TO Len( s_aHiScores )
+                Put( 7 + i, 9, hb_ntos( i ) + "  " + s_aHiScores[ i, 2 ] + Str( s_aHiScores[ i, 1 ], 8 ), ;
+                     IIF( i == s_nLastRank, IIF( n % 20 < 14, "GR+/N", "W/N" ), IIF( i == 1, "GR+/N", "W/N" ) ) )
+            NEXT
+        ENDIF
 
         PutC( 15, "Z X OR ARROWS  MOVE", "W/N" )
         PutC( 16, "SPACE  FIRE  P  PAUSE", "W/N" )
+        PutC( 17, "S  SOUND " + IIF( s_lSound, "ON ", "OFF" ), "W/N" )
         IF n % 40 < 26
             PutC( 19, "PRESS SPACE TO START", "W+/N" )
         ENDIF
@@ -256,6 +308,8 @@ STATIC PROCEDURE PlayGame()
     s_nLives := 3
     s_nLevel := 0
     s_nFrame := 0
+    s_nNextLife := EXTRA_LIFE
+    s_nLastRank := 0
     s_nKeyLeft := s_nKeyRight := s_nKeyFire := 0
     NewShields()
     NewWave()
@@ -268,10 +322,14 @@ STATIC PROCEDURE PlayGame()
             EXIT
         ELSEIF Upper( hb_keyChar( aKeys[ 4 ] ) ) == "P"
             lPaused := ! lPaused
+        ELSEIF Upper( hb_keyChar( aKeys[ 4 ] ) ) == "S"
+            ToggleSound()
+            Banner( "SOUND " + IIF( s_lSound, "ON", "OFF" ), "", 45 )
         ENDIF
 
         IF ! lPaused
             s_nFrame++
+            MoveStars()
             IF ! Update( aKeys )
                 Draw( .F. )
                 GameOver()
@@ -283,7 +341,17 @@ STATIC PROCEDURE PlayGame()
         FrameWait( nStart )
     ENDDO
 
-    s_nHi := Max( s_nHi, s_nScore )
+    IF IsHiScore( s_nScore )
+        s_nLastRank := AddHiScore( s_nScore, EnterInitials( s_nScore ) )
+    ENDIF
+
+RETURN
+
+STATIC PROCEDURE Banner( cText, cText2, nFrames )
+
+    s_cBanner := cText
+    s_cBanner2 := cText2
+    s_nBanner := nFrames
 
 RETURN
 
@@ -305,31 +373,57 @@ STATIC PROCEDURE NewWave()
     s_nAnim := 0
     s_nPx := Int( SCR_W / 2 ) - 1
     s_nMoveWait := 0
+    s_nHeld := 0
     s_lShot := .F.
     s_aBombs := {}
     s_aBursts := {}
+    s_aDivers := {}
     s_lComet := .F.
     s_nCometNext := 400 + hb_RandomInt( 0, 300 )
     s_nDead := 0
-    s_nBanner := 60
+    Banner( "WAVE " + hb_ntos( s_nLevel ), IIF( s_nLevel > 1 .AND. RepairShields(), "SHIELDS REPAIRED", "" ), 60 )
+    Sound( SND_WAVE )
 
 RETURN
 
 STATIC PROCEDURE NewShields()
 
-    LOCAL nB, nCol, nRow
-
     s_aShield := Array( SCR_H, SCR_W )
     AEval( s_aShield, {| a | AFill( a, 0 ) } )
-    /* four bunkers, 4 cells wide, 2 rows high */
+    AEval( ShieldCells(), {| a | s_aShield[ a[ 1 ] + 1, a[ 2 ] + 1 ] := 1 } )
+
+RETURN
+
+/* { nRow, nCol } of every bunker cell: four bunkers, 4 cells wide, 2 rows high */
+STATIC FUNCTION ShieldCells()
+
+    LOCAL aCells := {}, nB, nCol, nRow
+
     FOR nB := 0 TO 3
-        nCol := 2 + nB * 8
-        FOR nRow := ROW_SHIELD TO ROW_SHIELD + 1
-            AFill( s_aShield[ nRow + 1 ], 1, nCol + 1, 4 )
+        FOR nCol := 2 + nB * 8 TO 5 + nB * 8
+            FOR nRow := ROW_SHIELD TO ROW_SHIELD + 1
+                AAdd( aCells, { nRow, nCol } )
+            NEXT
         NEXT
     NEXT
 
-RETURN
+RETURN aCells
+
+/* after a wave every bunker cell gets one step of wear back (a gone one
+   comes back worn out); .T. when something was repaired */
+STATIC FUNCTION RepairShields()
+
+    LOCAL a, n, lRepaired := .F.
+
+    FOR EACH a IN ShieldCells()
+        n := s_aShield[ a[ 1 ] + 1, a[ 2 ] + 1 ]
+        IF n != 1
+            s_aShield[ a[ 1 ] + 1, a[ 2 ] + 1 ] := IIF( n == 0, 4, n - 1 )
+            lRepaired := .T.
+        ENDIF
+    NEXT
+
+RETURN lRepaired
 
 /* screen position of alien r, c (1-based) */
 STATIC FUNCTION AlienRow( r )
@@ -349,6 +443,8 @@ RETURN n
 /* one frame of game logic; .F. = game over */
 STATIC FUNCTION Update( aKeys )
 
+    LOCAL aD
+
     IF s_nBanner > 0
         s_nBanner--
     ENDIF
@@ -361,6 +457,13 @@ STATIC FUNCTION Update( aKeys )
             ENDIF
             s_nPx := Int( SCR_W / 2 ) - 1
             s_aBombs := {}
+            /* divers still on their way down come back from the top */
+            FOR EACH aD IN s_aDivers
+                IF ! aD[ 5 ]
+                    aD[ 5 ] := .T.
+                    aD[ 4 ] := ROW_COMET + 1
+                ENDIF
+            NEXT
         ENDIF
     ELSE
         MovePlayer( aKeys )
@@ -370,13 +473,23 @@ STATIC FUNCTION Update( aKeys )
     IF ! MoveAliens()
         RETURN .F.                         /* they landed */
     ENDIF
+    MoveDivers()
     DropBombs()
     IF ! MoveBombs()
         RETURN .F.
     ENDIF
     MoveComet()
 
-    IF AliensLeft() == 0 .AND. Len( s_aBursts ) == 0
+    IF s_nScore >= s_nNextLife
+        s_nNextLife += EXTRA_LIFE
+        IF s_nLives < MAX_LIVES
+            s_nLives++
+            Banner( "EXTRA LIFE", "", 60 )
+            Sound( SND_LIFE )
+        ENDIF
+    ENDIF
+
+    IF AliensLeft() == 0 .AND. Len( s_aDivers ) == 0 .AND. Len( s_aBursts ) == 0
         NewWave()
     ENDIF
 
@@ -384,21 +497,37 @@ RETURN .T.
 
 STATIC PROCEDURE MovePlayer( aKeys )
 
+    LOCAL nDir := IIF( aKeys[ 1 ] == aKeys[ 2 ], 0, IIF( aKeys[ 1 ], -1, 1 ) )
+
+    s_nHeld := IIF( nDir != 0 .AND. Sgn( s_nHeld ) == nDir, s_nHeld + nDir, nDir )
+
     IF s_nMoveWait > 0
         s_nMoveWait--
-    ELSEIF aKeys[ 1 ] .AND. ! aKeys[ 2 ] .AND. s_nPx > 0
-        s_nPx--
-        s_nMoveWait := 1
-    ELSEIF aKeys[ 2 ] .AND. ! aKeys[ 1 ] .AND. s_nPx < SCR_W - 2
-        s_nPx++
-        s_nMoveWait := 1
+    ELSEIF nDir != 0 .AND. s_nPx + nDir >= 0 .AND. s_nPx + nDir <= SCR_W - 2
+        s_nPx += nDir
+        /* a cell every 2nd frame (15 a second); held for 1/3 s, 3 cells in 4 frames */
+        s_nMoveWait := IIF( Abs( s_nHeld ) < 10 .OR. Abs( s_nHeld ) % 3 == 0, 1, 0 )
     ENDIF
 
     IF aKeys[ 3 ] .AND. ! s_lShot
         s_lShot := .T.
         s_nShotCol := s_nPx                  /* the shot glyph sits at the cell's right edge */
         s_nShotHy := ROW_PLAYER * 2 - 1
+        Sound( SND_SHOT )
     ENDIF
+
+RETURN
+
+STATIC FUNCTION Sgn( n )
+RETURN IIF( n > 0, 1, IIF( n < 0, -1, 0 ) )
+
+/* the player is hit (by a bomb or a diving manta) */
+STATIC PROCEDURE KillPlayer()
+
+    s_nLives--
+    s_nDead := 45
+    s_lShot := .F.
+    Sound( SND_DEATH )
 
 RETURN
 
@@ -425,23 +554,31 @@ STATIC PROCEDURE MoveShot()
             s_lComet := .F.
             AAdd( s_aBursts, { s_nCometCol, ROW_COMET, 45, hb_ntos( nPts ) } )
             s_lShot := .F.
+            Sound( SND_COMET )
             RETURN
         ENDIF
 
-        /* aliens: 2 cells wide; the shot is at the border of its cell and the next */
+        /* aliens: 2 cells wide; the shot (at the right edge of its cell) hits
+           the left one in the middle, the right one at its right half */
         FOR r := 1 TO ALIEN_ROWS
             IF AlienRow( r ) == nRow
                 FOR c := 1 TO ALIEN_COLS
-                    IF s_aAlive[ r, c ] .AND. s_nShotCol == AlienCol( c )
+                    IF s_aAlive[ r, c ] .AND. ;
+                       ( s_nShotCol == AlienCol( c ) .OR. s_nShotCol == AlienCol( c ) + 1 )
                         s_aAlive[ r, c ] := .F.
                         s_nScore += { 30, 20, 20, 10, 10 }[ r ]
                         AAdd( s_aBursts, { AlienCol( c ), nRow, 8, NIL } )
                         s_lShot := .F.
+                        Sound( SND_HIT )
                         RETURN
                     ENDIF
                 NEXT
             ENDIF
         NEXT
+
+        IF ShotHitsDiver( nRow )
+            RETURN
+        ENDIF
 
         /* shields */
         IF HitShield( nRow, s_nShotCol )
@@ -454,6 +591,7 @@ STATIC PROCEDURE MoveShot()
             IF s_aBombs[ r, 1 ] == s_nShotCol .AND. Abs( s_aBombs[ r, 2 ] - s_nShotHy ) <= 1
                 hb_ADel( s_aBombs, r, .T. )
                 s_lShot := .F.
+                Sound( SND_ZAP )
                 RETURN
             ENDIF
         NEXT
@@ -480,7 +618,7 @@ RETURN .F.
 STATIC FUNCTION MoveAliens()
 
     LOCAL nLeft := AliensLeft()
-    LOCAL r, c, nMinC := 99, nMaxC := 0, nMaxR := 0
+    LOCAL r, c, nMinC := 99, nMaxC := 0, nMaxR := 0, aD
 
     IF nLeft == 0
         RETURN .T.
@@ -492,6 +630,8 @@ STATIC FUNCTION MoveAliens()
     /* fewer aliens, faster steps; later waves faster */
     s_nStepWait := Max( 0, Int( nLeft / 2 ) - s_nLevel )
     s_nAnim := 1 - s_nAnim
+    s_nBeat := s_nBeat % 4 + 1
+    Sound( SND_BEAT + s_nBeat - 1 )
 
     FOR r := 1 TO ALIEN_ROWS
         FOR c := 1 TO ALIEN_COLS
@@ -501,6 +641,11 @@ STATIC FUNCTION MoveAliens()
                 nMaxR := Max( nMaxR, r )
             ENDIF
         NEXT
+    NEXT
+    /* keep room for the divers' places: they come back to them */
+    FOR EACH aD IN s_aDivers
+        nMinC := Min( nMinC, aD[ 2 ] )
+        nMaxC := Max( nMaxC, aD[ 2 ] )
     NEXT
 
     IF ( s_nDir > 0 .AND. AlienCol( nMaxC ) + 1 >= SCR_W - 1 ) .OR. ;
@@ -563,13 +708,96 @@ STATIC FUNCTION MoveBombs()
             hb_ADel( s_aBombs, i, .T. )
         ELSEIF nRow == ROW_PLAYER .AND. s_nDead == 0 .AND. ( nCol == s_nPx .OR. nCol == s_nPx + 1 )
             hb_ADel( s_aBombs, i, .T. )
-            s_nLives--
-            s_nDead := 45
-            s_lShot := .F.
+            KillPlayer()
         ENDIF
     NEXT
 
 RETURN .T.
+
+/* from wave 3 a manta now and then leaves the formation and dives at the
+   player (Galaxian); one that misses comes back from the top to its place */
+STATIC PROCEDURE MoveDivers()
+
+    LOCAL aCols := {}, c, i, aD
+
+    IF s_nLevel >= 3 .AND. s_nDead == 0 .AND. s_nBanner == 0 .AND. ;
+       Len( s_aDivers ) < IIF( s_nLevel >= 6, 2, 1 ) .AND. ;
+       hb_RandomInt( 1, Max( 60, 200 - s_nLevel * 15 ) ) == 1
+        FOR c := 1 TO ALIEN_COLS
+            IF s_aAlive[ 1, c ]
+                AAdd( aCols, c )
+            ENDIF
+        NEXT
+        IF Len( aCols ) > 0
+            c := aCols[ hb_RandomInt( 1, Len( aCols ) ) ]
+            s_aAlive[ 1, c ] := .F.
+            AAdd( s_aDivers, { 1, c, AlienCol( c ), AlienRow( 1 ), .F., 2, 0 } )
+            Sound( SND_DIVE )
+        ENDIF
+    ENDIF
+
+    FOR i := Len( s_aDivers ) TO 1 STEP -1
+        aD := s_aDivers[ i ]
+        IF --aD[ 6 ] > 0
+            LOOP
+        ENDIF
+        aD[ 6 ] := 2                         /* a row every 2nd frame */
+        aD[ 7 ]++
+        IF aD[ 5 ]
+            aD[ 3 ] += Max( -2, Min( 2, AlienCol( aD[ 2 ] ) - aD[ 3 ] ) )
+            IF ++aD[ 4 ] >= AlienRow( aD[ 1 ] )
+                s_aAlive[ aD[ 1 ], aD[ 2 ] ] := .T.
+                hb_ADel( s_aDivers, i, .T. )
+            ENDIF
+            LOOP
+        ENDIF
+
+        /* steers at half its speed down, until it is near the shields */
+        IF aD[ 7 ] % 2 == 0 .AND. aD[ 4 ] < ROW_SHIELD - 2
+            aD[ 3 ] += Sgn( s_nPx - aD[ 3 ] )
+        ENDIF
+        IF ++aD[ 4 ] > ROW_GROUND
+            aD[ 5 ] := .T.
+            aD[ 4 ] := ROW_COMET + 1
+            LOOP
+        ENDIF
+        HitShield( aD[ 4 ], aD[ 3 ] )
+        HitShield( aD[ 4 ], aD[ 3 ] + 1 )
+        IF aD[ 4 ] < ROW_SHIELD - 1 .AND. hb_RandomInt( 1, 6 ) == 1 .AND. Len( s_aBombs ) < 3 + Int( s_nLevel / 2 )
+            AAdd( s_aBombs, { aD[ 3 ], ( aD[ 4 ] + 1 ) * 2 } )
+        ENDIF
+        IF aD[ 4 ] == ROW_PLAYER .AND. s_nDead == 0 .AND. Abs( aD[ 3 ] - s_nPx ) <= 1
+            AAdd( s_aBursts, { aD[ 3 ], aD[ 4 ], 8, NIL } )
+            hb_ADel( s_aDivers, i, .T. )
+            KillPlayer()
+        ENDIF
+    NEXT
+
+    /* a diver may have moved onto the shot */
+    IF s_lShot
+        ShotHitsDiver( Int( s_nShotHy / 2 ) )
+    ENDIF
+
+RETURN
+
+/* the shot against the divers in nRow; .T. = hit */
+STATIC FUNCTION ShotHitsDiver( nRow )
+
+    LOCAL i, aD
+
+    FOR i := Len( s_aDivers ) TO 1 STEP -1
+        aD := s_aDivers[ i ]
+        IF aD[ 4 ] == nRow .AND. ( s_nShotCol == aD[ 3 ] .OR. s_nShotCol == aD[ 3 ] + 1 )
+            s_nScore += IIF( aD[ 5 ], 30, DIVE_POINTS )
+            AAdd( s_aBursts, { aD[ 3 ], nRow, 8, NIL } )
+            hb_ADel( s_aDivers, i, .T. )
+            s_lShot := .F.
+            Sound( SND_HIT )
+            RETURN .T.
+        ENDIF
+    NEXT
+
+RETURN .F.
 
 STATIC PROCEDURE MoveComet()
 
@@ -592,6 +820,8 @@ STATIC PROCEDURE MoveComet()
     s_nCometCol += s_nCometDir
     IF s_nCometCol < -2 .OR. s_nCometCol > SCR_W
         s_lComet := .F.
+    ELSEIF s_nCometCol % 4 == 0
+        Sound( SND_UFO )
     ENDIF
 
 RETURN
@@ -618,6 +848,7 @@ STATIC PROCEDURE Draw( lPaused )
 
     DispBegin()
     CLS
+    DrawStars()
 
     /* score line */
     Put( ROW_HUD, 0, "SCORE", "W/N" )
@@ -643,6 +874,9 @@ STATIC PROCEDURE Draw( lPaused )
                 Put( nRow, AlienCol( c ), G( aRowGlyph[ r ] + s_nAnim * 2, 2 ), aRowColor[ r ] )
             ENDIF
         NEXT
+    NEXT
+    FOR EACH aB IN s_aDivers
+        Put( aB[ 4 ], aB[ 3 ], G( aRowGlyph[ aB[ 1 ] ] + IIF( s_nFrame % 8 < 4, 0, 2 ), 2 ), aRowColor[ aB[ 1 ] ] )
     NEXT
 
     /* shields */
@@ -691,7 +925,10 @@ STATIC PROCEDURE Draw( lPaused )
     Put( ROW_GROUND, 0, Replicate( G( G_GROUND ), SCR_W ), "G/N" )
 
     IF s_nBanner > 0
-        PutC( 15, "WAVE " + hb_ntos( s_nLevel ), "W+/N" )
+        PutC( 15, s_cBanner, "W+/N" )
+        IF ! Empty( s_cBanner2 )                 /* row 17: at a wave's start aliens are on even rows */
+            PutC( 17, s_cBanner2, "G+/N" )
+        ENDIF
     ENDIF
     IF lPaused
         PutC( 15, "PAUSED", "GR+/N" )
@@ -705,6 +942,7 @@ STATIC PROCEDURE GameOver()
 
     LOCAL n, nStart
 
+    Sound( SND_OVER )
     FOR n := 1 TO 90                         /* 3 seconds */
         nStart := hb_MilliSeconds()
         DispBegin()
@@ -717,6 +955,336 @@ STATIC PROCEDURE GameOver()
         ENDIF
         FrameWait( nStart )
     NEXT
-    s_nHi := Max( s_nHi, s_nScore )
 
 RETURN
+
+/*--------------------------------------------------------------- stars */
+
+STATIC PROCEDURE NewStars()
+
+    LOCAL i
+
+    s_aStars := {}
+    FOR i := 1 TO 24
+        AAdd( s_aStars, { hb_RandomInt( 0, SCR_W - 1 ), hb_RandomInt( 1, ROW_GROUND - 1 ), ;
+                          hb_RandomInt( 0, 20 ), i % 3 == 0 } )
+    NEXT
+
+RETURN
+
+/* far stars drift down a row in 2/3 s, near ones in 1/3 s */
+STATIC PROCEDURE MoveStars()
+
+    LOCAL a
+
+    s_nStarTick++
+    FOR EACH a IN s_aStars
+        IF --a[ 3 ] < 0
+            a[ 3 ] := IIF( a[ 4 ], 10, 20 )
+            IF ++a[ 2 ] >= ROW_GROUND
+                a[ 2 ] := 1
+                a[ 1 ] := hb_RandomInt( 0, SCR_W - 1 )
+            ENDIF
+        ENDIF
+    NEXT
+
+RETURN
+
+/* drawn first: anything else in the cell covers the star */
+STATIC PROCEDURE DrawStars()
+
+    LOCAL a
+
+    FOR EACH a IN s_aStars
+        IF a[ 4 ]
+            Put( a[ 2 ], a[ 1 ], G( IIF( ( s_nStarTick + a:__enumIndex() * 37 ) % 120 < 8, G_STAR_BRIGHT, G_STAR ) ), "W/N" )
+        ELSE
+            Put( a[ 2 ], a[ 1 ], G( G_STAR ), "B+/N" )
+        ENDIF
+    NEXT
+
+RETURN
+
+/*--------------------------------------------------------------- high scores */
+
+STATIC FUNCTION HiScoreFile()
+RETURN hb_DirBase() + "nebula.hi"
+
+/* nebula.hi: a line per score, "12345 ABC" */
+STATIC PROCEDURE LoadHiScores()
+
+    LOCAL cLine, aWords
+
+    s_aHiScores := {}
+    FOR EACH cLine IN hb_ATokens( StrTran( hb_MemoRead( HiScoreFile() ), Chr( 13 ) ), Chr( 10 ) )
+        aWords := hb_ATokens( AllTrim( cLine ), " " )
+        IF Len( aWords ) == 2 .AND. Val( aWords[ 1 ] ) > 0
+            AAdd( s_aHiScores, { Val( aWords[ 1 ] ), Initials( aWords[ 2 ] ) } )
+        ENDIF
+    NEXT
+    IF Len( s_aHiScores ) == 0
+        s_aHiScores := { { 2500, "HBR" }, { 2000, "CUI" }, { 1500, "ZXS" }, { 1000, "NEB" }, { 500, "RAD" } }
+    ENDIF
+    ASort( s_aHiScores,,, {| a, b | a[ 1 ] > b[ 1 ] } )
+    ASize( s_aHiScores, Min( Len( s_aHiScores ), HISCORES ) )
+    s_nHi := s_aHiScores[ 1, 1 ]
+
+RETURN
+
+/* three letters A..Z (the font has no others) */
+STATIC FUNCTION Initials( cText )
+
+    LOCAL cOut := "", i, c
+
+    cText := PadR( Upper( cText ), 3 )
+    FOR i := 1 TO 3
+        c := SubStr( cText, i, 1 )
+        cOut += IIF( c >= "A" .AND. c <= "Z", c, "-" )
+    NEXT
+
+RETURN cOut
+
+STATIC FUNCTION IsHiScore( nScore )
+RETURN nScore > 0 .AND. ( Len( s_aHiScores ) < HISCORES .OR. nScore > ATail( s_aHiScores )[ 1 ] )
+
+/* adds and saves the score; its rank */
+STATIC FUNCTION AddHiScore( nScore, cInitials )
+
+    LOCAL aEntry := { nScore, cInitials }, cText := "", aHi
+
+    AAdd( s_aHiScores, aEntry )
+    ASort( s_aHiScores,,, {| a, b | a[ 1 ] > b[ 1 ] } )
+    ASize( s_aHiScores, Min( Len( s_aHiScores ), HISCORES ) )
+    s_nHi := s_aHiScores[ 1, 1 ]
+
+    FOR EACH aHi IN s_aHiScores
+        cText += hb_ntos( aHi[ 1 ] ) + " " + aHi[ 2 ] + hb_eol()
+    NEXT
+    hb_MemoWrit( HiScoreFile(), cText )
+
+RETURN AScan( s_aHiScores, {| a | a == aEntry } )
+
+/* three letters, the arcade way: Up/Down pick, Space next, or type them */
+STATIC FUNCTION EnterInitials( nScore )
+
+    LOCAL cLetters := "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    LOCAL aPick := { 1, 1, 1 }, nCur := 1, nKey, nAt, nStart, n := 0, i
+
+    hb_keyClear()
+    Sound( SND_LIFE )
+    DO WHILE nCur <= 3
+        nStart := hb_MilliSeconds()
+        DO WHILE nCur <= 3 .AND. ( nKey := Inkey() ) != 0
+            DO CASE
+            CASE nKey == K_UP
+                aPick[ nCur ] := aPick[ nCur ] % 26 + 1
+            CASE nKey == K_DOWN
+                aPick[ nCur ] := ( aPick[ nCur ] + 24 ) % 26 + 1
+            CASE nKey == K_LEFT .OR. nKey == K_BS
+                nCur := Max( 1, nCur - 1 )
+            CASE nKey == K_RIGHT .OR. nKey == K_SPACE
+                nCur++
+            CASE nKey == K_ENTER .OR. nKey == K_ESC
+                nCur := 4
+            CASE ( nAt := At( Upper( hb_keyChar( nKey ) ), cLetters ) ) > 0
+                aPick[ nCur ] := nAt
+                nCur++
+            ENDCASE
+        ENDDO
+        MoveStars()
+
+        DispBegin()
+        CLS
+        DrawStars()
+        PutC( 4, "NEW HIGH SCORE", IIF( n % 20 < 14, "GR+/N", "W/N" ) )
+        PutC( 6, hb_ntos( nScore ), "W+/N" )
+        PutC( 9, "ENTER YOUR INITIALS", "W/N" )
+        FOR i := 1 TO 3
+            Put( 12, 12 + i * 2, SubStr( cLetters, aPick[ i ], 1 ), IIF( i == nCur, "GR+/N", "W+/N" ) )
+            IF i == nCur .AND. n % 16 < 10
+                Put( 13, 12 + i * 2, "-", "GR+/N" )
+            ENDIF
+        NEXT
+        PutC( 16, "UP DOWN  LETTER", "W/N" )
+        PutC( 17, "SPACE  NEXT  ENTER  DONE", "W/N" )
+        Put( ROW_GROUND, 0, Replicate( G( G_GROUND ), SCR_W ), "G/N" )
+        DispEnd()
+
+        n++
+        FrameWait( nStart )
+    ENDDO
+
+RETURN SubStr( cLetters, aPick[ 1 ], 1 ) + SubStr( cLetters, aPick[ 2 ], 1 ) + SubStr( cLetters, aPick[ 3 ], 1 )
+
+/*--------------------------------------------------------------- sound */
+
+/* a WAV image (8-bit unsigned mono) of parts played one after another:
+   { nFreqFrom, nFreqTo, nMs, nVolFrom, nVolTo [, lNoise ] } - a square wave
+   sliding between the frequencies, or noise: a random level changed nFreq
+   times a second */
+STATIC FUNCTION Synth( aParts )
+
+    LOCAL nTotal := 0, cData, aP, i, nPos := 0, nSamples, nT, nPhase := 0, nLevel := 0
+
+    AEval( aParts, {| a | nTotal += Int( a[ 3 ] * SND_RATE / 1000 ) } )
+    cData := Space( nTotal )
+    FOR EACH aP IN aParts
+        nSamples := Int( aP[ 3 ] * SND_RATE / 1000 )
+        FOR i := 1 TO nSamples
+            nT := ( i - 1 ) / nSamples
+            nPhase += ( aP[ 1 ] + ( aP[ 2 ] - aP[ 1 ] ) * nT ) / SND_RATE
+            IF Len( aP ) > 5 .AND. aP[ 6 ]
+                IF nPhase >= 1
+                    nPhase -= Int( nPhase )
+                    nLevel := hb_RandomInt( -100, 100 ) / 100
+                ENDIF
+            ELSE
+                nPhase -= Int( nPhase )
+                nLevel := IIF( nPhase < 0.5, 1, -1 )
+            ENDIF
+            hb_BPoke( @cData, ++nPos, 128 + Int( nLevel * ( aP[ 4 ] + ( aP[ 5 ] - aP[ 4 ] ) * nT ) ) )
+        NEXT
+    NEXT
+
+RETURN "RIFF" + L2Bin( 36 + nTotal ) + "WAVEfmt " + L2Bin( 16 ) + ;
+       I2Bin( 1 ) + I2Bin( 1 ) + L2Bin( SND_RATE ) + L2Bin( SND_RATE ) + I2Bin( 1 ) + I2Bin( 8 ) + ;
+       "data" + L2Bin( nTotal ) + cData
+
+/* square-wave notes of nMs each */
+STATIC FUNCTION Notes( aFreq, nMs, nVol )
+
+    LOCAL aParts := {}, nFreq
+
+    FOR EACH nFreq IN aFreq
+        AAdd( aParts, { nFreq, nFreq, nMs, nVol, nVol } )
+    NEXT
+
+RETURN aParts
+
+STATIC PROCEDURE InitSound()
+
+    /* { nPriority, aParts }: a sound cuts one of lower or the same priority */
+    LOCAL aDefs := { ;
+        { 2, { { 1800, 500, 80, 40, 10 } } }, ;                                        /* SND_SHOT */
+        { 3, { { 6000, 1500, 180, 60, 0, .T. } } }, ;                                  /* SND_HIT */
+        { 3, { { 9000, 6000, 50, 40, 0, .T. } } }, ;                                   /* SND_ZAP */
+        { 4, { { 500, 2000, 120, 45, 40 }, { 2000, 500, 120, 40, 35 }, { 500, 2500, 160, 35, 0 } } }, ; /* SND_COMET */
+        { 1, { { 700, 1000, 60, 20, 20 }, { 1000, 700, 60, 20, 20 } } }, ;             /* SND_UFO */
+        { 2, { { 2200, 400, 450, 30, 20 } } }, ;                                       /* SND_DIVE */
+        { 5, { { 4000, 300, 700, 70, 0, .T. } } }, ;                                   /* SND_DEATH */
+        { 4, Notes( { 1047, 1319, 1568, 2093, 1568, 2093 }, 60, 35 ) }, ;               /* SND_LIFE */
+        { 4, Notes( { 523, 659, 784, 1047 }, 70, 30 ) }, ;                             /* SND_WAVE */
+        { 5, Notes( { 392, 330, 262, 196 }, 160, 40 ) }, ;                             /* SND_OVER */
+        { 1, { { 110, 110, 60, 55, 35 } } }, ;                                         /* SND_BEAT */
+        { 1, { { 98, 98, 60, 55, 35 } } }, ;
+        { 1, { { 87, 87, 60, 55, 35 } } }, ;
+        { 1, { { 82, 82, 60, 55, 35 } } } }
+    LOCAL aD, nMs, cFile
+#ifndef __PLATFORM__WINDOWS
+    LOCAL cOut, cErr
+
+    IF hb_processRun( "aplay --version", , @cOut, @cErr ) != 0
+        RETURN                                   /* no player: no sound */
+    ENDIF
+#endif
+
+    FOR EACH aD IN aDefs
+        nMs := 0
+        AEval( aD[ 2 ], {| a | nMs += a[ 3 ] } )
+        cFile := hb_DirTemp() + "nebula-" + hb_ntos( aD:__enumIndex() ) + ".wav"
+        AAdd( s_aSounds, { aD[ 1 ], Synth( aD[ 2 ] ), nMs, cFile } )
+#ifndef __PLATFORM__WINDOWS
+        hb_MemoWrit( cFile, ATail( s_aSounds )[ 2 ] )
+#endif
+    NEXT
+
+RETURN
+
+STATIC PROCEDURE Sound( nSound )
+
+    LOCAL aS
+
+    IF ! s_lSound .OR. nSound > Len( s_aSounds )
+        RETURN
+    ENDIF
+    aS := s_aSounds[ nSound ]
+    IF hb_MilliSeconds() < s_nSndEnd .AND. aS[ 1 ] < s_nSndPrio
+        RETURN
+    ENDIF
+#ifdef __PLATFORM__WINDOWS
+    nebula_PlayWav( aS[ 2 ] )
+#else
+    StopSound()
+    s_hSndProc := hb_processOpen( "aplay -q " + aS[ 4 ], , , , .T. )
+    IF s_hSndProc == -1
+        s_hSndProc := NIL
+    ENDIF
+#endif
+    s_nSndPrio := aS[ 1 ]
+    s_nSndEnd := hb_MilliSeconds() + aS[ 3 ]
+
+RETURN
+
+STATIC PROCEDURE StopSound()
+
+#ifdef __PLATFORM__WINDOWS
+    nebula_PlayWav()
+#else
+    IF s_hSndProc != NIL
+        IF hb_processValue( s_hSndProc, .F. ) == -1      /* still playing */
+            hb_processClose( s_hSndProc, .F. )
+            hb_processValue( s_hSndProc, .T. )
+        ENDIF
+        s_hSndProc := NIL
+    ENDIF
+#endif
+    s_nSndEnd := 0
+
+RETURN
+
+STATIC PROCEDURE ToggleSound()
+
+    s_lSound := ! s_lSound
+    IF ! s_lSound
+        StopSound()
+    ENDIF
+
+RETURN
+
+STATIC PROCEDURE DoneSound()
+
+    LOCAL aS
+
+    StopSound()
+    FOR EACH aS IN s_aSounds
+        IF hb_FileExists( aS[ 4 ] )
+            FErase( aS[ 4 ] )
+        ENDIF
+    NEXT
+
+RETURN
+
+#pragma BEGINDUMP
+
+#include "hbapi.h"
+
+#if defined( HB_OS_WIN )
+   #include <windows.h>
+   #include <mmsystem.h>
+#endif
+
+/* NEBULA_PLAYWAV( [ cWav ] ): plays a WAV image without waiting; no
+   argument stops it. The string must stay alive while it plays. */
+HB_FUNC( NEBULA_PLAYWAV )
+{
+#if defined( HB_OS_WIN )
+   if( HB_ISCHAR( 1 ) )
+      hb_retl( PlaySoundA( hb_parc( 1 ), NULL, SND_MEMORY | SND_ASYNC | SND_NODEFAULT ) != 0 );
+   else
+      hb_retl( PlaySoundA( NULL, NULL, 0 ) != 0 );
+#else
+   hb_retl( HB_FALSE );
+#endif
+}
+
+#pragma ENDDUMP
