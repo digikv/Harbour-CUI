@@ -40,6 +40,7 @@ PROCEDURE Main()
     TestMenuItems()
     TestTitleButtons()
     TestCharts()
+    TestPixelFont()
     TestBig5Screen()
     TestUnicodeInput()   /* last: HTApplication():new() switches the codepage */
 
@@ -556,6 +557,58 @@ STATIC PROCEDURE TestMenuHotKeys()
     Assert( "Menu: barRow 1 by default",            oBar:barRow() == 1 )
     oBar:setBarRow( 0 )
     Assert( "Menu: setBarRow",                      oBar:barRow() == 0 )
+
+RETURN
+
+/*----------------------------------------------------------------*/
+
+/* HTPixelFont: .glyphs round trip, cells, TrueType checksum, BDF */
+STATIC PROCEDURE TestPixelFont()
+
+    LOCAL cDir := hb_DirTemp() + "htpf" + hb_ntos( hb_RandomInt( 100000, 999999 ) ) + hb_ps()
+    LOCAL cGlyphs := cDir + "t.glyphs"
+    LOCAL cSrc, hModel, cError, aCells, cTTF, nSum, i, cBdf, cReport
+
+    hb_DirBuild( cDir )
+    cSrc := "# test font" + Chr( 10 ) + "# font: t.ttf TestPix x11" + Chr( 10 ) + ;
+            "char A" + Chr( 10 ) + Replicate( "#......." + Chr( 10 ), 8 ) + ;
+            Chr( 10 ) + "# a sprite" + Chr( 10 ) + "glyph E000 ship" + Chr( 10 ) + ;
+            Replicate( "........########" + Chr( 10 ), 8 )
+    hb_MemoWrit( cGlyphs, cSrc )
+
+    hModel := ht_glyphsLoad( cGlyphs, @cError )
+    Assert( "ht_glyphsLoad",                  hModel != NIL .AND. Len( hModel[ "items" ] ) == 2 )
+    Assert( "ht_glyphsLoad: glyph code/name", hModel[ "items" ][ 2 ][ "code" ] == 0xE000 .AND. hModel[ "items" ][ 2 ][ "name" ] == "ship" )
+    Assert( "ht_glyphsLoad: bad file",        ht_glyphsLoad( cDir + "none.glyphs", @cError ) == NIL .AND. ! Empty( cError ) )
+
+    ht_glyphsSave( hModel, cDir + "copy.glyphs" )
+    Assert( "ht_glyphsSave keeps the file",   hb_MemoRead( cDir + "copy.glyphs" ) == cSrc )
+
+    aCells := ht_glyphsCells( hModel )
+    Assert( "ht_glyphsCells: sprite split + space", Len( aCells ) == 4 .AND. aCells[ 1 ][ 1 ] == 32 .AND. ;
+            aCells[ 3 ][ 1 ] == 0xE000 .AND. aCells[ 3 ][ 2 ][ 1 ] == "........" .AND. aCells[ 4 ][ 2 ][ 1 ] == "########" )
+
+    Assert( "ht_glyphsBuild",                 ht_glyphsBuild( hModel, cGlyphs, @cReport ) )
+    cTTF := hb_MemoRead( cDir + "t.ttf" )
+    Assert( "TTF: sfnt version, 10 tables",   hb_BLeft( cTTF, 6 ) == hb_BChar( 0 ) + hb_BChar( 1 ) + hb_BChar( 0 ) + hb_BChar( 0 ) + hb_BChar( 0 ) + hb_BChar( 10 ) )
+    /* the whole font sums to 0xB1B0AFBA once head.checkSumAdjustment is in */
+    nSum := 0
+    cTTF += Replicate( hb_BChar( 0 ), ( 4 - hb_BLen( cTTF ) % 4 ) % 4 )
+    FOR i := 1 TO hb_BLen( cTTF ) STEP 4
+        nSum := ( nSum + hb_BCode( hb_BSubStr( cTTF, i, 1 ) ) * 16777216 + hb_BCode( hb_BSubStr( cTTF, i + 1, 1 ) ) * 65536 + ;
+                  hb_BCode( hb_BSubStr( cTTF, i + 2, 1 ) ) * 256 + hb_BCode( hb_BSubStr( cTTF, i + 3, 1 ) ) ) % 4294967296
+    NEXT
+    Assert( "TTF: checksum adjustment",       nSum == 0xB1B0AFBA )
+    Assert( "TTF: family name (UTF-16BE)",    hb_BAt( hb_BChar( 0 ) + "T" + hb_BChar( 0 ) + "e" + hb_BChar( 0 ) + "s" + hb_BChar( 0 ) + "t", cTTF ) > 0 )
+
+    cBdf := hb_MemoRead( cDir + "x11" + hb_ps() + "testpix-16.bdf" )
+    Assert( "BDF: XLFD and a 2x scaled row",  "-hbtui-testpix-medium-r-normal--16-160-75-75-c-160-iso10646-1" $ cBdf .AND. ;
+            "ENCODING 65" + Chr( 10 ) $ cBdf .AND. Chr( 10 ) + "C000" + Chr( 10 ) $ cBdf )
+    Assert( "fonts.dir",                      hb_MemoRead( cDir + "x11" + hb_ps() + "fonts.dir" ) = "5" + Chr( 10 ) )
+
+    AEval( hb_DirScan( cDir, hb_osFileMask() ), {| a | FErase( cDir + a[ 1 ] ) } )
+    DirRemove( cDir + "x11" )
+    DirRemove( cDir )
 
 RETURN
 

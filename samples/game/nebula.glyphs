@@ -1,5 +1,6 @@
 # nebula.glyphs - NEBULA RAID font: 8x8 square cells, ZX Spectrum style.
-# Build: python tools/pixelfont.py samples/game/nebula.glyphs samples/game/nebula8.ttf "Nebula8"
+# Edit with samples/fonteditor, or build: pixelfont samples/game/nebula.glyphs (tools/pixelfont.prg)
+# font: nebula8.ttf Nebula8 x11
 # '#' = pixel, '.' = empty. All designs are original (MIT, Harbour-CUI).
 
 # ---------------------------------------------------------------- text

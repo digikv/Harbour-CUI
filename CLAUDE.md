@@ -161,6 +161,17 @@ HTGet wraps Harbour's core `Get` class for full Clipper-compatible input editing
   positions are deleted, right to left (`HTGetBackend:editable()` = TGet's PROTECTED `IsEditable()`),
   so picture literals stay. TGet's cursor cannot pass the last character: `FlSelLast` covers it.
 
+### Pixel fonts (`src/HTPixelFont.prg`, Harbour only)
+
+- `.glyphs` file: `char A` / `glyph E000 name` + 8 rows of `#`/`.` (wider = more cells), `# ` comments,
+  `# font: <file.ttf> <Family> [<x11dir>]`. `ht_glyphsLoad()` / `ht_glyphsSave()` keep comments and
+  order; `ht_glyphsCells()` splits sprites into 8x8 cells; `ht_glyphsBuild()` makes what `# font:` says.
+- `ht_pixelFontTTF()` writes the TrueType tables itself (head hhea maxp OS/2 hmtx cmap-4 loca glyf name
+  post, one clockwise rectangle per pixel run, checksums, fixed timestamps). Pitfalls: GDI rejects a
+  font without name IDs 1-6; `hmtx` lsb must equal the glyph's xMin (head flag bit 1) or renderers
+  shift the glyph to the left edge; maxp 1.0 is exactly 32 bytes; table tags in binary order.
+- `ht_pixelFontX11()` writes BDF + fonts.dir (identical to what fontTools-based tools produced).
+
 ### Own fonts and game input (`ht_winmouse.c`)
 
 - `ht_fontLoad( cFile )`: `AddFontResourceEx( FR_PRIVATE )` - the font is usable by this process
@@ -173,7 +184,7 @@ HTGet wraps Harbour's core `Get` class for full Clipper-compatible input editing
 - **Linux / gtxwc** (`src/HTWindow/ht_x11.c`, a file of its own so only programs that call these
   link Xlib - `{unix}-lX11` in their hbmk.hbm): `ht_fontLoad( cDir )` adds a folder holding
   `fonts.dir` + BDF fonts to the X server's font path (`XSetFontPath`, like `xset +fp`); select with
-  `HB_GTI_FONTSEL` and an XLFD. `tools/pixelfont.py ... <x11dir>` writes BDFs at 16..48 px (font
+  `HB_GTI_FONTSEL` and an XLFD. `ht_pixelFontX11()` writes BDFs at 16..48 px (font
   pixels as whole squares). `ht_keyDown()` = `XQueryKeymap`, same Windows VK codes, only while the
   window titled `HB_GTI_WINTITLE` has the focus (focus window, a parent or a child; with
   PointerRoot the window under the pointer). gtxwc stores WM_NAME as UTF8_STRING: read it with
@@ -323,8 +334,7 @@ src/HTWidget/     Widget classes (25+ widgets, HTGetBackend, HTToast)
 src/types/        HTPoint, HTSize, HT
 legacy/         Prior win.prg / cui.ch kept for reference
 tools/            unifont-cell.sh/.py: builds the "Unifont Cell" X font (CJK in gtxwc)
-                  pixelfont.py: 8x8 square-cell TTF from '#'/'.' glyph drawings (needs fontTools;
-                  GDI needs the full name table - fullName, psName, version - or it rejects the font)
+                  pixelfont.prg: builds the fonts of a .glyphs file (src/HTPixelFont.prg, no external tools)
 docs/             Documentation
   EVENT_SYSTEM.md HTEventLoop guide, event types, routing, focus, tasks, coordinates
 samples/          Demo applications (human-facing, require a display)
@@ -341,7 +351,7 @@ samples/          Demo applications (human-facing, require a display)
   menu/           HTMenuBar + HTMenu + HTAction with keyboard shortcuts
   progress/       Animated HTProgressBar with scheduleRepeat()
   game/           NEBULA RAID: fixed-screen shooter drawn only with its own 8x8 font (nebula8.ttf
-                  from nebula.glyphs via tools/pixelfont.py): ZX Spectrum style 32x24 cells,
+                  from nebula.glyphs via ht_glyphsBuild()): ZX Spectrum style 32x24 cells,
                   16-color palette, ht_fontLoad() + ht_keyDown(); DPI-aware manifest (nebula.rc);
                   Linux: X11 bitmap fonts in x11/ (gtxwc)
   charts/         HTSparkline (live, 4 rows; 1 row in its own color) + HTBarChart, F1-F7 themes

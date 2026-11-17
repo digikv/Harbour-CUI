@@ -8,7 +8,7 @@
  * only (ht_fontLoad), keys are read as held down (ht_keyDown) so moving
  * and firing work together.
  *
- * Font: samples/game/nebula.glyphs -> tools/pixelfont.py -> nebula8.ttf
+ * Font: samples/game/nebula.glyphs -> ht_glyphsBuild() (fonteditor, tools/pixelfont) -> nebula8.ttf + x11/
  *
  * Keys:  Left/Right or Z/X move, Space or Up fire, P pause, Esc quit
  * Windows (gtwvt): nebula8.ttf. Linux (gtxwc): the X11 bitmap fonts in x11/,
@@ -75,7 +75,7 @@ PROCEDURE Main()
 
     IF ! ht_fontLoad( cFont )
         ? "Cannot load " + cFont
-        ? "Build it: python tools/pixelfont.py samples/game/nebula.glyphs samples/game/nebula8.ttf Nebula8 samples/game/x11"
+        ? "Build it with samples/fonteditor (Build) or tools/pixelfont nebula.glyphs"
         Inkey( 0 )
         RETURN
     ENDIF
