@@ -114,7 +114,9 @@ beneath); a `wSelect()` before `exec()` is overridden.
 **Geometry**: `move()` and `resize()` take effect at once (they also queue the move/resize event), so a
 widget resized inside a running `HTDialog:exec()` paints with its new size. `HTDialog:move()` before
 `exec()` keeps that position (otherwise the dialog is centered). `addButtonBar( "OK", "Cancel" )` lays the
-buttons out right-aligned in the given order (Tab order too); the first accepts, the last rejects. `setTitleButtons( lHide, lMaximize,
+buttons out right-aligned in the given order (Tab order too); the first accepts, the last rejects.
+A dialog has a drop shadow. Its modal loop (`HTEventLoop:run()`) turns the Win32 queue's screen-absolute
+mouse cells into the dialog window's coordinates, as `HTApplication:exec()` does for top-level windows. `setTitleButtons( lHide, lMaximize,
 lResize )` hides title bar buttons besides close (a message box: `.F., .F., .F.`).
 
 **HTMenuBar**: `"&File"` / `"Save &as"` mark hot keys (shown without the `&`, the letter in

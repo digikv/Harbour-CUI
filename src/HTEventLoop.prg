@@ -211,6 +211,14 @@ METHOD PROCEDURE run( oTarget, bCondition ) CLASS HTEventLoop
         event := ::poll()
 
         IF event != NIL
+            /* the Win32 mouse queue reports screen-absolute cells: the
+               target hit-tests in its own window's coordinates (as in
+               HTApplication:exec) */
+            IF event:className() == "HTMOUSEEVENT" .AND. oTarget:windowId != NIL
+                wSelect( oTarget:windowId, .F. )
+                event:mouseRow := event:mouseAbsRow - wRow()
+                event:mouseCol := event:mouseAbsCol - wCol()
+            ENDIF
             event:setWidget( oTarget )
             oTarget:event( event )
             /* keep the hardware cursor on the focused editor */

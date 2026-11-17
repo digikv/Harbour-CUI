@@ -49,6 +49,7 @@ ENDCLASS
 METHOD new( parent, cTitle ) CLASS HTDialog
 
     ::super:new( parent, HT_DIALOG )
+    ::Fshadow := HT_SHADOW_ATTR
 
     IF cTitle != NIL
         ::setWindowTitle( cTitle )
@@ -64,7 +65,7 @@ RETURN self
  */
 METHOD FUNCTION exec() CLASS HTDialog
 
-    LOCAL aFocusable
+    LOCAL aFocusable, oChild, oFocus
 
     ::FisVisible := .T.
     ::Frunning := .T.
@@ -72,13 +73,21 @@ METHOD FUNCTION exec() CLASS HTDialog
     /* paint the dialog */
     ::paintEvent( HTPaintEvent():new() )
 
-    /* auto-focus first focusable child */
+    /* auto-focus the first focusable child that takes the focus (a GET's
+       WHEN may refuse it); the focus-in starts its editing, so the cursor
+       is in the first GET from the start */
     IF ::FfocusWidget = NIL
         aFocusable := ::focusableChildren()
-        IF Len( aFocusable ) > 0
-            ::FfocusWidget := aFocusable[ 1 ]
-        ENDIF
+        FOR EACH oChild IN aFocusable
+            ::FfocusWidget := oChild
+            oFocus := HTFocusEvent():new( HT_EVENT_TYPE_FOCUSIN )
+            oChild:focusInEvent( oFocus )
+            IF oFocus:isAccepted
+                EXIT
+            ENDIF
+        NEXT
     ENDIF
+    HTApplication():syncCursor()
 
     /* modal event loop — uses shared HTEventLoop for mouse tracking + tasks */
     HTEventLoop():run( self, {|| ::Frunning } )

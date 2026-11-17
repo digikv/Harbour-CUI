@@ -773,7 +773,7 @@ METHOD FUNCTION handleClick( nRow, nCol ) CLASS HTMenuBar
             ENDIF
             RETURN .T.
         ENDIF
-        nLeft += nWidth
+        nLeft += nWidth + 1   /* paintEvent() leaves one column between titles */
     NEXT
 
 RETURN .F.
@@ -859,10 +859,10 @@ METHOD FUNCTION handleMouseClick( nAbsRow, nAbsCol ) CLASS HTMenuBar
         wSelect( parent:windowId, .F. )
         nDropRow := nAbsRow - wRow()
         nDropCol := nAbsCol - wCol()
-        IF nDropRow = 1  /* menu bar is at window row 1 (border=0, menubar=1) */
+        IF nDropRow = ::FnBarRow
             ::closeMenu()
             ::FactiveMenu := 0
-            RETURN ::handleClick( 0, nDropCol - 1 )
+            RETURN ::handleClick( 0, nDropCol )
         ENDIF
     ENDIF
 
