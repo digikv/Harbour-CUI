@@ -15,20 +15,21 @@ Older standalone CUI helpers (`win.prg`, `cui.ch`) are kept under [`legacy/`](le
 
 ## Features
 
-**25+ widgets** covering forms, data display, navigation, and feedback:
+**30 widgets** covering forms, data display, navigation, charts and feedback:
 
 | Category | Widgets |
 |----------|---------|
 | Windows | HTMainWindow, HTDesktop, HTDialog (modal + button bar + draggable), HTMessageBox |
-| Input | HTLineEdit (selection + clipboard), HTGet (full PICTURE/VALID/WHEN), HTTextEdit, HTSpinner, HTCheckList |
+| Input | HTLineEdit (selection + clipboard), HTGet (full PICTURE/VALID/WHEN, Shift+arrow selection), HTTextEdit (multi-line, selection + clipboard), HTSpinner, HTCheckList |
 | Buttons | HTPushButton, HTCheckBox, HTRadioButton |
 | Lists | HTListBox, HTComboBox (type-to-filter), HTBrowse (TBrowse wrapper, inline cell editing: F2 / typing / double-click, typed values via the column PICTURE) |
-| Menus | HTMenuBar, HTMenu, HTContextMenu, HTAction |
+| Menus | HTMenuBar (`&` hot keys, Alt+letter, action shortcuts), HTMenu, HTContextMenu, HTAction |
 | Layout | HTVBoxLayout, HTHBoxLayout, HTGridLayout |
 | Display | HTLabel, HTFrame, HTProgressBar, HTStatusBar, HTSeparator, HTScrollBar, HTTabWidget, HTToolBar |
+| Charts | HTSparkline (live values, any height), HTBarChart (labels, compact values) - block characters, eight levels per row |
 | Feedback | HTToast (non-blocking notifications, auto-dismiss, stacking) |
 
-**Event system** — `HTEventLoop` with priority queue, mouse tracking, task scheduling. On Windows/gtwvt, mouse is driven by a Win32 WndProc subclass with coalesced `WM_MOUSEMOVE`. See [docs/EVENT_SYSTEM.md](docs/EVENT_SYSTEM.md).
+**Event system** — `HTEventLoop` with priority queue, mouse tracking, task scheduling. On Windows/gtwvt, mouse is driven by a Win32 WndProc subclass with coalesced `WM_MOUSEMOVE`. A widget that returns `.T.` from `mouseDragWanted()` (drawing, dragging) gets every mouse move and the button up while a button is held, also outside it. See [docs/EVENT_SYSTEM.md](docs/EVENT_SYSTEM.md).
 
 **Viewport system** — `wFormat()` / viewport remapping in `src/HTWindow/` so child widgets paint in local coordinates.
 
@@ -40,6 +41,7 @@ Older standalone CUI helpers (`win.prg`, `cui.ch`) are kept under [`legacy/`](le
 - Drop shadows follow every move and resize. A window covered by others paints into its own layer and never over the windows above it.
 - The text cursor returns to the focused editor (`HTGet`, `HTLineEdit`, `HTTextEdit`) after any repaint, also when switching between windows. A click past the typed text in an `HTGet` lands right after it.
 - In `HTGet` and `HTLineEdit`, Enter moves to the next field like Tab (Clipper READ style); a failing VALID keeps the focus.
+- Text selection: Shift + arrows / Home / End selects in `HTGet`, `HTLineEdit` and `HTTextEdit`; Del and Backspace delete the selection, typing replaces it (picture literals of an `HTGet` stay). Clipboard: Ctrl+C / Ctrl+X / Ctrl+V and Ctrl+Ins / Shift+Ins; a plain Ins toggles insert mode.
 - Window repaints are buffered (`DispBegin`/`DispEnd`) and a focus change repaints only the two affected controls, so clicks don't make the screen flicker.
 
 **Unicode and East Asian text** — Chinese (traditional and simplified), Japanese and Korean can be typed with the Windows IME and are shown in every widget, as are Cyrillic, Greek and other scripts.
@@ -48,6 +50,8 @@ Older standalone CUI helpers (`win.prg`, `cui.ch`) are kept under [`legacy/`](le
 - Data in an older codepage needs no conversion in your code: tell the RDD the table's codepage (`USE customers CODEPAGE "HR852"`, or `Set( _SET_DBCODEPAGE, "HR852" )` for all tables) and it translates on every read and write. The file stays in that codepage, so older programs can keep using it.
 - A Chinese, Japanese or Korean character takes two screen cells, as in a terminal. Editors, GETs, labels, menus, window titles and HTBrowse columns measure text in cells, so the cursor, mouse clicks and columns stay aligned (`ht_strWidth()`, `ht_cellPadR()`, … in `src/HTCells.prg`).
 - On Windows, gtwvt draws CJK characters through a fallback font. Windows lays out Korean Hangul by its own glyph width, so the cell after a Hangul character holds a zero width space instead of a space: Chinese, Japanese and Korean all line up on the same grid.
+- The IME composition window and candidate list open at the text cursor. `ht_fullScreen( .F. )` before `ht_cuiSetupDisplay()` / `exec()` opens a maximized window instead of fullscreen, so the taskbar with the IME mode indicator stays visible (Alt+Enter still switches).
+- Multi-byte codepages such as `CP950` (Big5) keep their text through window moves and restores. Harbour's CP950 counts bytes, not characters, so for editing keep the VM in `UTF8EX` and open Big5 tables with `CODEPAGE "CP950"`.
 - `samples/unicode` shows labels, GETs, editors and a browse in Chinese, Japanese, Korean, Cyrillic and Greek.
 - On Linux, `gtxwc` draws with a single X font, and its default `fixed` has no Chinese, Japanese or Korean glyphs: they show as empty boxes (Cyrillic, Greek and accented Latin are fine). Install the "Unifont Cell" font once and every application picks it up by itself:
 
@@ -85,6 +89,13 @@ HTTheme():saveTheme( "My theme" )      // built-in themes stay as they are
 
 `addTheme()`, `removeTheme()`, `themeNames()`, `themeColors()` and `themePalette()` manage own themes. `samples/theme_editor` edits the colors and the palette interactively, saves own themes and keeps them in `themes.json` for the next start.
 
+**Pixel fonts and sprites** — text mode with an own character set, the way 8-bit home computers did it: every character an 8×8 square cell, sprites at U+E000…, all drawn as text.
+
+- A `.glyphs` file holds the drawings (`#` = pixel, `.` = empty; wider sprites become several characters). `src/HTPixelFont.prg` reads and writes it and builds the fonts in Harbour, no external tools: a TrueType font for Windows (`ht_pixelFontTTF()`) and X11 bitmap fonts at 16–48 px for Linux (`ht_pixelFontX11()`).
+- `ht_fontLoad()` makes the font usable for this program only (Windows: no installation; Linux: added to the X font path). `ht_keyDown( nVirtualKey )` reads keys held down — several at once, the same key codes on Windows and Linux — only while the program's window has the focus.
+- `samples/fonteditor` draws the glyphs (mouse with drag, keyboard, preview, transforms, undo) and builds the fonts with F9; `tools/pixelfont.prg` does the build from the command line.
+- `samples/game` is NEBULA RAID, a fixed-screen shooter on a 32×24 grid in its own font (Windows and Linux).
+
 ## Quick Start
 
 ```bash
@@ -109,10 +120,13 @@ cd samples/hello && hbmk2 hello.prg hbmk.hbm && ./hello
 | `editor` | HTLineEdit + HTTextEdit |
 | `menu` | HTMenuBar + HTMenu |
 | `progress` | Animated HTProgressBar |
+| `charts` | HTSparkline (live, 4 rows) and HTBarChart, following the themes (F1–F7) |
 | `theme` | Switching among the seven built-in themes (F1–F7) |
 | `theme_editor` | Change theme colors and the palette, add own themes, save them to `themes.json` |
 | `unicode` | Chinese, Japanese, Korean, Cyrillic and Greek text: IME input, two-cell characters |
 | `toast` | HTToast notifications |
+| `fonteditor` | Pixel font editor for `.glyphs` files: draw with the mouse, preview, build TTF + X11 fonts (F9) |
+| `game` | NEBULA RAID: a shooter drawn entirely with its own 8×8 font, held keys for moving and firing |
 | `showcase` | Full controls demo |
 
 ```bash
@@ -126,9 +140,10 @@ cd samples/window && hbmk2 window_01.prg hbmk.hbm && ./window_01
 
 - Harbour compiler
 - GT driver: `gtxwc` on Linux, `gtwvt` on Windows (tests: `gttrm` / `-gtnul`)
-  - Windows: borderless fullscreen with the Consolas font scaled to fill the screen; mouse via a Win32 WndProc bridge.
+  - Windows: borderless fullscreen with the Consolas font scaled to fill the screen (or a maximized window: `ht_fullScreen( .F. )`); mouse via a Win32 WndProc bridge. Pixel-font programs should be DPI aware (manifest, see `samples/game/nebula.rc`), or Windows stretches them at 125% / 150%.
   - Linux: an X11 window that starts with the requested grid (default 40×131) in the GT's own font; mouse via `Inkey()`. `gtxwc` cannot scale its font, so resizing or maximizing the window changes the grid instead: the `HTMainWindow` shell and its bottom status bar follow, floating windows keep their place. Platform code is selected with `#ifdef __PLATFORM__WINDOWS`.
   - `gtxwc` draws with X core fonts and stops with "Cannot load 'fixed' font" when they are missing — install them first (Debian/Ubuntu: `sudo apt install xfonts-base`). Building Harbour itself with `gtxwc` needs `libx11-dev`.
+- Programs that call `ht_fontLoad()` / `ht_keyDown()` on Linux link Xlib (`{unix}-lX11` in their `hbmk.hbm`).
 - Compiler flags: `-w3 -es2`
 
 ## License / credits
