@@ -514,7 +514,62 @@ HB_FUNC( HT_FONTHASCHAR )
    hb_retl( fHas );
 }
 
+/* HT_FONTLOAD( cFile ) -> lOk
+ * Makes a font file (.ttf/.otf/.fon) usable by this process only - no
+ * installation, gone when the program ends. Then select it by its family
+ * name: hb_gtInfo( HB_GTI_FONTNAME, "Nebula8" ). */
+HB_FUNC( HT_FONTLOAD )
+{
+   const char * szFile = hb_parc( 1 );
+   int nAdded = 0;
+
+   if( szFile && *szFile )
+   {
+      WCHAR wszFile[ MAX_PATH ];
+
+      if( MultiByteToWideChar( CP_UTF8, 0, szFile, -1, wszFile, MAX_PATH ) > 0 )
+         nAdded = AddFontResourceExW( wszFile, FR_PRIVATE, NULL );
+   }
+   hb_retl( nAdded > 0 );
+}
+
+/* HT_KEYDOWN( nVirtualKey ) -> lDown
+ * Whether a key is held down now (VK_LEFT = 0x25, VK_SPACE = 0x20, 'Z' = 90,
+ * ...) - several keys at once, no keyboard repeat delay: games. Only while
+ * the GT window is the foreground window, so keys typed into another program
+ * do not count. */
+HB_FUNC( HT_KEYDOWN )
+{
+   HWND hWnd = s_hWnd ? s_hWnd : ht_get_gt_hwnd();
+
+   hb_retl( HB_ISNUM( 1 ) && hWnd && GetForegroundWindow() == hWnd &&
+            ( GetAsyncKeyState( hb_parni( 1 ) ) & 0x8000 ) != 0 );
+}
+
+/* HT_KEYSTATEAVAILABLE() -> .T. where HT_KEYDOWN() works */
+HB_FUNC( HT_KEYSTATEAVAILABLE )
+{
+   hb_retl( HB_TRUE );
+}
+
 #else /* ! HB_OS_WIN */
+
+/* Linux: X fonts are installed with mkfontdir/xset, not per process */
+HB_FUNC( HT_FONTLOAD )
+{
+   hb_retl( HB_FALSE );
+}
+
+/* no key state outside Windows: read Inkey() instead */
+HB_FUNC( HT_KEYDOWN )
+{
+   hb_retl( HB_FALSE );
+}
+
+HB_FUNC( HT_KEYSTATEAVAILABLE )
+{
+   hb_retl( HB_FALSE );
+}
 
 /* the X fonts (fixed, Unifont Cell) and terminals have the block elements */
 HB_FUNC( HT_FONTHASCHAR )

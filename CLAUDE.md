@@ -161,6 +161,16 @@ HTGet wraps Harbour's core `Get` class for full Clipper-compatible input editing
   positions are deleted, right to left (`HTGetBackend:editable()` = TGet's PROTECTED `IsEditable()`),
   so picture literals stay. TGet's cursor cannot pass the last character: `FlSelLast` covers it.
 
+### Own fonts and game input (`ht_winmouse.c`)
+
+- `ht_fontLoad( cFile )`: `AddFontResourceEx( FR_PRIVATE )` - the font is usable by this process
+  only, no installation; then `hb_gtInfo( HB_GTI_FONTNAME, cFamily )`. Set `HB_GTI_CODEPAGE` 1
+  (DEFAULT_CHARSET) so GDI takes the font as it is. Sprites live at U+E000.. (Private Use Area).
+- `ht_keyDown( nVK )`: `GetAsyncKeyState`, only while the GT window is in the foreground - held keys,
+  several at once (move + fire). `ht_keyStateAvailable()` is .F. where it does not work: read Inkey().
+- A process that is not DPI aware is stretched by Windows at 125%/150%: pixel fonts blur. A
+  manifest with `dpiAware true/pm` (samples/game/nebula.rc) keeps them crisp.
+
 ### Charts (HTSparkline, HTBarChart)
 
 - Values scale to eighths of a row (`ht_chartScale()`); `ht_blockGlyph( nEighths )` = ▁..█.
@@ -304,6 +314,8 @@ src/HTWidget/     Widget classes (25+ widgets, HTGetBackend, HTToast)
 src/types/        HTPoint, HTSize, HT
 legacy/         Prior win.prg / cui.ch kept for reference
 tools/            unifont-cell.sh/.py: builds the "Unifont Cell" X font (CJK in gtxwc)
+                  pixelfont.py: 8x8 square-cell TTF from '#'/'.' glyph drawings (needs fontTools;
+                  GDI needs the full name table - fullName, psName, version - or it rejects the font)
 docs/             Documentation
   EVENT_SYSTEM.md HTEventLoop guide, event types, routing, focus, tasks, coordinates
 samples/          Demo applications (human-facing, require a display)
@@ -319,6 +331,9 @@ samples/          Demo applications (human-facing, require a display)
   layout/         HTVBoxLayout demo (spacing, stretch, nesting)
   menu/           HTMenuBar + HTMenu + HTAction with keyboard shortcuts
   progress/       Animated HTProgressBar with scheduleRepeat()
+  game/           NEBULA RAID: fixed-screen shooter drawn only with its own 8x8 font (nebula8.ttf
+                  from nebula.glyphs via tools/pixelfont.py): ZX Spectrum style 32x24 cells,
+                  16-color palette, ht_fontLoad() + ht_keyDown(); DPI-aware manifest (nebula.rc)
   charts/         HTSparkline (live, 4 rows; 1 row in its own color) + HTBarChart, F1-F7 themes
   theme/          Theme switching demo (7 built-in themes, F1-F7, theme list + buttons)
   theme_editor/   Theme editor: change category colors (Text/Back spinners or a color string) and
