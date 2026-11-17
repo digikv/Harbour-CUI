@@ -3,7 +3,7 @@
  * external tools): a TrueType font for Windows (gtwvt) and X11 bitmap fonts
  * for Linux (gtxwc). The work is done by src/HTPixelFont.prg.
  *
- * Build:  hbmk2 tools/pixelfont.prg hbtui.hbc -gtcgi
+ * Build:  hbmk2 -w3 -es2 tools/pixelfont.prg hbtui.hbc -gtcgi
  * Use:    pixelfont file.glyphs                      what its "# font:" line says
  *         pixelfont file.glyphs out.ttf Family [x11dir]
  *

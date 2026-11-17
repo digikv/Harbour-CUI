@@ -42,7 +42,9 @@ upper-case form; `__PLATFORM__Windows` is never defined):
 The portable path can be checked on Windows by building a copy of the library with
 `__PLATFORM__WINDOWS` renamed in those three files.
 
-Compiler flags: `-w3 -es2` (warnings level 3, warnings as errors).
+Compiler flags: `-w3 -es2` (warnings level 3, warnings as errors) in `hbtui.hbp` and in every
+`samples/*/hbmk.hbm` and `tests/hbmk.hbm` — newer Harbour builds report more warnings (e.g.
+W0032 for an assignment never read), so keep the code free of them everywhere.
 
 ## Architecture
 

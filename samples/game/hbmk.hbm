@@ -1,3 +1,4 @@
+-w3 -es2
 ../../hbtui.hbc
 {win}nebula.rc
 {unix}-lX11
