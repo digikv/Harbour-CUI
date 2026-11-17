@@ -52,6 +52,8 @@ PUBLIC:
 
     METHOD getText()
     METHOD setText( cText )
+    METHOD setSelection( nRow1, nCol1, nRow2, nCol2 )   /* anchor -> cursor, 1-based */
+    METHOD selectedText() INLINE ::getSelectedText()
 
     PROPERTY text READ getText WRITE setText
     METHOD readOnly()   INLINE ::FreadOnly
@@ -109,6 +111,21 @@ METHOD PROCEDURE setText( cText ) CLASS HTTextEdit
 
 RETURN
 
+/** Selects from ( nRow1, nCol1 ) (the anchor) to ( nRow2, nCol2 ), where the
+ * cursor goes, as Shift+arrows would. Rows and columns are 1-based and clamped
+ * to the text; a column after the last character is the line end.
+ */
+METHOD PROCEDURE setSelection( nRow1, nCol1, nRow2, nCol2 ) CLASS HTTextEdit
+
+    nRow1 := Max( 1, Min( nRow1, Len( ::FaLines ) ) )
+    nRow2 := Max( 1, Min( nRow2, Len( ::FaLines ) ) )
+    ::FnSelAnchorRow := nRow1
+    ::FnSelAnchorCol := Max( 1, Min( nCol1, Len( ::FaLines[ nRow1 ] ) + 1 ) )
+    ::FnCurRow := nRow2
+    ::FnCurCol := Max( 1, Min( nCol2, Len( ::FaLines[ nRow2 ] ) + 1 ) )
+
+RETURN
+
 /** Returns .T. if there is an active multi-line selection. */
 METHOD FUNCTION hasSelection() CLASS HTTextEdit
 RETURN ::FnSelAnchorRow > 0 .AND. ;
@@ -162,7 +179,7 @@ RETURN cResult
 /** Deletes the text within the current selection and repositions the cursor. */
 METHOD PROCEDURE deleteSelection() CLASS HTTextEdit
 
-    LOCAL aRange, nR1, nC1, nR2, nC2
+    LOCAL aRange, nR1, nC1, nR2, nC2, i
 
     aRange := ::selectionRange()
     IF aRange = NIL
@@ -176,11 +193,11 @@ METHOD PROCEDURE deleteSelection() CLASS HTTextEdit
         ::FaLines[ nR1 ] := Left( ::FaLines[ nR1 ], nC1 - 1 ) + SubStr( ::FaLines[ nR1 ], nC2 )
     ELSE
         ::FaLines[ nR1 ] := Left( ::FaLines[ nR1 ], nC1 - 1 ) + SubStr( ::FaLines[ nR2 ], nC2 )
-        IF nR2 > nR1 + 1
-            ADel( ::FaLines, nR1 + 1, nR2 - nR1 - 1 )
-            ASize( ::FaLines, Len( ::FaLines ) - ( nR2 - nR1 - 1 ) )
-        ENDIF
-        hb_aDel( ::FaLines, nR1 + 1, .T. )
+        /* lines nR1 + 1 .. nR2 (ADel() has no count: the old ADel + ASize
+           removed one middle line and cut the rest off the end of the text) */
+        FOR i := nR1 + 1 TO nR2
+            hb_aDel( ::FaLines, nR1 + 1, .T. )
+        NEXT
     ENDIF
 
     ::FnCurRow := nR1
@@ -344,13 +361,18 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS HTTextEdit
         ENDIF
     ENDIF
 
-    /* --- Selection: start anchor on first Shift+arrow if no selection --- */
-    IF lShift .AND. ::FnSelAnchorRow = 0
-        ::FnSelAnchorRow := ::FnCurRow
-        ::FnSelAnchorCol := ::FnCurCol
-    ELSEIF ! lShift .AND. ::FnSelAnchorRow > 0
-        /* non-shift navigation clears selection */
-        ::clearSelection()
+    /* --- Selection: Shift+navigation starts / extends it, navigation without
+       Shift clears it. Editing keys (Del, Backspace, Enter, typing) keep it:
+       they act on the selected text (cleared here before, Del removed one
+       character instead of the selected block). --- */
+    IF AScan( { K_UP, K_DOWN, K_LEFT, K_RIGHT, K_HOME, K_END, K_PGUP, K_PGDN, ;
+                K_CTRL_HOME, K_CTRL_END }, keyEvent:key ) > 0
+        IF lShift .AND. ::FnSelAnchorRow = 0
+            ::FnSelAnchorRow := ::FnCurRow
+            ::FnSelAnchorCol := ::FnCurCol
+        ELSEIF ! lShift .AND. ::FnSelAnchorRow > 0
+            ::clearSelection()
+        ENDIF
     ENDIF
 
     SWITCH keyEvent:key

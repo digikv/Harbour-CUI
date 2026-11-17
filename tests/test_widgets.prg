@@ -115,6 +115,34 @@ STATIC PROCEDURE TestLineEdit()
     t:keyEvent( HTKeyEvent():new( K_INS ) )
     Assert( "HTTextEdit:Ins does not paste",  t:getText() == "abc" )
 
+    /* Shift+Right selection, then Del (google group report): Del removed one
+       character, because every key without Shift cleared the selection */
+    t:setText( "abcdef" )
+    t:setSelection( 1, 2, 1, 5 )                       /* "bcd" */
+    Assert( "HTTextEdit:setSelection text",    t:selectedText() == "bcd" )
+    t:keyEvent( HTKeyEvent():new( K_DEL ) )
+    Assert( "HTTextEdit:Del removes selection", t:getText() == "aef" )
+    t:setText( "abcdef" )
+    t:setSelection( 1, 5, 1, 2 )                       /* selected leftwards */
+    t:keyEvent( HTKeyEvent():new( K_BS ) )
+    Assert( "HTTextEdit:Backspace removes selection", t:getText() == "aef" )
+    t:setText( "abcdef" )
+    t:setSelection( 1, 2, 1, 5 )
+    t:keyEvent( HTKeyEvent():new( Asc( "X" ) ) )
+    Assert( "HTTextEdit:typing replaces selection", t:getText() == "aXef" )
+    t:setSelection( 1, 1, 1, 2 )
+    t:keyEvent( HTKeyEvent():new( K_RIGHT ) )         /* no Shift: clears */
+    t:keyEvent( HTKeyEvent():new( K_DEL ) )
+    Assert( "HTTextEdit:arrow clears selection", t:getText() == "aXf" )
+
+    /* across 4 lines: the old ADel( a, n, nCount ) + ASize() cut lines off
+       the end of the text instead of the selected middle lines */
+    t:setText( "11" + hb_eol() + "22" + hb_eol() + "33" + hb_eol() + "44" + hb_eol() + "55" + hb_eol() + "66" )
+    t:setSelection( 2, 2, 5, 2 )                       /* "2" .. "5" */
+    t:keyEvent( HTKeyEvent():new( K_DEL ) )
+    Assert( "HTTextEdit:Del multi-line selection", ;
+        t:getText() == "11" + hb_eol() + "25" + hb_eol() + "66" )
+
 RETURN
 
 /*----------------------------------------------------------------*/
