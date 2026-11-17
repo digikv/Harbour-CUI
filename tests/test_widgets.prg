@@ -39,6 +39,7 @@ PROCEDURE Main()
     TestContextMenu()
     TestMenuItems()
     TestTitleButtons()
+    TestCharts()
     TestBig5Screen()
     TestUnicodeInput()   /* last: HTApplication():new() switches the codepage */
 
@@ -555,6 +556,73 @@ STATIC PROCEDURE TestMenuHotKeys()
     Assert( "Menu: barRow 1 by default",            oBar:barRow() == 1 )
     oBar:setBarRow( 0 )
     Assert( "Menu: setBarRow",                      oBar:barRow() == 0 )
+
+RETURN
+
+/*----------------------------------------------------------------*/
+
+/* HTSparkline / HTBarChart: scaling to eighths of a row, kept values,
+   compact value texts, painting */
+STATIC PROCEDURE TestCharts()
+
+    LOCAL o, c, i
+
+    o := HTSparkline():new()
+    o:setValues( { 0, 5, 10 } )
+    Assert( "HTSparkline:levels 1 row",           hb_ValToExp( o:levels( 3, 1 ) ) == "{0, 4, 8}" )
+    Assert( "HTSparkline:levels shows the last",  hb_ValToExp( o:levels( 2, 1 ) ) == "{4, 8}" )
+    Assert( "HTSparkline:levels 2 rows",          hb_ValToExp( o:levels( 3, 2 ) ) == "{0, 8, 16}" )
+    o:setValues( { 0, 1, 100 } )
+    Assert( "HTSparkline:small value stays visible", hb_ValToExp( o:levels( 3, 1 ) ) == "{0, 1, 8}" )
+    o:setValues( { -10, 0, 10 } )
+    Assert( "HTSparkline:negative values",        hb_ValToExp( o:levels( 3, 1 ) ) == "{0, 4, 8}" )
+    o:maximum := 20
+    o:minimum := 0
+    o:setValues( { 10, 20, 30 } )
+    Assert( "HTSparkline:fixed range clamps",     hb_ValToExp( o:levels( 3, 1 ) ) == "{4, 8, 8}" )
+    o:maximum := NIL
+    o:minimum := NIL
+    o:clear()
+    Assert( "HTSparkline:clear",                  Len( o:levels( 10, 1 ) ) == 0 )
+    o:maxCount := 3
+    FOR i := 1 TO 5
+        o:addValue( i )
+    NEXT
+    Assert( "HTSparkline:addValue keeps maxCount", hb_ValToExp( o:values() ) == "{3, 4, 5}" )
+    o:paintEvent( HTPaintEvent():new() )
+    Assert( "HTSparkline:paints",                 .T. )
+
+    Assert( "ht_blockGlyph 0 is blank",           ht_blockGlyph( 0 ) == " " )
+    Assert( "ht_blockGlyph 8 is full",            ht_blockGlyph( 8 ) == ht_glyph( 0x2588, "#" ) )
+    Assert( "ht_blockGlyph over 8 is full",       ht_blockGlyph( 12 ) == ht_blockGlyph( 8 ) )
+    Assert( "ht_chartColor theme pair",           "/" $ ht_chartColor() )
+    Assert( "ht_chartColor own color",            ht_chartColor( "R/W" ) == "R/W" )
+
+    c := HTBarChart():new()
+    c:setBars( { { "A", 50 }, { "B", 100 }, { "C", 0, "R/W" } } )
+    Assert( "HTBarChart:barRows",                 c:barRows( 10 ) == 8 )
+    Assert( "HTBarChart:levels",                  hb_ValToExp( c:levels( 2 ) ) == "{8, 16, 0}" )
+    c:showValues := .F.
+    Assert( "HTBarChart:barRows without values",  c:barRows( 10 ) == 9 )
+    c:showValues := .T.
+    c:setValue( 3, 200 )
+    Assert( "HTBarChart:setValue",                hb_ValToExp( c:levels( 1 ) ) == "{2, 4, 8}" )
+    c:maximum := 100
+    Assert( "HTBarChart:fixed maximum clamps",    hb_ValToExp( c:levels( 1 ) ) == "{4, 8, 8}" )
+    c:addBar( "D", 25 )
+    Assert( "HTBarChart:addBar",                  Len( c:bars() ) == 4 )
+
+    Assert( "HTBarChart:valueText fits",          c:valueText( 120 ) == "120" )
+    Assert( "HTBarChart:valueText k",             c:valueText( 12345 ) == "12k" )
+    Assert( "HTBarChart:valueText 1000",          c:valueText( 1000 ) == "1k" )
+    Assert( "HTBarChart:valueText M narrow",      c:valueText( 2500000 ) == "3M" )
+    c:barWidth := 5
+    Assert( "HTBarChart:valueText M wide",        c:valueText( 2500000 ) == "2.5M" )
+    c:valueBlock := {| n | "#" + hb_ntos( n ) }
+    Assert( "HTBarChart:valueBlock",              c:valueText( 7 ) == "#7" )
+
+    c:paintEvent( HTPaintEvent():new() )
+    Assert( "HTBarChart:paints",                  .T. )
 
 RETURN
 

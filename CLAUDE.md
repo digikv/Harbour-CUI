@@ -59,6 +59,7 @@ HTBase
       HTGet (TGet-backed: full PICTURE, numeric/date/logical, undo, validation rejection)
       HTAbstractButton → HTPushButton, HTCheckBox, HTRadioButton
       HTFrame, HTProgressBar, HTStatusBar, HTSeparator
+      HTSparkline, HTBarChart (block-character charts, eighths of a row; idea after Ratatui)
       HTMenuBar, HTMenu, HTContextMenu (right-click popup)
       HTMessageBox (singleton), HTScrollBar, HTSpinner, HTCheckList
       HTTabWidget, HTToolBar
@@ -159,6 +160,20 @@ HTGet wraps Harbour's core `Get` class for full Clipper-compatible input editing
   `hasSelection()`, `editBuffer()`); Del/Backspace delete it, typing replaces it. Only editable
   positions are deleted, right to left (`HTGetBackend:editable()` = TGet's PROTECTED `IsEditable()`),
   so picture literals stay. TGet's cursor cannot pass the last character: `FlSelLast` covers it.
+
+### Charts (HTSparkline, HTBarChart)
+
+- Values scale to eighths of a row (`ht_chartScale()`); `ht_blockGlyph( nEighths )` = ▁..█.
+  A **full cell is drawn as a space in the bar color** (`ht_chartFullColor()`): █ leaves gaps
+  between rows. Consolas (gtwvt) has only ▄ █, not U+2581..U+2587 - GDI shows a box and does not
+  fall back to another font - so `ht_fontHasChar( cFont, nUnicode )` (`ht_winmouse.c`; .T. off
+  Windows) switches to halves. Glyphs are cached per codepage + font.
+- Colors: default = the theme's progress fill color on the window background (`ht_chartColor()`);
+  an own color may be a foreground only ("G" -> "G/<window bg>"). Named colors follow the theme
+  palette (in Classic "R+" is gray): take colors from the theme (e.g. a toast background).
+- `HTBarChart`: bars `{ cLabel, nValue [, cColor ] }`, values row (`valueText()`: 12k, 2.5M,
+  or `valueBlock`) and labels row under the bars; `barWidth`, `barGap`, `maximum`.
+- `HTSparkline`: last width() values, `addValue()` (keeps `maxCount`), `minimum`/`maximum`.
 
 ### Layout System
 
@@ -304,6 +319,7 @@ samples/          Demo applications (human-facing, require a display)
   layout/         HTVBoxLayout demo (spacing, stretch, nesting)
   menu/           HTMenuBar + HTMenu + HTAction with keyboard shortcuts
   progress/       Animated HTProgressBar with scheduleRepeat()
+  charts/         HTSparkline (live, 4 rows; 1 row in its own color) + HTBarChart, F1-F7 themes
   theme/          Theme switching demo (7 built-in themes, F1-F7, theme list + buttons)
   theme_editor/   Theme editor: change category colors (Text/Back spinners or a color string) and
                   the 16-color palette (R G B), save as own themes, themes.json persistence,
@@ -323,7 +339,7 @@ tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_layout     HTBoxLayout, HTGridLayout item management
   test_theme      HTTheme singleton, all built-in themes and palettes, own themes (save/add/
                   replace/remove, built-ins protected), category names, invalid index fallback
-  test_widgets    HTLabel, HTLineEdit, HTCheckBox, HTPushButton, HTListBox,
+  test_widgets    HTLabel, HTLineEdit, HTCheckBox, HTPushButton, HTListBox, HTSparkline, HTBarChart,
                   HTComboBox, HTCheckList, HTSpinner, HTProgressBar, HTScrollBar,
                   HTTextEdit, HTContextMenu, HTMenu:items() (submenu order),
                   HTMenuBar hot keys / Alt / shortcuts, setTitleButtons,

@@ -475,7 +475,52 @@ HB_FUNC( REGISTERHTONEVENTLBDBLCLICK )
    hb_retl( pSym_LBDblClick != NULL );
 }
 
+/* HT_FONTHASCHAR( cFontName, nUnicode ) -> lHas
+ * .T. when the font has a glyph for the character. gtwvt draws with GDI,
+ * which for symbols (e.g. the block elements U+2581..U+2587, missing in
+ * Consolas) does not fall back to another font: a missing glyph is a box.
+ * .T. when it cannot tell (no font name). */
+HB_FUNC( HT_FONTHASCHAR )
+{
+   const char * szFont = hb_parc( 1 );
+   HB_BOOL fHas = HB_TRUE;
+
+   if( szFont && *szFont && HB_ISNUM( 2 ) )
+   {
+      WCHAR wszFont[ LF_FACESIZE ];
+      HDC   hdc = CreateCompatibleDC( NULL );
+
+      MultiByteToWideChar( CP_ACP, 0, szFont, -1, wszFont, LF_FACESIZE );
+      wszFont[ LF_FACESIZE - 1 ] = 0;
+      if( hdc )
+      {
+         HFONT hFont = CreateFontW( 16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                                    OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
+                                    FIXED_PITCH | FF_MODERN, wszFont );
+         if( hFont )
+         {
+            HGDIOBJ hOld = SelectObject( hdc, hFont );
+            WCHAR wc = ( WCHAR ) hb_parni( 2 );
+            WORD  wIndex = 0;
+
+            if( GetGlyphIndicesW( hdc, &wc, 1, &wIndex, GGI_MARK_NONEXISTING_GLYPHS ) == 1 )
+               fHas = wIndex != 0xFFFF;
+            SelectObject( hdc, hOld );
+            DeleteObject( hFont );
+         }
+         DeleteDC( hdc );
+      }
+   }
+   hb_retl( fHas );
+}
+
 #else /* ! HB_OS_WIN */
+
+/* the X fonts (fixed, Unifont Cell) and terminals have the block elements */
+HB_FUNC( HT_FONTHASCHAR )
+{
+   hb_retl( HB_TRUE );
+}
 
 HB_FUNC( HT_WINMOUSEINSTALL )
 {
