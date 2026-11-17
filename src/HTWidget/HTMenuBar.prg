@@ -59,6 +59,8 @@ PUBLIC:
 
     /* highlights menu nMenu (default 1) as F10 does, without opening it */
     METHOD activate( nMenu )
+    /* opens menu nMenu's dropdown, first entry highlighted (F2..F9 menus) */
+    METHOD popup( nMenu )
 
 ENDCLASS
 
@@ -470,6 +472,16 @@ METHOD PROCEDURE activate( nMenu ) CLASS HTMenuBar
     IF Len( ::getMenus() ) > 0
         ::FactiveMenu := Max( 1, Min( hb_defaultValue( nMenu, 1 ), Len( ::getMenus() ) ) )
         ::repaintParent()
+    ENDIF
+RETURN
+
+/** Opens menu nMenu's dropdown with its first entry highlighted; another
+ * open dropdown is closed first.
+ * @param nMenu 1-based menu index
+ */
+METHOD PROCEDURE popup( nMenu ) CLASS HTMenuBar
+    IF HB_ISNUMERIC( nMenu ) .AND. nMenu >= 1 .AND. nMenu <= Len( ::getMenus() )
+        ::openAt( nMenu )
     ENDIF
 RETURN
 

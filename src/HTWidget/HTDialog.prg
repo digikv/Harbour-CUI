@@ -137,14 +137,18 @@ METHOD FUNCTION addButtonBar( ... ) CLASS HTDialog
     /* position: near bottom of content area */
     nBarRow := ::Fheight - 4
 
-    /* right-align buttons */
+    /* right-aligned, created left to right: aButtons and the Tab order
+       follow the labels */
     nBtnX := ::Fwidth - 3
-    FOR i := Len( aLabels ) TO 1 STEP -1
+    FOR i := 1 TO Len( aLabels )
+        nBtnX -= Max( ht_strWidth( aLabels[ i ] ) + 4, 8 ) + 2
+    NEXT
+    FOR i := 1 TO Len( aLabels )
         nBtnWidth := Max( ht_strWidth( aLabels[ i ] ) + 4, 8 )
-        nBtnX -= nBtnWidth + 2
         oBtn := HTPushButton():new( aLabels[ i ], self )
         oBtn:setGeometry( Max( 1, nBtnX ), nBarRow, nBtnWidth, 1 )
         AAdd( aButtons, oBtn )
+        nBtnX += nBtnWidth + 2
     NEXT
 
     /* wire first button to accept, last to reject (if more than one) */

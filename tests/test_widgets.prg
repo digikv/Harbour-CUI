@@ -554,6 +554,11 @@ STATIC PROCEDURE TestMenuHotKeys()
     oBar:handleKey( K_ENTER )
     Assert( "Menu: first entry highlighted on open", cHit == "SKP" )
 
+    oBar:popup( 2 )
+    Assert( "Menu: popup() opens that menu",        oBar:isMenuOpen() .AND. oBar:activeMenu() == 2 )
+    oBar:handleKey( K_ENTER )
+    Assert( "Menu: popup() highlights the first entry", cHit == "SKPS" )
+
     Assert( "Menu: barRow 1 by default",            oBar:barRow() == 1 )
     oBar:setBarRow( 0 )
     Assert( "Menu: setBarRow",                      oBar:barRow() == 0 )

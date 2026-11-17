@@ -15,3 +15,6 @@ lib
 deps/
 samples/theme_editor/themes.json
 samples/game/nebula.hi
+samples/cuibro/cuibro.ini
+samples/cuibro/customer.*
+samples/cuibro/orders.*

@@ -113,14 +113,15 @@ beneath); a `wSelect()` before `exec()` is overridden.
 
 **Geometry**: `move()` and `resize()` take effect at once (they also queue the move/resize event), so a
 widget resized inside a running `HTDialog:exec()` paints with its new size. `HTDialog:move()` before
-`exec()` keeps that position (otherwise the dialog is centered). `setTitleButtons( lHide, lMaximize,
+`exec()` keeps that position (otherwise the dialog is centered). `addButtonBar( "OK", "Cancel" )` lays the
+buttons out right-aligned in the given order (Tab order too); the first accepts, the last rejects. `setTitleButtons( lHide, lMaximize,
 lResize )` hides title bar buttons besides close (a message box: `.F., .F., .F.`).
 
 **HTMenuBar**: `"&File"` / `"Save &as"` mark hot keys (shown without the `&`, the letter in
 `HT_CLR_MENU_HOTKEY(_SEL)`): Alt + a title's hot key (else its first letter) opens it; on the active
 bar a title's letter opens it; in an open dropdown / submenu an entry's letter runs it.
 `action:setShortcut( K_CTRL_B )` runs an action from anywhere (bar inactive or open). `activate()`,
-`isActive()`, `activeMenu()`; `setBarRow( 0 )` draws the bar on its window's title row (a one-row
+`isActive()`, `activeMenu()`, `popup( n )` (opens menu n, first entry highlighted: F-key menus); `setBarRow( 0 )` draws the bar on its window's title row (a one-row
 window as a screen menu bar on row 0; the window routes clicks: `handleClick( 0, nCol )` /
 `handleMouseClick( nAbsRow, nAbsCol )`). Inkey Alt codes follow the keyboard rows
 (K_ALT_Q = 272, K_ALT_A = 286, K_ALT_Z = 300) — `hb_keyCode( "Alt+F" )` is the code of `"A"`.
@@ -379,6 +380,14 @@ samples/          Demo applications (human-facing, require a display)
                   Ctrl+F6 window cycling, Enter-to-next-field, cursor restore
   unicode/        Chinese/Japanese/Korean/Cyrillic text: IME input in HTGet, HTLineEdit,
                   HTTextEdit and the HTBrowse editor, wide (2-cell) characters
+  cuibro/         CUIBro: BroPlus-style xBase browser / file manager (written from scratch,
+                  menus and keys after BroPlus 2.50): F1-F9 menus (HTMenuBar:popup), one
+                  floating window per database (title = alias + order, HTStatusBar
+                  indicators, browse, HTLabel key line), HTStatusBar bottom line;
+                  relations (Alt-R) with master-detail scope - demo CUSTOMER -> ORDERS
+                  made next to the exe (git-ignored). Keys of a database window reach
+                  the main window's menu bar first (WindowKey); tiled windows leave a
+                  row for the shadow
   showcase/       Full controls demo with all features
 tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_basic      HTPoint, HTSize, all HTEvent subclasses
@@ -388,8 +397,8 @@ tests/            Automated test suite (headless, -gtnul, exit code 0/1)
                   replace/remove, built-ins protected), category names, invalid index fallback
   test_widgets    HTLabel, HTLineEdit, HTCheckBox, HTPushButton, HTListBox, HTSparkline, HTBarChart, HTPixelFont (.glyphs, TTF checksum, BDF),
                   HTComboBox, HTCheckList, HTSpinner, HTProgressBar, HTScrollBar,
-                  HTTextEdit, HTContextMenu, HTMenu:items() (submenu order),
-                  HTMenuBar hot keys / Alt / shortcuts, setTitleButtons,
+ HTTextEdit, HTContextMenu, HTMenu:items() (submenu order),
+ HTMenuBar hot keys / Alt / shortcuts / popup(), setTitleButtons,
                   Unicode: UTF8EX default, CJK typing (ht_keyText, editors, HTGet),
                   wide-cell helpers, SaveScreen keeping Unicode, ht_glyph
   test_browse     HTBrowse column management, navigation blocks, callbacks,
