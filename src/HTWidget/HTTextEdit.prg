@@ -313,7 +313,7 @@ RETURN NIL
 METHOD PROCEDURE keyEvent( keyEvent ) CLASS HTTextEdit
 
     LOCAL parent
-    LOCAL cChar, cLine, cPaste, aPasteLines, i, cSel
+    LOCAL cChar, cLine, cPaste, aPasteLines, i
     LOCAL lChanged := .F.
     LOCAL nLineCount := Len( ::FaLines )
     LOCAL nShifts := hb_gtInfo( HB_GTI_KBDSHIFTS )
@@ -348,7 +348,6 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS HTTextEdit
                 ENDIF
                 ::FnCurCol := Min( ::FnCurCol, Len( ::FaLines[ ::FnCurRow ] ) + 1 )
             ENDIF
-            lChanged := .T.
             keyEvent:accept()
             parent := ::parent()
             IF parent != NIL .AND. parent:isDerivedFrom( "HTWidget" )
