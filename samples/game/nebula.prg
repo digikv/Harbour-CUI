@@ -11,7 +11,8 @@
  * Font: samples/game/nebula.glyphs -> tools/pixelfont.py -> nebula8.ttf
  *
  * Keys:  Left/Right or Z/X move, Space or Up fire, P pause, Esc quit
- * Windows (gtwvt); the font cannot be loaded per program under gtxwc yet.
+ * Windows (gtwvt): nebula8.ttf. Linux (gtxwc): the X11 bitmap fonts in x11/,
+ * added to the X server's font path by ht_fontLoad().
  */
 
 #include "inkey.ch"
@@ -66,13 +67,15 @@ STATIC s_nKeyLeft, s_nKeyRight, s_nKeyFire   /* Inkey fallback: frames a key cou
 
 PROCEDURE Main()
 
-    LOCAL cFont := hb_DirBase() + "nebula8.ttf"
+    LOCAL lX11 := hb_gtVersion() == "XWC"
+    /* Windows: a TrueType font; X11 (gtxwc): a folder of bitmap fonts */
+    LOCAL cFont := hb_DirBase() + IIF( lX11, "x11", "nebula8.ttf" )
 
     hb_cdpSelect( "UTF8EX" )
 
     IF ! ht_fontLoad( cFont )
-        ? "Cannot load " + cFont + " (Windows / gtwvt only)."
-        ? "Build it: python tools/pixelfont.py samples/game/nebula.glyphs samples/game/nebula8.ttf Nebula8"
+        ? "Cannot load " + cFont
+        ? "Build it: python tools/pixelfont.py samples/game/nebula.glyphs samples/game/nebula8.ttf Nebula8 samples/game/x11"
         Inkey( 0 )
         RETURN
     ENDIF
@@ -101,15 +104,23 @@ STATIC PROCEDURE SetupScreen()
         nCell := Max( 16, Int( Min( nDeskW * 0.9 / SCR_W, nDeskH * 0.85 / SCR_H ) / 8 ) * 8 )
     ENDIF
 
-    hb_gtInfo( HB_GTI_CODEPAGE, 1 )               /* DEFAULT_CHARSET: take the font as it is */
-    hb_gtInfo( HB_GTI_FONTNAME, "Nebula8" )
-    hb_gtInfo( HB_GTI_FONTWIDTH, nCell )
-    hb_gtInfo( HB_GTI_FONTSIZE, nCell )
-    hb_gtInfo( HB_GTI_FONTQUALITY, HB_GTI_FONTQ_NORMAL )
-    hb_gtInfo( HB_GTI_RESIZEMODE, HB_GTI_RESIZEMODE_FONT )
-    hb_gtInfo( HB_GTI_RESIZABLE, .T. )
-    hb_gtInfo( HB_GTI_ALTENTER, .T. )
-    hb_gtInfo( HB_GTI_WINTITLE, "NEBULA RAID" )
+    hb_gtInfo( HB_GTI_WINTITLE, "NEBULA RAID" )   /* also how ht_keyDown() finds the window on X11 */
+    IF hb_gtVersion() == "XWC"
+        /* X11: bitmap fonts made for 16, 24, 32, 40 and 48 pixel cells; a
+           resized gtxwc window would change the grid, so it stays fixed */
+        nCell := Max( 16, Min( 48, nCell ) )
+        hb_gtInfo( HB_GTI_FONTSEL, "-hbtui-nebula8-medium-r-normal--" + hb_ntos( nCell ) + "-*-*-*-c-*-iso10646-1" )
+        hb_gtInfo( HB_GTI_RESIZABLE, .F. )
+    ELSE
+        hb_gtInfo( HB_GTI_CODEPAGE, 1 )           /* DEFAULT_CHARSET: take the font as it is */
+        hb_gtInfo( HB_GTI_FONTNAME, "Nebula8" )
+        hb_gtInfo( HB_GTI_FONTWIDTH, nCell )
+        hb_gtInfo( HB_GTI_FONTSIZE, nCell )
+        hb_gtInfo( HB_GTI_FONTQUALITY, HB_GTI_FONTQ_NORMAL )
+        hb_gtInfo( HB_GTI_RESIZEMODE, HB_GTI_RESIZEMODE_FONT )
+        hb_gtInfo( HB_GTI_RESIZABLE, .T. )
+        hb_gtInfo( HB_GTI_ALTENTER, .T. )
+    ENDIF
     SetMode( SCR_H, SCR_W )
     SetCursor( SC_NONE )
     SetBlink( .F. )

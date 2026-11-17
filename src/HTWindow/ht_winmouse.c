@@ -554,22 +554,8 @@ HB_FUNC( HT_KEYSTATEAVAILABLE )
 
 #else /* ! HB_OS_WIN */
 
-/* Linux: X fonts are installed with mkfontdir/xset, not per process */
-HB_FUNC( HT_FONTLOAD )
-{
-   hb_retl( HB_FALSE );
-}
-
-/* no key state outside Windows: read Inkey() instead */
-HB_FUNC( HT_KEYDOWN )
-{
-   hb_retl( HB_FALSE );
-}
-
-HB_FUNC( HT_KEYSTATEAVAILABLE )
-{
-   hb_retl( HB_FALSE );
-}
+/* HT_FONTLOAD, HT_KEYDOWN, HT_KEYSTATEAVAILABLE outside Windows: ht_x11.c
+   (a file of its own: only programs that call them link Xlib) */
 
 /* the X fonts (fixed, Unifont Cell) and terminals have the block elements */
 HB_FUNC( HT_FONTHASCHAR )

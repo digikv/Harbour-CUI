@@ -1,3 +1,7 @@
 # scripts run on Linux (also from a Windows checkout via WSL): keep LF
 *.sh text eol=lf
 *.py text eol=lf
+# X11 fonts are read by the X server: keep LF
+*.bdf text eol=lf
+fonts.dir text eol=lf
+*.ttf binary

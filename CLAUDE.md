@@ -170,6 +170,15 @@ HTGet wraps Harbour's core `Get` class for full Clipper-compatible input editing
   several at once (move + fire). `ht_keyStateAvailable()` is .F. where it does not work: read Inkey().
 - A process that is not DPI aware is stretched by Windows at 125%/150%: pixel fonts blur. A
   manifest with `dpiAware true/pm` (samples/game/nebula.rc) keeps them crisp.
+- **Linux / gtxwc** (`src/HTWindow/ht_x11.c`, a file of its own so only programs that call these
+  link Xlib - `{unix}-lX11` in their hbmk.hbm): `ht_fontLoad( cDir )` adds a folder holding
+  `fonts.dir` + BDF fonts to the X server's font path (`XSetFontPath`, like `xset +fp`); select with
+  `HB_GTI_FONTSEL` and an XLFD. `tools/pixelfont.py ... <x11dir>` writes BDFs at 16..48 px (font
+  pixels as whole squares). `ht_keyDown()` = `XQueryKeymap`, same Windows VK codes, only while the
+  window titled `HB_GTI_WINTITLE` has the focus (focus window, a parent or a child; with
+  PointerRoot the window under the pointer). gtxwc stores WM_NAME as UTF8_STRING: read it with
+  `XGetWMName`, `XFetchName` returns nothing. A resized gtxwc window changes the grid: a game sets
+  `HB_GTI_RESIZABLE .F.`. BDF / fonts.dir must keep LF (`.gitattributes`).
 
 ### Charts (HTSparkline, HTBarChart)
 
@@ -333,7 +342,8 @@ samples/          Demo applications (human-facing, require a display)
   progress/       Animated HTProgressBar with scheduleRepeat()
   game/           NEBULA RAID: fixed-screen shooter drawn only with its own 8x8 font (nebula8.ttf
                   from nebula.glyphs via tools/pixelfont.py): ZX Spectrum style 32x24 cells,
-                  16-color palette, ht_fontLoad() + ht_keyDown(); DPI-aware manifest (nebula.rc)
+                  16-color palette, ht_fontLoad() + ht_keyDown(); DPI-aware manifest (nebula.rc);
+                  Linux: X11 bitmap fonts in x11/ (gtxwc)
   charts/         HTSparkline (live, 4 rows; 1 row in its own color) + HTBarChart, F1-F7 themes
   theme/          Theme switching demo (7 built-in themes, F1-F7, theme list + buttons)
   theme_editor/   Theme editor: change category colors (Text/Back spinners or a color string) and
