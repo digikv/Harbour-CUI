@@ -19,6 +19,7 @@ CREATE CLASS HTGetBackend FROM Get
     EXPORTED:
 
     METHOD display()
+    METHOD editable( nPos ) INLINE ::IsEditable( nPos )   /* Get:IsEditable() is PROTECTED */
 
 ENDCLASS
 

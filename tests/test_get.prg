@@ -26,6 +26,7 @@ PROCEDURE Main()
     TestGetReadOnly()
     TestGetEnterMovesFocus()
     TestGetUnchangedKeepsValue()
+    TestGetSelection()
 
     nTotal := nPass + nFail
     QOut( "" )
@@ -250,3 +251,68 @@ STATIC PROCEDURE TestGetUnchangedKeepsValue()
     Assert( "HTGet: unchanged number keeps hidden decimals", nNum == 1.23456 )
 
 RETURN
+
+/*----------------------------------------------------------------*/
+
+/** Shift+arrow selection in an HTGet (google group report: Shift+Right then
+ * Del did not delete the selected block - HTGet had no selection at all).
+ * gtnul reports no Shift key, so the selection is set with setSelection(). */
+STATIC PROCEDURE TestGetSelection()
+
+    LOCAL cText := "abcdef    "
+    LOCAL cTel  := "123456"
+    LOCAL oDlg, oGet, oTel
+
+    oDlg := HTDialog():new( NIL, "Test" )
+    oGet := HTGet():new( oDlg )
+    oGet:setup( {| x | IIF( x == NIL, cText, cText := x ) }, "", "", NIL, NIL, "", NIL, .F., .F., 12 )
+    oTel := HTGet():new( oDlg )
+    oTel:setup( {| x | IIF( x == NIL, cTel, cTel := x ) }, "", "@R 999-999", NIL, NIL, "", NIL, .F., .F., 12 )
+
+    oGet:focusInEvent( HTFocusEvent():new( HT_EVENT_TYPE_FOCUSIN ) )
+    Assert( "HTGet: no selection after focus in", ! oGet:hasSelection() )
+
+    oGet:setSelection( 2, 5 )
+    Assert( "HTGet: selectedText", oGet:selectedText() == "bcd" )
+    oGet:keyEvent( HTKeyEvent():new( K_DEL ) )
+    Assert( "HTGet: Del removes the selection", RTrim( HTGetBuffer( oGet ) ) == "aef" )
+    Assert( "HTGet: selection gone after Del", ! oGet:hasSelection() )
+
+    oGet:keyEvent( HTKeyEvent():new( K_DEL ) )             /* no selection: one character */
+    Assert( "HTGet: Del without selection", RTrim( HTGetBuffer( oGet ) ) == "af" )
+
+    oGet:setSelection( 1, 3 )
+    oGet:keyEvent( HTKeyEvent():new( K_BS ) )
+    Assert( "HTGet: Backspace removes the selection", RTrim( HTGetBuffer( oGet ) ) == "" )
+
+    oGet:keyEvent( HTKeyEvent():new( Asc( "q" ) ) )
+    oGet:keyEvent( HTKeyEvent():new( Asc( "r" ) ) )
+    oGet:keyEvent( HTKeyEvent():new( Asc( "s" ) ) )
+    oGet:setSelection( 2, 3 )
+    oGet:keyEvent( HTKeyEvent():new( Asc( "X" ) ) )
+    Assert( "HTGet: typing replaces the selection", RTrim( HTGetBuffer( oGet ) ) == "qXs" )
+
+    /* up to and including the last character (TGet's cursor cannot pass it) */
+    oGet:setSelection( 2, 11 )
+    Assert( "HTGet: selection covers the last character", Len( oGet:selectedText() ) == 9 )
+    oGet:keyEvent( HTKeyEvent():new( K_DEL ) )
+    Assert( "HTGet: Del to the end", RTrim( HTGetBuffer( oGet ) ) == "q" )
+
+    oGet:focusOutEvent( HTFocusEvent():new( HT_EVENT_TYPE_FOCUSOUT ) )
+    Assert( "HTGet: edited value written back", RTrim( cText ) == "q" )
+
+    /* picture literals stay: "123-456", select "23-45", Del */
+    oTel:focusInEvent( HTFocusEvent():new( HT_EVENT_TYPE_FOCUSIN ) )
+    Assert( "HTGet: @R buffer", HTGetBuffer( oTel ) == "123-456" )
+    oTel:setSelection( 2, 7 )
+    Assert( "HTGet: @R selectedText", oTel:selectedText() == "23-45" )
+    oTel:paintEvent( HTPaintEvent():new() )                /* selection highlight paints without error */
+    Assert( "HTGet: paint keeps the selection", oTel:selectedText() == "23-45" )
+    oTel:keyEvent( HTKeyEvent():new( K_DEL ) )
+    Assert( "HTGet: @R Del keeps the literal", HTGetBuffer( oTel ) == "1  -6  " )
+
+RETURN
+
+/* the edit buffer of a focused HTGet */
+STATIC FUNCTION HTGetBuffer( oGet )
+RETURN oGet:editBuffer()

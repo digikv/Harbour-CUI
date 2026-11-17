@@ -65,6 +65,7 @@
 #include "hbtui.ch"
 #include "inkey.ch"
 #include "setcurs.ch"
+#include "hbgtinfo.ch"
 
 
 CLASS HTGet FROM HTWidget
@@ -75,6 +76,11 @@ PROTECTED:
     DATA FlGetActive     INIT .F.                       /* whether TGet currently has focus */
     DATA FdispOffset     INIT 1
     DATA FreadOnly       INIT .F.                       /* explicit: avoids READONLY keyword clash */
+    DATA FselAnchor      INIT 0                         /* Shift+arrow selection: buffer position it started at, 0 = none */
+    DATA FlSelLast       INIT .F.                       /* selection also covers the character under the cursor (the last one: TGet's cursor cannot go past it) */
+
+    METHOD selectionRange()                             /* { nFrom, nTo } buffer positions, nTo exclusive, or NIL */
+    METHOD deleteSelection()
 
 PUBLIC:
 
@@ -97,6 +103,12 @@ PUBLIC:
     METHOD setReadOnly( lReadOnly )
     METHOD setLabelWidth( nWidth )
     METHOD getDisplayValue()
+
+    METHOD editBuffer() INLINE IIF( ::FlGetActive .AND. ::FoGet != NIL, ::FoGet:buffer, ::getDisplayValue() )
+    METHOD hasSelection() INLINE ::selectionRange() != NIL
+    METHOD selectedText()
+    METHOD setSelection( nFrom, nTo )                   /* select buffer positions nFrom .. nTo - 1 (cursor to nTo) */
+    METHOD clearSelection() INLINE ::FselAnchor := 0, ::FlSelLast := .F.
 
     METHOD readOnly()   INLINE ::FreadOnly
     METHOD _readOnly( b ) INLINE ::FreadOnly := b
@@ -206,6 +218,7 @@ METHOD PROCEDURE paintEvent( event ) CLASS HTGet
     LOCAL cDisplay, cColor, cTransformed
     LOCAL nVisibleWidth
     LOCAL nCursorCol, nCursorPos
+    LOCAL aRange, nSelFrom, nSelCol
     LOCAL nMaxCol := MaxCol()
 
     HB_SYMBOL_UNUSED( event )
@@ -256,6 +269,20 @@ METHOD PROCEDURE paintEvent( event ) CLASS HTGet
 
     DispOutAt( 0, ::FlabelWidth, cDisplay, cColor )
 
+    /* Shift+arrow selection: repaint its visible part in the selection color */
+    aRange := IIF( nCursorPos > 0, ::selectionRange(), NIL )
+    IF aRange != NIL
+        nSelFrom := Max( aRange[ 1 ], ::FdispOffset )
+        IF aRange[ 2 ] > nSelFrom
+            nSelCol := ht_cellCol( cTransformed, ::FdispOffset, nSelFrom )
+            IF nSelCol < nVisibleWidth
+                DispOutAt( 0, ::FlabelWidth + nSelCol, ;
+                    ht_cellLeft( SubStr( cTransformed, nSelFrom, aRange[ 2 ] - nSelFrom ), nVisibleWidth - nSelCol ), ;
+                    HTTheme():getColor( HT_CLR_LINEEDIT_SELECTED ) )
+            ENDIF
+        ENDIF
+    ENDIF
+
     /* position cursor if focused */
     IF ::hasFocus() .AND. ! ::FreadOnly .AND. nCursorPos > 0
         nCursorCol := ::FlabelWidth + ht_cellCol( cTransformed, ::FdispOffset, nCursorPos )
@@ -273,37 +300,73 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS HTGet
     LOCAL parent
     LOCAL lOldChanged
     LOCAL cChar
+    LOCAL nKey, nOldPos
+    LOCAL lShift, lNav
 
     IF ::FreadOnly .OR. ::FoGet == NIL .OR. ! ::FlGetActive
         RETURN
     ENDIF
 
     lOldChanged := ::FoGet:changed
+    nKey := keyEvent:key
 
-    SWITCH keyEvent:key
+    /* Shift + Left/Right/Home/End/Ctrl+Left/Right selects; the same keys
+       without Shift drop the selection. Del, Backspace and typing act on it. */
+    lNav := AScan( { K_LEFT, K_RIGHT, K_HOME, K_END, K_CTRL_LEFT, K_CTRL_RIGHT }, nKey ) > 0
+    IF lNav
+        lShift := hb_bitAnd( hb_gtInfo( HB_GTI_KBDSHIFTS ), HB_GTI_KBD_SHIFT ) != 0
+        IF lShift
+            IF ::FselAnchor = 0
+                ::FselAnchor := ::FoGet:pos
+            ENDIF
+        ELSE
+            ::clearSelection()
+        ENDIF
+        nOldPos := ::FoGet:pos
+    ENDIF
+
+    SWITCH nKey
     CASE K_LEFT
+        ::FlSelLast := .F.
         ::FoGet:left()
         EXIT
     CASE K_RIGHT
         ::FoGet:right()
+        /* the cursor stays on the last character: with Shift, select it too */
+        ::FlSelLast := ::FselAnchor > 0 .AND. ::FoGet:pos = nOldPos
         EXIT
     CASE K_HOME
+        ::FlSelLast := .F.
         ::FoGet:home()
         EXIT
     CASE K_END
         ::FoGet:end()
+        ::FlSelLast := ::FselAnchor > 0 .AND. ::FoGet:pos = nOldPos .AND. ;
+                       ! Empty( SubStr( ::FoGet:buffer, ::FoGet:pos, 1 ) )
         EXIT
     CASE K_CTRL_LEFT
+        ::FlSelLast := .F.
         ::FoGet:wordLeft()
         EXIT
     CASE K_CTRL_RIGHT
+        ::FlSelLast := .F.
         ::FoGet:wordRight()
         EXIT
     CASE K_BS
-        ::FoGet:backSpace()
+        IF ::hasSelection()
+            ::deleteSelection()
+        ELSE
+            ::clearSelection()
+            ::FoGet:backSpace()
+        ENDIF
         EXIT
     CASE K_DEL
-        ::FoGet:delete()
+        IF ::hasSelection()
+            ::deleteSelection()
+        ELSE
+            ::clearSelection()
+            ::FoGet:delete()
+        ENDIF
         EXIT
     CASE K_CTRL_T
         ::FoGet:delWordRight()
@@ -321,7 +384,11 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS HTGet
     OTHERWISE
         cChar := ht_keyText( keyEvent:key )
         IF ! cChar == ""
-            IF Set( _SET_INSERT )
+            IF ::hasSelection()
+                /* typing replaces the selected text */
+                ::deleteSelection()
+                ::FoGet:insert( cChar )
+            ELSEIF Set( _SET_INSERT )
                 ::FoGet:insert( cChar )
             ELSE
                 ::FoGet:overStrike( cChar )
@@ -330,6 +397,11 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS HTGet
             RETURN
         ENDIF
     ENDSWITCH
+
+    /* any other editing key (Ctrl+Y, Ctrl+T, Ctrl+U, ...) ends the selection */
+    IF ! lNav .AND. ::FselAnchor > 0
+        ::clearSelection()
+    ENDIF
 
     keyEvent:accept()
 
@@ -349,6 +421,89 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS HTGet
 
 RETURN
 
+/** Selected buffer positions while editing.
+ * @return { nFrom, nTo } with nTo exclusive, or NIL when nothing is selected
+ */
+METHOD FUNCTION selectionRange() CLASS HTGet
+
+    LOCAL nPos, nFrom, nTo
+
+    IF ::FselAnchor <= 0 .OR. ::FoGet == NIL .OR. ! ::FlGetActive .OR. ! HB_ISNUMERIC( ::FoGet:pos )
+        RETURN NIL
+    ENDIF
+
+    nPos  := ::FoGet:pos
+    nFrom := Min( ::FselAnchor, nPos )
+    nTo   := Max( ::FselAnchor, nPos )
+    IF ::FlSelLast .AND. nPos >= ::FselAnchor
+        nTo++
+    ENDIF
+    nTo := Min( nTo, Len( ::FoGet:buffer ) + 1 )
+
+    IF nTo <= nFrom
+        RETURN NIL
+    ENDIF
+
+RETURN { nFrom, nTo }
+
+/** @return The selected part of the edit buffer, "" when nothing is selected */
+METHOD FUNCTION selectedText() CLASS HTGet
+
+    LOCAL aRange := ::selectionRange()
+
+    IF aRange == NIL
+        RETURN ""
+    ENDIF
+
+RETURN SubStr( ::FoGet:buffer, aRange[ 1 ], aRange[ 2 ] - aRange[ 1 ] )
+
+/** Selects buffer positions nFrom .. nTo - 1 of the field being edited, as
+ * Shift+arrows would; the cursor goes to nTo (to the last character when nTo
+ * is past it). Ignored while the field is not being edited.
+ */
+METHOD PROCEDURE setSelection( nFrom, nTo ) CLASS HTGet
+
+    LOCAL nLen
+
+    IF ::FoGet == NIL .OR. ! ::FlGetActive
+        RETURN
+    ENDIF
+
+    nLen  := Len( ::FoGet:buffer )
+    nFrom := Max( 1, Min( nFrom, nLen ) )
+    nTo   := Max( 1, Min( nTo, nLen + 1 ) )
+    ::FselAnchor := nFrom
+    ::FlSelLast  := nTo > nLen
+    ::FoGet:pos  := Min( nTo, nLen )
+
+RETURN
+
+/** Deletes the selected characters; the cursor goes to the start of the
+ * selection. Only editable positions are deleted, right to left: TGet's
+ * delete() shifts the rest of that part of the field left, so picture
+ * literals (the "-" of "@R 999-999") stay where they are.
+ */
+METHOD PROCEDURE deleteSelection() CLASS HTGet
+
+    LOCAL aRange := ::selectionRange()
+    LOCAL nPos
+
+    IF aRange == NIL
+        ::clearSelection()
+        RETURN
+    ENDIF
+
+    FOR nPos := aRange[ 2 ] - 1 TO aRange[ 1 ] STEP -1
+        IF ::FoGet:editable( nPos )
+            ::FoGet:pos := nPos
+            ::FoGet:delete()
+        ENDIF
+    NEXT
+    ::FoGet:pos := aRange[ 1 ]
+    ::clearSelection()
+
+RETURN
+
 /** Handles mouse click on the input area to reposition cursor.
  * @param eventMouse HTMouseEvent
  */
@@ -361,6 +516,7 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTGet
 
         /* only react to clicks on the input area */
         IF nClickCol >= ::FlabelWidth .AND. ::FoGet != NIL .AND. ::FlGetActive
+            ::clearSelection()
             nNewPos := ::FdispOffset - 1 + ht_cellPos( SubStr( ::FoGet:buffer, ::FdispOffset ), nClickCol - ::FlabelWidth )
             /* a click past the typed text lands right after it, not in the blanks */
             nNewPos := Min( nNewPos, Len( RTrim( ::FoGet:buffer ) ) + 1 )
@@ -399,6 +555,7 @@ METHOD PROCEDURE focusInEvent( eventFocus ) CLASS HTGet
         ::FlGetActive := .T.
         ::FdispOffset := 1
     ENDIF
+    ::clearSelection()
 
     ::super:focusInEvent( eventFocus )
 
@@ -412,6 +569,8 @@ METHOD PROCEDURE focusOutEvent( eventFocus ) CLASS HTGet
 
     LOCAL xValue
     LOCAL parent
+
+    ::clearSelection()
 
     IF ::FlGetActive .AND. ::FoGet != NIL
 

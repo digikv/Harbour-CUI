@@ -155,6 +155,10 @@ HTGet wraps Harbour's core `Get` class for full Clipper-compatible input editing
 - VALID block returning `.F.` rejects focus change (keeps editing)
 - WHEN block returning `.F.` prevents focus entry
 - Existing `Transform()` used for display; `oGet:buffer` for edit state
+- Shift + Left/Right/Home/End/Ctrl+Left/Right selects (`setSelection( nFrom, nTo )`, `selectedText()`,
+  `hasSelection()`, `editBuffer()`); Del/Backspace delete it, typing replaces it. Only editable
+  positions are deleted, right to left (`HTGetBackend:editable()` = TGet's PROTECTED `IsEditable()`),
+  so picture literals stay. TGet's cursor cannot pass the last character: `FlSelLast` covers it.
 
 ### Layout System
 
@@ -328,7 +332,7 @@ tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_browse     HTBrowse column management, navigation blocks, callbacks,
                   inline cell editing (F2/typing, Enter/Esc, typed numeric save),
                   setBrowse (external TBrowse), own colors, repaint without re-reading rows
-  test_get        HTGet setup/getValue/setValue, label/picture/width, readOnly,
+  test_get        HTGet setup/getValue/setValue, label/picture/width, readOnly, Shift+arrow selection,
                   Enter moves to the next field (VALID rejection keeps focus)
   test_integration Focus cycle (flat + nested layouts), layout geometry,
                   childAt recursion, repaintChild delegation
