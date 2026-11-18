@@ -2,6 +2,10 @@
 
 Character User Interface (CUI) library for the [Harbour](https://harbour.github.io/) compiler.
 
+**CBro 1.0**, an xBase database browser built on Harbour-CUI (a successor to BroPlus), is ready to run on
+Windows and Linux: [download the release](https://github.com/digikv/Harbour-CUI/releases/tag/cbro-1.0)
+([samples/cbro](samples/cbro/README.md)).
+
 ## Origin
 
 **Osnova ovog projekta preuzeta je od [tfonrouge/HBTui](https://github.com/tfonrouge/HBTui).**
@@ -128,7 +132,7 @@ cd samples/hello && hbmk2 hello.prg hbmk.hbm && ./hello
 | `fonteditor` | Pixel font editor for `.glyphs` files: draw with the mouse, preview, build TTF + X11 fonts (F9) |
 | `game` | NEBULA RAID: a shooter drawn entirely with its own 8×8 font, held keys for moving and firing |
 | `showcase` | Full controls demo |
-| `cbro` | CBro: xBase database browser and file manager, a successor to BroPlus - DBF, LetoDB/LetoDBf, SQL, Excel, scripts (own build: `samples/cbro/README.md`; dual license GPL-3+ / commercial) |
+| `cbro` | CBro: xBase database browser and file manager, a successor to BroPlus - DBF, LetoDB/LetoDBf, SQL, Excel, scripts (own build: `samples/cbro/README.md`; programs: [release cbro-1.0](https://github.com/digikv/Harbour-CUI/releases/tag/cbro-1.0); dual license GPL-3+ / commercial) |
 
 ```bash
 cd samples/<name> && hbmk2 <name>.prg hbmk.hbm && ./<name>
