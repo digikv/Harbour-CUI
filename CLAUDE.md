@@ -418,12 +418,12 @@ samples/          Demo applications (human-facing, require a display)
                   colors picked against the theme's palette; more languages from cedit.lang in the
                   format of HbEdit's hbedit.ini [LANG_xxx], ce_SyntaxLoad), Shift-F8 codepage, cedit.ini (settings,
                   recent files with the cursor). "Turbo Pascal" editor colors = an own theme with the
-                  VGA palette (ce_TurboTheme). UI tests that send keys steal the user's keyboard:
-                  run them only when the user is away.
-                  Not on GitHub yet: it lives only on the local branch `cedit` (on top of main) -
-                  never push it. Library / other changes go to main (commit them on main, push,
-                  then `git rebase main` on cedit). One folder (D:\projekti\Harbour-CUI, no extra
-                  worktree): `git switch main` -> commit -> push, `git switch cedit` -> `git rebase main`
+                  VGA palette (ce_TurboTheme). cetabs.prg = CETabBar (a tab per open file, x closes).
+                  Ctrl-F / Ctrl-H (codes of End / Backspace) reach CEdit through HTCodeEdit:bCtrlKey.
+                  build.bat / build.sh build the library first when it is missing. Linux tests: WSL
+                  Ubuntu-24.04 with Xvfb + xdotool (hidden display: no keys reach the user); UI tests
+                  on Windows that send keys steal the user's keyboard: only when the user is away.
+                  On main since 1.0 (released as cedit-1.0: cedit-1.0-win32.zip, -linux-x86_64.tar.gz).
 tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_basic      HTPoint, HTSize, all HTEvent subclasses
   test_eventloop  HTEventLoop schedule, scheduleRepeat, cancelTask, runPendingTasks
