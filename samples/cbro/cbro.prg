@@ -80,6 +80,8 @@ STATIC s_aAreas := {}
 STATIC s_nArea  := 0
 STATIC s_oMain, s_oBar, s_oMsg
 STATIC s_aMsgTxt := { "", "", "" }
+STATIC s_nMsgBase := 0              /* 1: section 1 shows the input language */
+STATIC s_cInputLang := ""
 STATIC s_hAct := { => }
 STATIC s_hFKeys := { => }
 
@@ -318,6 +320,14 @@ PROCEDURE Main( ... )
 
     s_oMsg := HTStatusBar():new( s_oMain )
     s_oMsg:setGeometry( 0, s_oMain:height - 2, s_oMain:width, 1 )
+    /* the input language / IME mode: the taskbar showing it is hidden under
+       the fullscreen window (Windows) */
+    s_cInputLang := ht_inputLanguage()
+    IF ! Empty( s_cInputLang )
+        s_nMsgBase := 1
+        s_oMsg:addSection( " " + s_cInputLang + " " )
+        HTEventLoop():scheduleRepeat( {|| ShowInputLang() }, 300 )
+    ENDIF
     AEval( s_aMsgTxt, {|| s_oMsg:addSection( "" ) } )
 
     BuildMenu()
@@ -1616,9 +1626,21 @@ STATIC PROCEDURE ShowStatLine()
     FOR i := 1 TO Len( aText )
         IF ! aText[ i ] == s_aMsgTxt[ i ]
             s_aMsgTxt[ i ] := aText[ i ]
-            s_oMsg:setSection( i, aText[ i ] )
+            s_oMsg:setSection( s_nMsgBase + i, aText[ i ] )
         ENDIF
     NEXT
+
+RETURN
+
+/* section 1 of the bottom line follows the input language (Win+Space) */
+STATIC PROCEDURE ShowInputLang()
+
+    LOCAL cLang := ht_inputLanguage()
+
+    IF ! cLang == s_cInputLang
+        s_cInputLang := cLang
+        s_oMsg:setSection( 1, " " + cLang + " " )
+    ENDIF
 
 RETURN
 
@@ -5138,7 +5160,7 @@ RETURN HTMessageBox():question( "CBro", cText ) == HT_DIALOG_ACCEPTED
 /* a message in the bottom line while something takes time */
 STATIC PROCEDURE Busy( cText )
     s_aMsgTxt[ 1 ] := " " + cText + " "
-    s_oMsg:setSection( 1, s_aMsgTxt[ 1 ] )
+    s_oMsg:setSection( s_nMsgBase + 1, s_aMsgTxt[ 1 ] )
     s_oMain:repaintChild( s_oMsg )
 RETURN
 

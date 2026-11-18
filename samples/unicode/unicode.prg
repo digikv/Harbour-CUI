@@ -26,6 +26,7 @@
 STATIC s_oStatus
 STATIC s_cName
 STATIC s_cCity
+STATIC s_cLang
 
 PROCEDURE Main()
 
@@ -63,7 +64,11 @@ PROCEDURE Main()
 
     s_oStatus := HTStatusBar():new( main )
     s_oStatus:setGeometry( 0, Max( 0, main:height - 2 ), main:width, 1 )
-    s_oStatus:addSection( "Win+Space = input method   Tab = next field   F2 = edit cell   Ctrl+F6 = next window   ESC = quit" )
+    /* the input language / IME mode, as the taskbar shows it */
+    s_cLang := ht_inputLanguage()
+    s_oStatus:addSection( " " + s_cLang + " " )
+    s_oStatus:addSection( " Win+Space = input method   Tab = next field   F2 = edit cell   Ctrl+F6 = next window   ESC = quit" )
+    HTEventLoop():scheduleRepeat( {|| ShowInputLang() }, 300 )
     main:repaint()
 
     /* --- Window 1: form ------------------------------------------------- */
@@ -176,7 +181,19 @@ RETURN nActual
 STATIC PROCEDURE ShowStatus( cText )
 
     IF s_oStatus != NIL
-        s_oStatus:setSection( 1, cText )
+        s_oStatus:setSection( 2, " " + cText )
+    ENDIF
+
+RETURN
+
+/** Section 1 of the status bar follows the input language (Win+Space). */
+STATIC PROCEDURE ShowInputLang()
+
+    LOCAL cLang := ht_inputLanguage()
+
+    IF ! cLang == s_cLang
+        s_cLang := cLang
+        s_oStatus:setSection( 1, " " + cLang + " " )
     ENDIF
 
 RETURN

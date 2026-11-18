@@ -30,6 +30,7 @@
 #include "hbapigt.h"
 #include "hbapicdp.h"
 #include "hbapiitm.h"
+#include "hbapistr.h"
 #include "hbvm.h"
 #include "hbgtinfo.ch"
 
@@ -208,21 +209,20 @@ typedef HIMC ( WINAPI * HT_IMMGETCONTEXT )( HWND );
 typedef BOOL ( WINAPI * HT_IMMRELEASECONTEXT )( HWND, HIMC );
 typedef BOOL ( WINAPI * HT_IMMSETCOMPOSITIONWINDOW )( HIMC, LPCOMPOSITIONFORM );
 typedef BOOL ( WINAPI * HT_IMMSETCANDIDATEWINDOW )( HIMC, LPCANDIDATEFORM );
+typedef BOOL ( WINAPI * HT_IMMGETOPENSTATUS )( HIMC );
+typedef BOOL ( WINAPI * HT_IMMGETCONVERSIONSTATUS )( HIMC, LPDWORD, LPDWORD );
 
-/* Places the IME composition window at the caret (gtwvt keeps the system
-   caret on the GT cursor) and the candidate list below the cursor row. */
-static void ht_ime_place( HWND hWnd )
+static HT_IMMGETCONTEXT           s_pGetContext     = NULL;
+static HT_IMMRELEASECONTEXT       s_pReleaseContext = NULL;
+static HT_IMMSETCOMPOSITIONWINDOW s_pSetComposition = NULL;
+static HT_IMMSETCANDIDATEWINDOW   s_pSetCandidate   = NULL;
+static HT_IMMGETOPENSTATUS        s_pGetOpenStatus  = NULL;
+static HT_IMMGETCONVERSIONSTATUS  s_pGetConversion  = NULL;
+
+/* imm32 functions, loaded once at run time; .F. without imm32 */
+static HB_BOOL ht_imm_load( void )
 {
    static HB_BOOL s_fLoaded = HB_FALSE;
-   static HT_IMMGETCONTEXT           s_pGetContext     = NULL;
-   static HT_IMMRELEASECONTEXT       s_pReleaseContext = NULL;
-   static HT_IMMSETCOMPOSITIONWINDOW s_pSetComposition = NULL;
-   static HT_IMMSETCANDIDATEWINDOW   s_pSetCandidate   = NULL;
-
-   POINT pt;
-   RECT  rc;
-   HIMC  hIMC;
-   int   nRows, nCellH;
 
    if( ! s_fLoaded )
    {
@@ -235,9 +235,23 @@ static void ht_ime_place( HWND hWnd )
          s_pReleaseContext = ( HT_IMMRELEASECONTEXT ) ( void * ) GetProcAddress( hImm, "ImmReleaseContext" );
          s_pSetComposition = ( HT_IMMSETCOMPOSITIONWINDOW ) ( void * ) GetProcAddress( hImm, "ImmSetCompositionWindow" );
          s_pSetCandidate   = ( HT_IMMSETCANDIDATEWINDOW ) ( void * ) GetProcAddress( hImm, "ImmSetCandidateWindow" );
+         s_pGetOpenStatus  = ( HT_IMMGETOPENSTATUS ) ( void * ) GetProcAddress( hImm, "ImmGetOpenStatus" );
+         s_pGetConversion  = ( HT_IMMGETCONVERSIONSTATUS ) ( void * ) GetProcAddress( hImm, "ImmGetConversionStatus" );
       }
    }
-   if( ! s_pGetContext || ! s_pReleaseContext || ! s_pSetComposition || ! s_pSetCandidate )
+   return s_pGetContext && s_pReleaseContext;
+}
+
+/* Places the IME composition window at the caret (gtwvt keeps the system
+   caret on the GT cursor) and the candidate list below the cursor row. */
+static void ht_ime_place( HWND hWnd )
+{
+   POINT pt;
+   RECT  rc;
+   HIMC  hIMC;
+   int   nRows, nCellH;
+
+   if( ! ht_imm_load() || ! s_pSetComposition || ! s_pSetCandidate )
       return;
 
    /* no caret: the cursor is hidden (SC_NONE), leave the IME's own place */
@@ -864,7 +878,61 @@ HB_FUNC( HT_KEYSTATEAVAILABLE )
    hb_retl( HB_TRUE );
 }
 
+/* HT_INPUTLANGUAGE() -> cLanguage
+ * The input language of the program ("EN", "GU", "ZH", ...) and, while an
+ * IME is on, its mode: "ZH 中" / "ZH A" (Chinese / Latin letters), "JA あ" /
+ * "JA カ" / "JA A", "KO 가" / "KO A". The taskbar shows this, but not over a
+ * fullscreen window: a program shows it in its status bar. "" off Windows. */
+HB_FUNC( HT_INPUTLANGUAGE )
+{
+   LANGID lang = LOWORD( ( DWORD_PTR ) GetKeyboardLayout( 0 ) );
+   WCHAR wsz[ 24 ];
+   int n = GetLocaleInfoW( MAKELCID( lang, SORT_DEFAULT ), LOCALE_SISO639LANGNAME, wsz, 16 );
+   HWND hWnd = s_hWnd ? s_hWnd : ht_get_gt_hwnd();
+   WORD wPrimary = PRIMARYLANGID( lang );
+
+   if( n <= 1 )
+   {
+      hb_retc_null();
+      return;
+   }
+   --n;   /* without the terminating zero */
+   CharUpperBuffW( wsz, ( DWORD ) n );
+
+   if( ( wPrimary == LANG_CHINESE || wPrimary == LANG_JAPANESE || wPrimary == LANG_KOREAN ) &&
+       hWnd && ht_imm_load() && s_pGetOpenStatus && s_pGetConversion )
+   {
+      HIMC hIMC = s_pGetContext( hWnd );
+
+      if( hIMC )
+      {
+         DWORD dwConv = 0, dwSent = 0;
+         WCHAR wcMode = 'A';
+
+         if( s_pGetOpenStatus( hIMC ) && s_pGetConversion( hIMC, &dwConv, &dwSent ) &&
+             ( dwConv & IME_CMODE_NATIVE ) != 0 )
+         {
+            if( wPrimary == LANG_JAPANESE )
+               wcMode = ( dwConv & IME_CMODE_KATAKANA ) != 0 ? 0x30AB : 0x3042;   /* カ あ */
+            else if( wPrimary == LANG_KOREAN )
+               wcMode = 0xAC00;   /* 가 */
+            else
+               wcMode = 0x4E2D;   /* 中 */
+         }
+         wsz[ n++ ] = ' ';
+         wsz[ n++ ] = wcMode;
+         s_pReleaseContext( hWnd, hIMC );
+      }
+   }
+   hb_retstrlen_u16( HB_CDP_ENDIAN_NATIVE, wsz, n );
+}
+
 #else /* ! HB_OS_WIN */
+
+HB_FUNC( HT_INPUTLANGUAGE )
+{
+   hb_retc_null();
+}
 
 /* HT_FONTLOAD, HT_KEYDOWN, HT_KEYSTATEAVAILABLE outside Windows: ht_x11.c
    (a file of its own: only programs that call them link Xlib) */

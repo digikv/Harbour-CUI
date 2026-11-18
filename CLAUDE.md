@@ -282,6 +282,9 @@ HTGet wraps Harbour's core `Get` class for full Clipper-compatible input editing
   on the GT cursor) and the candidate list below the cursor row (imm32 loaded at run time).
   `ht_fullScreen( .F. )` before `ht_cuiSetupDisplay()`/`exec()`: a maximized window instead
   of fullscreen, the taskbar (IME mode indicator) stays visible (the unicode sample uses it).
+  `ht_inputLanguage()` (`ht_winmouse.c`): the thread's keyboard layout as an ISO 639 code
+  ("HR", "GU") + for Chinese/Japanese/Korean the IME mode ("ZH 中" / "ZH A", "JA あ" / "JA カ",
+  "KO 가"); "" off Windows. The unicode sample and CBro poll it (300 ms) into status bar section 1.
 - **Symbols**: `ht_glyph( nUnicode, cFallback )` — Unicode symbol when the codepage has it, else
   ASCII. Title bar buttons `─ □/▫ ×` (3 cells each from width 24), resize grip `┘`, `√`, `─│`.
   Never write CP437 bytes (`e"\xC4"`, `Chr(251)`) through `DispOutAt` — under UTF8EX they are
