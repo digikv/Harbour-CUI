@@ -845,7 +845,9 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTWidget
             EXIT
         ENDIF
 
-        IF ::FposDown:y = 0 .AND. ! ::FwinSysBtnClose .AND. ! ::FwinSysBtnHide .AND. ! ::FwinSysBtnMaximize
+        /* the title row drags the window, unless the menu bar is drawn on it */
+        IF ::FposDown:y = 0 .AND. ! ::FwinSysBtnClose .AND. ! ::FwinSysBtnHide .AND. ! ::FwinSysBtnMaximize .AND. ;
+           ( ht_objectFromId( ::FmenuBar ) == NIL .OR. ht_objectFromId( ::FmenuBar ):barRow() != 0 )
             /* blocking Digi drag with screen-stack compose */
             IF ::FwindowId != NIL
                 aPos := ht_winDrag( ::FwindowId, eventMouse:mouseAbsRow, eventMouse:mouseAbsCol )

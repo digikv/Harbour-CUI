@@ -129,7 +129,8 @@ bar a title's letter opens it; in an open dropdown / submenu an entry's letter r
 `action:setShortcut( K_CTRL_B )` runs an action from anywhere (bar inactive or open). `activate()`,
 `isActive()`, `activeMenu()`, `popup( n )` (opens menu n, first entry highlighted: F-key menus); `setBarRow( 0 )` draws the bar on its window's title row (a one-row
 window as a screen menu bar on row 0; the window routes clicks: `handleClick( 0, nCol )` /
-`handleMouseClick( nAbsRow, nAbsCol )`). Inkey Alt codes follow the keyboard rows
+`handleMouseClick( nAbsRow, nAbsCol )`; a click on that title row opens a menu instead of
+dragging the window). Inkey Alt codes follow the keyboard rows
 (K_ALT_Q = 272, K_ALT_A = 286, K_ALT_Z = 300) — `hb_keyCode( "Alt+F" )` is the code of `"A"`.
 
 **HTBrowse**: wraps a TBrowse (`browse()`), or shows an existing one: `setBrowse( oTBrowse )` (its
