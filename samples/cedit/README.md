@@ -17,7 +17,7 @@ command. F1 shows the keys in the editor.
 | F2 / Shift-F2 | save / save as |
 | F4 / Ctrl-F4 | open (recent files) / open file |
 | Shift-F4 | new file |
-| F12, Ctrl-Tab, Shift-Tab | list of open files, next, previous |
+| F12, Ctrl-Tab, Shift-Tab | list of open files, next, previous (also the tabs under the menu) |
 | F10, Esc | close the file (the last one ends CEdit); Esc first cancels a selection |
 | Alt-X | exit |
 | F3 / Ctrl-F3 | block / vertical block: the cursor keys select, F3 again ends it |
@@ -44,6 +44,13 @@ command. F1 shows the keys in the editor.
 The menu View also has Theme, Editor colors (theme colors, Turbo Pascal - yellow on blue with the
 VGA palette, white on blue, ...) and Options (tab size, Tab with spaces, highlighting, the codepage
 of files that are not UTF-8).
+
+## Tabs
+
+Every open file has a tab under the menu, as in Notepad++: a click on a tab shows that file,
+a click on `×` (on the active tab) closes it, `*` after a name means the file is changed.
+When the tabs do not fit, `<` and `>` at the ends show the others; the active tab is always
+visible. View - Tabs hides / shows them (kept in `cedit.ini`).
 
 ## Files
 
@@ -76,19 +83,140 @@ in CEdit reads the languages again. A language for the extensions of a built-in 
 the last 20 files with the line and column of the cursor — a recent file opens where it was left.
 `cedit.lang` (languages, see above) is in the same folder.
 
-## Build
+## Building CEdit, step by step
+
+CEdit is built from its source code with Harbour (a compiler for the Clipper language) and the
+Harbour-CUI library. It takes three things, each done once: a C compiler, Harbour, and this
+folder. If you already have Harbour (`hbmk2` works), go to step 3.
+
+Everything below is typed in a command window: on Windows **cmd** (Start, type `cmd`, Enter),
+on Linux a **terminal**.
+
+### Windows
+
+**Step 1 - the C compiler (MinGW, through MSYS2).** Harbour turns `.prg` into C, and a C
+compiler makes the `.exe` from it.
+
+1. Download the installer from https://www.msys2.org and install it into `C:\msys64` (the
+   default folder - keep it).
+2. At the end the installer opens an "MSYS2" window. Type there:
+
+   ```
+   pacman -S --needed mingw-w64-i686-gcc git
+   ```
+
+   and answer `Y`. This installs the 32-bit MinGW compiler into `C:\msys64\mingw32\bin`
+   and git. Leave the window open for step 2.
+
+**Step 2 - Harbour.** Harbour is built from its sources once (about 10 - 20 minutes).
+First the sources, in the **MSYS2** window:
 
 ```
-build.bat                 Windows, with the newest Harbour in D:\tools\harbour-core
-hbmk2 cedit.hbp           any platform (Linux: X11, -lX11, for the Ctrl-Z / Ctrl-Left test)
+git clone https://github.com/harbour/core /d/tools/harbour-core
 ```
 
-Usage: `cedit [file ...]`
+(or without git: on https://github.com/harbour/core the green "Code" button - "Download ZIP",
+unpack it so that `D:\tools\harbour-core\win-make.exe` exists). Then the build, in **cmd**:
+
+```
+set PATH=C:\msys64\mingw32\bin;%PATH%
+cd /d D:\tools\harbour-core
+win-make
+```
+
+Only `mingw32\bin` goes into the PATH, not `C:\msys64\usr\bin`: the tools there disturb the
+Harbour build.
+
+At the end `D:\tools\harbour-core\bin\win\mingw\hbmk2.exe` must exist. Check:
+
+```
+D:\tools\harbour-core\bin\win\mingw\hbmk2.exe --version
+```
+
+Another folder than `D:\tools\harbour-core` works too: then set `HBMK2` before step 3, e.g.
+`set HBMK2=C:\harbour\bin\win\mingw\hbmk2.exe`.
+
+**Step 3 - CEdit.** In **cmd**, in the `samples\cedit` folder of Harbour-CUI:
+
+```
+cd /d D:\projekti\Harbour-CUI\samples\cedit
+build
+```
+
+`build.bat` finds MinGW in `C:\msys64\mingw32\bin` by itself, builds the Harbour-CUI library
+the first time (`..\..\lib\win\mingw\libhbtui.a`) and then CEdit. At the end it says
+`Done: cedit.exe`. Run it:
+
+```
+cedit
+cedit D:\work\program.prg
+```
+
+`build all` builds the library again too (after an update of Harbour-CUI or of Harbour).
+`cedit.exe` needs no other files: it can be copied anywhere (e.g. into a folder in the PATH).
+
+### Linux (Ubuntu, Debian, Mint ...)
+
+CEdit runs in its own window (X11), not inside the terminal: it needs a desktop
+(also WSLg on Windows 11, or `ssh -X`).
+
+**Step 1 - the C compiler and the libraries:**
+
+```
+sudo apt update
+sudo apt install build-essential git libx11-dev xfonts-base
+```
+
+`libx11-dev` must be there **before** Harbour is built: without it Harbour has no window
+driver (gtxwc) and CEdit cannot start.
+
+**Step 2 - Harbour** (about 10 minutes):
+
+```
+sudo git clone https://github.com/harbour/core /opt/harbour-core
+cd /opt/harbour-core
+sudo make
+export PATH=/opt/harbour-core/bin/linux/gcc:$PATH
+hbmk2 --version
+```
+
+Put the `export PATH=...` line at the end of `~/.bashrc`, so that `hbmk2` is found in every new
+terminal.
+
+**Step 3 - CEdit:**
+
+```
+cd ~/Harbour-CUI/samples/cedit
+chmod +x build.sh
+./build.sh
+./cedit file.txt
+```
+
+`build.sh` builds the Harbour-CUI library the first time and then CEdit; `./build.sh all` builds
+the library again too. Copy `cedit` to `~/.local/bin` (or `/usr/local/bin`) to run it from
+anywhere.
+
+### When something goes wrong
+
+| Message | What to do |
+|---|---|
+| `Harbour was not found` | Harbour is not built, or is in another folder: step 2, or `set HBMK2=...` (Linux: `HBMK2=... ./build.sh`) |
+| `The C compiler gcc.exe was not found` | MSYS2 / MinGW is missing: step 1 (Windows) |
+| `git: command not found` | step 1 (`pacman -S git` in the MSYS2 window), or "Download ZIP" |
+| `The X11 development files are missing` | `sudo apt install libx11-dev`, then build Harbour again (`sudo make` in `/opt/harbour-core`) |
+| `cannot find -lhbtui` | the library is not built: `build all` |
+| CEdit opens no window (Linux) | no desktop: CEdit needs X11 (a desktop session, WSLg, `ssh -X`); `echo $DISPLAY` must not be empty |
+| CEdit starts, but the letters are boxes (Linux) | `sudo apt install xfonts-base` |
+| `Error ... Message not found` when CEdit starts | the library is older than CEdit: `build all` |
+
+Usage: `cedit [file ...]` - several files open in tabs.
 
 ## Notes
 
 - Ctrl-Z and Ctrl-Left (also Ctrl-B and Ctrl-Right) give the same Inkey code; CEdit tells them apart
   by the state of the Z / B key (`ht_keyDown()`).
+- Ctrl-F and Ctrl-H have the codes of End and Backspace: the editor widget gives them to CEdit
+  (`bCtrlKey`) only while Ctrl is held, so they are not menu shortcuts.
 - `htcodeedit.prg` (the editor widget `HTCodeEdit`), `cebuffer.prg` (`CEBuffer`: text, cursor,
   selection, undo / redo, search of one file) and `cesyntax.prg` (languages, colorizer) do not
-  depend on the rest of CEdit.
+  depend on the rest of CEdit; `cetabs.prg` is the row of tabs (`CETabBar`).

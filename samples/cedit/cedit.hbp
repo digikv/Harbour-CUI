@@ -12,5 +12,6 @@ cedit.prg
 htcodeedit.prg
 cebuffer.prg
 cesyntax.prg
+cetabs.prg
 
 {unix}-lX11

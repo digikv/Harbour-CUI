@@ -33,6 +33,7 @@ REQUEST HB_CODEPAGE_SR646
 
 STATIC s_oApp, s_oMain, s_oBar, s_oEdit, s_oStat
 STATIC s_aBufs := {}
+STATIC s_oTabs                        /* CETabBar: a tab for every open file */
 STATIC s_nBuf := 0
 STATIC s_aRecent := {}               /* { { cFile, nRow, nCol }, ... } the newest first */
 STATIC s_hSet                        /* settings (cedit.ini [OPTIONS]) */
@@ -74,6 +75,11 @@ PROCEDURE Main( ... )
     s_oEdit:lInsert := s_hSet[ "insert" ]
     s_oEdit:lTabSpaces := s_hSet[ "tabspaces" ]
     ce_SetEditorColors( s_hSet[ "colors" ] )
+    s_oTabs := CETabBar():new( s_oMain )
+    s_oTabs:bTabs := {|| ce_TabList() }
+    s_oTabs:bActive := {|| s_nBuf }
+    s_oTabs:bSelect := {| n | ce_SwitchTo( n ), s_oEdit:setFocus(), ce_Status() }
+    s_oTabs:bClose := {| n | ce_SwitchTo( n ), ce_CmdClose(), ce_After(), ce_Status() }
     s_oStat := HTStatusBar():new( s_oMain )
     s_oStat:addSection( "" )
     ce_Arrange()
@@ -155,8 +161,31 @@ RETURN
 
 /* text from under the menu bar down to the status line on the last row */
 STATIC PROCEDURE ce_Arrange()
-    s_oEdit:setGeometry( 0, 0, s_oMain:width, Max( 1, s_oMain:height - 2 ) )
+
+    LOCAL nTop := IIF( s_hSet[ "tabs" ], 1, 0 )
+
+    s_oTabs:setGeometry( 0, 0, IIF( nTop == 1, s_oMain:width, 0 ), nTop )
+    s_oEdit:setGeometry( 0, nTop, s_oMain:width, Max( 1, s_oMain:height - 2 - nTop ) )
     s_oStat:setGeometry( 0, s_oMain:height - 2, s_oMain:width, 1 )
+
+RETURN
+
+/* the tabs: { { cTitle, lModified }, ... } */
+STATIC FUNCTION ce_TabList()
+
+    LOCAL aTabs := {}, oB
+
+    FOR EACH oB IN s_aBufs
+        AAdd( aTabs, { oB:title(), oB:isModified() .AND. ! oB:lReadOnly } )
+    NEXT
+
+RETURN aTabs
+
+/* View - Tabs */
+STATIC PROCEDURE ce_CmdTabs()
+    s_hSet[ "tabs" ] := ! s_hSet[ "tabs" ]
+    ce_Arrange()
+    HTApplication():repaintAll()
 RETURN
 
 /*----------------------------------------------------------- menu */
@@ -211,6 +240,7 @@ STATIC PROCEDURE ce_BuildMenu()
     ce_Item( oMenu, "&Back", "Alt-B", K_ALT_B, {|| ce_CmdBack() } )
 
     oMenu := s_oBar:addMenu( "&View" )
+    ce_Item( oMenu, "Ta&bs (open files)", "", NIL, {|| ce_CmdTabs() } )
     ce_Item( oMenu, "&Syntax highlighting", "F8", K_F8, {|| ce_CmdHilite() } )
     ce_Item( oMenu, "&Language...", "", NIL, {|| ce_CmdSyntax() } )
     ce_Item( oMenu, "Language &definitions", "", NIL, {|| ce_CmdLangFile() } )
@@ -277,6 +307,9 @@ STATIC PROCEDURE ce_Status()
     IF oB == NIL
         RETURN
     ENDIF
+    IF s_oTabs != NIL                    /* "*" of a changed file */
+        s_oTabs:refresh()
+    ENDIF
     DO CASE
     CASE oB:lReadOnly
         cMode := "View"
@@ -333,6 +366,7 @@ STATIC PROCEDURE ce_SwitchTo( n )
         s_oEdit:setBuffer( s_aBufs[ n ] )
         hb_gtInfo( HB_GTI_WINTITLE, "CEdit - " + s_aBufs[ n ]:title() )
         s_oEdit:refresh()
+        s_oTabs:refresh()
     ENDIF
 RETURN
 
@@ -1146,7 +1180,7 @@ STATIC PROCEDURE ce_LoadSettings()
     LOCAL hIni, h, cKey, a
 
     s_hSet := { "theme" => "Classic", "colors" => "", "tab" => 4, "tabspaces" => .T., ;
-                "codepage" => "SL852", "hilite" => .T., "insert" => .T. }
+                "codepage" => "SL852", "hilite" => .T., "insert" => .T., "tabs" => .T. }
     s_cIni := ce_IniPath()
     IF ! hb_FileExists( s_cIni )
         RETURN
@@ -1164,6 +1198,7 @@ STATIC PROCEDURE ce_LoadSettings()
     s_hSet[ "codepage" ]  := hb_HGetDef( h, "codepage", "SL852" )
     s_hSet[ "hilite" ]    := !( hb_HGetDef( h, "hilite", "1" ) == "0" )
     s_hSet[ "insert" ]    := !( hb_HGetDef( h, "insert", "1" ) == "0" )
+    s_hSet[ "tabs" ]      := !( hb_HGetDef( h, "tabs", "1" ) == "0" )
     IF AScan( ce_CPList(), {| x | x[ 1 ] == s_hSet[ "codepage" ] } ) < 2
         s_hSet[ "codepage" ] := "SL852"
     ENDIF
@@ -1194,6 +1229,7 @@ STATIC PROCEDURE ce_SaveSettings()
     h[ "codepage" ]  := s_hSet[ "codepage" ]
     h[ "hilite" ]    := IIF( s_hSet[ "hilite" ], "1", "0" )
     h[ "insert" ]    := IIF( s_hSet[ "insert" ], "1", "0" )
+    h[ "tabs" ]      := IIF( s_hSet[ "tabs" ], "1", "0" )
     hIni[ "OPTIONS" ] := h
     h := { => }
     FOR EACH a IN s_aRecent
@@ -1210,53 +1246,110 @@ RETURN
 STATIC FUNCTION ce_HelpText()
 RETURN ce_Join( { ;
     "CEdit " + CE_VERSION + " - text editor in character mode (Harbour-CUI)", ;
+    "Esc or F10 closes this help. F7 / Ctrl-F searches in it.", ;
     "", ;
-    "F9 opens the menu (also Alt + the underlined letter, or the mouse); the menu", ;
-    "shows the keys of its commands. Esc closes this help.", ;
+    "GETTING STARTED", ;
+    "  cedit file.prg        opens a file (several files: cedit a.prg b.ch)", ;
+    [  cedit                 an empty "Untitled"; F2 asks for the name], ;
+    "  F9           the menu: cursor keys and Enter, or Alt + the red letter", ;
+    "               (Alt-F = File ...), or the mouse. Every command shows its", ;
+    "               key on the right: the menu is the reference.", ;
+    "  Esc                   closes a menu or a dialog, cancels a selection,", ;
+    "                        then closes the file (the last one ends CEdit)", ;
+    "  A changed file has * after its name in the status line; before it is", ;
+    "  closed CEdit asks: Save / Don't save / Cancel.", ;
     "", ;
-    "Files", ;
-    "  F2           save                  Shift-F2   save as", ;
-    "  F4           open (recent files)   Ctrl-F4    open file", ;
-    "  Shift-F4     new file              F12        list of open files", ;
-    "  Ctrl-Tab     next file             Shift-Tab  previous file", ;
-    "  F10, Esc     close the file (the last one ends CEdit)", ;
-    "  Alt-X        exit", ;
+    "FILES", ;
+    "  F2           save                    Shift-F2       save as", ;
+    "  F4           open: recent files      Ctrl-F4        open: choose a file", ;
+    "  Shift-F4     new file                F12            list of open files", ;
+    "  Ctrl-Tab     next open file          Shift-Tab      previous open file", ;
+    "  F10, Esc     close the file          Alt-X          exit (asks for changes)", ;
+    "  A recent file opens at the line and column where it was closed.", ;
     "", ;
-    "Editing", ;
-    "  Ins          insert / overwrite    Enter      new line, keeps the indent", ;
-    "  Tab          spaces to the next tab stop; with lines selected: indent", ;
-    "  Ctrl-Y       delete line           Ctrl-Z, Alt-BS  undo   Ctrl-R  redo", ;
+    "TABS", ;
+    "  Every open file has a tab under the menu (View - Tabs: on / off).", ;
+    "  Click on a tab: that file; click on x (on the active tab): close it", ;
+    "  (F10 / Esc close the file too). Ctrl-Tab / Shift-Tab: next / previous.", ;
+    "  * after a name: the file is changed. < > at the ends: more tabs.", ;
     "", ;
-    "Selection and clipboard", ;
-    "  Shift + cursor keys, the mouse (drag; double click: a word), Ctrl-A all", ;
-    "  F3           block: the cursor keys select, F3 again ends it", ;
-    "  Ctrl-F3      vertical block", ;
-    "  Esc          cancel the selection", ;
-    "  Ctrl-C, Ctrl-Ins   copy        Ctrl-X, Shift-Del   cut", ;
-    "  Ctrl-V, Shift-Ins  paste (a vertical block goes in as a block)", ;
+    "MOVING", ;
+    "  Cursor keys, PgUp / PgDn, the mouse wheel", ;
+    "  Home         first text of the line; again: the line start", ;
+    "  End          end of the line", ;
+    "  Ctrl-Left / Ctrl-Right    word left / right", ;
+    "  Ctrl-Home / Ctrl-End      start / end of the text", ;
+    "  Ctrl-PgUp / Ctrl-PgDn     top / bottom of the screen", ;
+    "  Ctrl-Up / Ctrl-Down       scroll one line, the cursor stays", ;
+    [  Alt-F8       go to a line: "120", or line and column: "120,15"], ;
+    "  Ctrl-B       the matching bracket of ( [ { at the cursor", ;
+    "  Alt-B        back to where the cursor was before a jump (go to, search)", ;
     "", ;
-    "Search", ;
-    "  F7, Ctrl-F   find                  Ctrl-F7, Ctrl-H   replace", ;
-    "  Shift-F7     next                  Alt-F7     previous", ;
-    "  Alt-8        the word at the cursor, Alt-3 backwards", ;
-    "  Alt-F8       go to line[,column]   Ctrl-B     matching bracket", ;
-    "  Alt-B        back to where the cursor was before a jump", ;
+    "EDITING", ;
+    "  Ins          insert / overwrite (status line: Ins / Ovr)", ;
+    "  Enter        new line, it keeps the indent of the line above", ;
+    "  Tab          spaces up to the next tab stop (View - Options: tab size,", ;
+    "               or a real Tab character); with several lines selected:", ;
+    "               indents them", ;
+    "  Backspace, Del    delete a character, or the selection", ;
+    "  Ctrl-Y       delete the line", ;
+    "  Ctrl-Z, Alt-Backspace     undo", ;
+    "  Ctrl-R       redo", ;
+    "  Edit - Upper case / Lower case: the selected text", ;
     "", ;
-    "View", ;
-    "  F8           syntax highlighting on / off (View - Language: choose)", ;
+    "SELECTION AND CLIPBOARD", ;
+    "  Shift + cursor keys       select", ;
+    "  Mouse        drag to select; double click: a word; Shift + click: extend", ;
+    "  F3           block: then the cursor keys select, F3 again ends it", ;
+    "  Ctrl-F3      vertical block (columns), the same way", ;
+    "  Ctrl-A       select all                Esc        cancel the selection", ;
+    "  Ctrl-C, Ctrl-Ins          copy", ;
+    "  Ctrl-X, Shift-Del         cut", ;
+    "  Ctrl-V, Shift-Ins         paste (a vertical block goes in as a block)", ;
+    "  The clipboard is the one of the system: copy in CEdit, paste anywhere.", ;
+    "", ;
+    "SEARCH AND REPLACE", ;
+    [  F7, Ctrl-F   find: the text, "Case sensitive", "Whole words".], ;
+    "               The match is selected.", ;
+    "  Shift-F7     next match              Alt-F7     previous match", ;
+    "  Alt-8        the word at the cursor, next; Alt-3: previous", ;
+    [  Ctrl-F7, Ctrl-H   replace. With "Ask before each one" CEdit asks for], ;
+    "               every match: Yes (replace it) / No (skip it) / All (the", ;
+    "               rest without asking) / Cancel; without it all are replaced.", ;
+    "               Ctrl-Z undoes the replacements.", ;
+    [  At the end of the text the search goes on from the start ("Searched on], ;
+    [  from the start" is shown).], ;
+    "", ;
+    "VIEW", ;
+    "  F8           syntax highlighting on / off", ;
+    "  View - Language        the language of the file (by the extension:", ;
+    "                         .prg .c .sql .py .sh .bat .ini .html ...)", ;
+    "  View - Language definitions   more languages, file cedit.lang", ;
     "  Shift-F8     codepage: an unchanged file is read again in it,", ;
-    "               a changed one is saved in it", ;
-    "  View - Theme, Editor colors, Options (tab size, spaces, codepage)", ;
+    "               a changed one is saved in it (e.g. CP852 -> UTF-8)", ;
+    "  View - Theme           the colors of menus and dialogs", ;
+    "  View - Editor colors   the colors of the text: the theme's, Turbo", ;
+    "                         Pascal (yellow on blue), white on blue, ...", ;
+    "  View - Options         tab size, Tab as spaces, highlighting, the", ;
+    "                         codepage of files that are not UTF-8", ;
     "", ;
-    "Cursor", ;
-    "  Home         first text of the line, again: line start", ;
-    "  Ctrl-Left/Right   word        Ctrl-Home / Ctrl-End  start / end of the text", ;
-    "  Ctrl-PgUp/PgDn    top / bottom of the screen", ;
-    "  Ctrl-Up/Down      scroll a line", ;
+    "FILES AND CODEPAGES", ;
+    "  Text is edited in UTF-8 (all languages, also Chinese, Hindi ...).", ;
+    "  A file that is not valid UTF-8 is read and saved in CP852 (DOS / Clipper", ;
+    "  DBF Latin 2); View - Options chooses another one (CP1250, CP1251, ...).", ;
+    [  The status line shows it: "UTF-8", "CP852"; "LF" = Linux line ends.], ;
+    "  Line ends (CRLF Windows / LF Linux), the last line end and a UTF-8 BOM", ;
+    "  stay as they were.", ;
     "", ;
-    "Files that are not UTF-8 are read and written in CP852 (Options: another", ;
-    "codepage). Line ends (CRLF / LF) and a UTF-8 BOM are kept. Recent files", ;
-    "reopen at the line where they were closed." }, Chr( 10 ) )
+    "SETTINGS", ;
+    "  Options, theme, colors and the recent files are saved when CEdit ends:", ;
+    "    " + s_cIni, ;
+    "  Languages: " + ce_LangPath(), ;
+    "", ;
+    "FOR USERS OF HBEDIT", ;
+    "  The F-keys are those of HbEdit (Alexander S. Kresin): F2, F3, F4, F7,", ;
+    "  F8, F9, F10, F12, Alt-F7, Alt-F8, Ctrl-Y ... CEdit is written anew on", ;
+    "  Harbour-CUI; the [LANG_xxx] sections of hbedit.ini work in cedit.lang." }, Chr( 10 ) )
 
 /*----------------------------------------------------------- dialogs */
 
