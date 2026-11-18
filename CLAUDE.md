@@ -19,7 +19,8 @@ cd samples/window && hbmk2 window_01.prg hbmk.hbm   # source is window_01.prg
 cd tests && for t in test_basic test_eventloop test_layout test_theme test_widgets test_browse test_get test_integration; do hbmk2 $t.prg hbmk.hbm && ./$t; done
 ```
 
-Requires: Harbour compiler at `~/git/core`.
+Requires: Harbour compiler at `~/git/core` (Windows: always the newest one,
+`D:	oolsharbour-coreinwinmingwhbmk2.exe`, 32-bit MinGW).
 
 GT driver: `gtxwc` on Linux (X11 window), `gtwvt` on Windows. Tests use `gttrm` / `-gtnul`.
 
@@ -63,7 +64,9 @@ HTBase
       HTFrame, HTProgressBar, HTStatusBar, HTSeparator
       HTSparkline, HTBarChart (block-character charts, eighths of a row; idea after Ratatui)
       HTMenuBar, HTMenu, HTContextMenu (right-click popup)
-      HTMessageBox (singleton), HTScrollBar, HTSpinner, HTCheckList
+      HTMessageBox (singleton: information/warning/error/question, choose( cTitle, cMsg,
+                    aButtons, nKind ) like Alert(); wrapped multi-line text, kind badge),
+      HTScrollBar, HTSpinner, HTCheckList
       HTTabWidget, HTToolBar
       HTTheme (singleton: named themes with palettes; Classic/Blue/Light/Dark/Amber from
                Digi knjigovodstvo, HighContrast, Mono; own themes)

@@ -112,6 +112,13 @@
 #define HT_DIALOG_ACCEPTED      1
 #define HT_DIALOG_REJECTED      0
 
+/* HTMessageBox kinds (the badge left of the text) */
+#define HT_MSG_INFO             1
+#define HT_MSG_WARNING          2
+#define HT_MSG_QUESTION         3
+#define HT_MSG_ERROR            4
+#define HT_MSG_NONE             5
+
 #define HT_ALIGN_LEFT           0
 #define HT_ALIGN_CENTER         1
 #define HT_ALIGN_HCENTER        1

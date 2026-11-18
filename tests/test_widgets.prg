@@ -40,6 +40,7 @@ PROCEDURE Main()
     TestMenuItems()
     TestTitleButtons()
     TestCharts()
+    TestMessageWrap()
     TestPixelFont()
     TestBig5Screen()
     TestUnicodeInput()   /* last: HTApplication():new() switches the codepage */
@@ -621,6 +622,22 @@ RETURN
 
 /* HTSparkline / HTBarChart: scaling to eighths of a row, kept values,
    compact value texts, painting */
+STATIC PROCEDURE TestMessageWrap()
+
+    LOCAL a
+
+    QOut( "--- HTMessageBox text wrap ---" )
+    a := ht_msgWrap( "short", 20 )
+    Assert( "wrap: one short line", Len( a ) == 1 .AND. a[ 1 ] == "short" )
+    a := ht_msgWrap( "line one" + Chr( 13 ) + Chr( 10 ) + "line two" + Chr( 10 ) + "three", 20 )
+    Assert( "wrap: CRLF and LF breaks", Len( a ) == 3 .AND. a[ 2 ] == "line two" )
+    a := ht_msgWrap( "aaa bbb ccc ddd", 7 )
+    Assert( "wrap: words", Len( a ) == 2 .AND. a[ 1 ] == "aaa bbb" .AND. a[ 2 ] == "ccc ddd" )
+    a := ht_msgWrap( "abcdefghij", 4 )
+    Assert( "wrap: long word split", Len( a ) == 3 .AND. a[ 1 ] == "abcd" .AND. a[ 3 ] == "ij" )
+
+RETURN
+
 STATIC PROCEDURE TestCharts()
 
     LOCAL o, c, i
