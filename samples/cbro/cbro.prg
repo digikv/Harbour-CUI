@@ -1165,8 +1165,10 @@ STATIC FUNCTION FieldColumn( cAlias, aField )
         oCol:picture := cPict
     CASE IsEditable( cType )
         oCol := TBColumnNew( aField[ 1 ], bRaw )
-        IF cType == "C" .AND. aField[ 3 ] > 50
-            oCol:width := 50
+        /* the field length, not the first value: TBrowse counts its characters,
+           so a first value in Chinese / UTF-8 made the column too narrow */
+        IF cType == "C"
+            oCol:width := Min( 50, Max( Len( aField[ 1 ] ), aField[ 3 ] ) )
         ENDIF
     CASE cType $ "WGP"
         oCol := TBColumnNew( aField[ 1 ], {|| "<Binary>" } )
