@@ -52,6 +52,7 @@ PROCEDURE Main( ... )
 
     hb_cdpSelect( "UTF8EX" )
     ce_LoadSettings()
+    ce_SyntaxLoad( ce_LangPath() )
 
     s_oApp := HTApplication():new()
     /* full screen; the grid is set up before the first window takes its size.
@@ -210,6 +211,7 @@ STATIC PROCEDURE ce_BuildMenu()
     oMenu := s_oBar:addMenu( "&View" )
     ce_Item( oMenu, "&Syntax highlighting", "F8", K_F8, {|| ce_CmdHilite() } )
     ce_Item( oMenu, "&Language...", "", NIL, {|| ce_CmdSyntax() } )
+    ce_Item( oMenu, "Language &definitions", "", NIL, {|| ce_CmdLangFile() } )
     ce_Item( oMenu, "&Codepage...", "Shift-F8", K_SH_F8, {|| ce_CmdCodepage() } )
     oMenu:addSeparator()
     ce_Item( oMenu, "&Theme...", "", NIL, {|| ce_CmdTheme() } )
@@ -437,6 +439,9 @@ STATIC FUNCTION ce_SaveBuffer( oB, lAs )
     ENDIF
     oB:lReadOnly := .F.
     oB:cName := ""
+    IF ce_SameFile( cFile, ce_LangPath() )         /* cedit.lang: the languages again */
+        ce_LangReload()
+    ENDIF
     ce_AddRecent( oB )
     hb_gtInfo( HB_GTI_WINTITLE, "CEdit - " + oB:title() )
     HTToast():show( "Saved: " + oB:title(), 1500, HT_CLR_TOAST_SUCCESS )
@@ -838,6 +843,79 @@ STATIC PROCEDURE ce_CmdHilite()
     ENDIF
 
 RETURN
+
+/* cedit.lang: languages in HbEdit's format (hbedit.ini [LANG_xxx]), next to cedit.ini */
+STATIC FUNCTION ce_LangPath()
+RETURN hb_FNameDir( ce_IniPath() ) + "cedit.lang"
+
+/* View - Language definitions: opens cedit.lang (a new one with an example);
+   saving it reads the languages again */
+STATIC PROCEDURE ce_CmdLangFile()
+
+    LOCAL cFile := ce_LangPath()
+
+    IF ! hb_FileExists( cFile )
+        hb_DirBuild( hb_FNameDir( cFile ) )
+        hb_MemoWrit( cFile, ce_LangSample() )
+    ENDIF
+    ce_OpenFile( cFile )
+
+RETURN
+
+STATIC PROCEDURE ce_LangReload()
+
+    LOCAL oB, n := ce_SyntaxLoad( ce_LangPath() )
+
+    FOR EACH oB IN s_aBufs
+        IF ! Empty( oB:cFile ) .AND. ! oB:lReadOnly
+            oB:cSyntax := ce_SyntaxFor( oB:cFile )
+            oB:nStateValid := 1
+        ENDIF
+    NEXT
+    HTToast():show( "Languages from cedit.lang: " + hb_ntos( n ), 2000, HT_CLR_TOAST_SUCCESS )
+
+RETURN
+
+STATIC FUNCTION ce_LangSample()
+
+    LOCAL cEol := hb_eol()
+
+RETURN ;
+    "; CEdit languages - the format of HbEdit's hbedit.ini (Alexander S. Kresin):" + cEol + ;
+    "; its [LANG_xxx] sections can be copied here, or this file can be hbedit.ini." + cEol + ;
+    ";" + cEol + ;
+    ";   ext=         extensions (.prg.ch)" + cEol + ;
+    ";   keywords1=   .. keywords9=  words in the keyword color" + cEol + ;
+    ";   scomm=       comment to the end of the line (//); a word (rem) = a comment line" + cEol + ;
+    ";   mcomm=       block comment (/* */); < > = HTML / XML tags; [ ] = INI sections" + cEol + ;
+    ";   startline=   preprocessor / label mark at the line start (#)" + cEol + ;
+    ";   case=        on | off (keywords in any case)" + cEol + ;
+    ";   quotes=      string quotes (default: double and single quote)" + cEol + ;
+    ";   CEdit only:  title=  first= (comment lines: *)  dotwords= (.AND. .T.)" + cEol + ;
+    ";                escape= on | off   base= harbour | c | sql | python | shell | bat | ini | html | none" + cEol + ;
+    ";" + cEol + ;
+    "; A language for the extensions of a built-in one (.prg, .c, ...) adds to it." + cEol + ;
+    "; Saving this file in CEdit reads it again." + cEol + ;
+    cEol + ;
+    "[LANG_LISP]" + cEol + ;
+    "ext=.lisp.lsp.scm" + cEol + ;
+    "keywords1=and append atom car cdr cond cons defun eq equal if lambda let list load not null or quote set setq" + cEol + ;
+    "scomm=;" + cEol + ;
+    "case=off" + cEol + ;
+    "quotes=" + Chr( 34 ) + cEol + ;
+    cEol + ;
+    "[LANG_PAS]" + cEol + ;
+    "title=Pascal, Delphi" + cEol + ;
+    "ext=.pas.pp.dpr.inc" + cEol + ;
+    "keywords1=and array begin case const div do downto else end file for function goto if implementation" + ;
+    " in interface label mod nil not of or packed procedure program record repeat set then to type unit" + ;
+    " until uses var while with class object private public property constructor destructor" + cEol + ;
+    "keywords2=boolean byte char integer longint real string word true false" + cEol + ;
+    "scomm=//" + cEol + ;
+    "mcomm={ }" + cEol + ;
+    "case=off" + cEol + ;
+    "quotes='" + cEol + ;
+    "escape=off" + cEol
 
 STATIC PROCEDURE ce_CmdSyntax()
 

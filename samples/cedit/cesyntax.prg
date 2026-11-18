@@ -19,11 +19,27 @@
 #define S_PP     6
 
 STATIC s_hDefs := NIL
+STATIC s_aUser := {}       /* languages of cedit.lang: { cName, cTitle, aExt, hDef } */
 
 FUNCTION ce_SyntaxNames()
-RETURN { "harbour", "c", "sql", "python", "shell", "bat", "ini", "html" }
+
+    LOCAL aNames := { "harbour", "c", "sql", "python", "shell", "bat", "ini", "html" }, a
+
+    FOR EACH a IN s_aUser
+        IF AScan( aNames, {| c | c == a[ 1 ] } ) == 0
+            AAdd( aNames, a[ 1 ] )
+        ENDIF
+    NEXT
+
+RETURN aNames
 
 FUNCTION ce_SyntaxTitle( cName )
+
+    LOCAL n := AScan( s_aUser, {| a | a[ 1 ] == cName } )
+
+    IF n > 0
+        RETURN s_aUser[ n ][ 2 ]
+    ENDIF
     SWITCH cName
     CASE "harbour" ; RETURN "Harbour / Clipper / xBase"
     CASE "c"       ; RETURN "C, C++, C#, Java, JavaScript, PHP, Go"
@@ -39,7 +55,20 @@ RETURN "Plain text"
 /* language of a file by its extension, "" = plain text */
 FUNCTION ce_SyntaxFor( cFile )
 
-    LOCAL cExt := Lower( hb_FNameExt( cFile ) ), aMap, a
+    LOCAL cExt := Lower( hb_FNameExt( cFile ) ), a
+
+    FOR EACH a IN s_aUser                         /* cedit.lang first */
+        IF AScan( a[ 3 ], {| x | x == cExt } ) > 0
+            RETURN a[ 1 ]
+        ENDIF
+    NEXT
+
+RETURN ce_SyntaxBuiltin( cExt )
+
+/* the built-in language of an extension (".prg") */
+STATIC FUNCTION ce_SyntaxBuiltin( cExt )
+
+    LOCAL aMap, a
 
     aMap := { ;
         { "harbour", { ".prg", ".ch", ".hb", ".ppo", ".prw", ".prx", ".fmg", ".api" } }, ;
@@ -62,6 +91,16 @@ RETURN ""
 
 /* the definition of a language (made once), NIL for an unknown name */
 FUNCTION ce_SyntaxDef( cName )
+
+    LOCAL n := AScan( s_aUser, {| a | a[ 1 ] == cName } )
+
+    IF n > 0
+        RETURN s_aUser[ n ][ 4 ]
+    ENDIF
+
+RETURN ce_BuiltinDef( cName )
+
+STATIC FUNCTION ce_BuiltinDef( cName )
 
     IF s_hDefs == NIL
         s_hDefs := { => }
@@ -421,3 +460,200 @@ STATIC FUNCTION ce_FindTok( aCh, i, cTok )
     ENDDO
 
 RETURN 0
+
+/*
+ * cedit.lang: languages in the format of HbEdit's hbedit.ini (Alexander S. Kresin),
+ * so its [LANG_xxx] sections can be copied (or the whole hbedit.ini used):
+ *
+ *   [LANG_PRG]                 the name: "prg"
+ *   ext=.prg.ch                extensions
+ *   keywords1=if else endif    keywords1 .. keywords9 (all in the keyword color)
+ *   scomm=//                   comment to the end of the line ("rem": a comment line)
+ *   mcomm=<open> <close>       block comment; "< >" = HTML / XML tags, "[ ]" = INI sections
+ *   startline=#                preprocessor / label mark at the line start
+ *   case=off                   keywords in any case (default: on)
+ *   quotes="                   string quotes (default: " and ')
+ *
+ * A color before a comma ("mcomm=W+/B,[ ]") is skipped; scomm= with a color is
+ * not a comment (HbEdit only colors with it); plugin= and brackets= are skipped.
+ * CEdit's own keys: title= (in View - Language), first= (comments at the line
+ * start, e.g. "*"), dotwords= (.AND. .T. ...), escape=on|off (backslash in
+ * strings, default = case), base=harbour|c|sql|python|shell|bat|ini|html|none.
+ * A language for the extensions of a built-in one starts from it (or from base=):
+ * its keywords, comments and quotes are added to the built-in ones.
+ * Returns the number of languages read.
+ */
+FUNCTION ce_SyntaxLoad( cFile )
+
+    LOCAL hIni, cSect, h, cName, aExt, cBase, hBase, hDef, c, a, lCase, n
+
+    s_aUser := {}
+    IF ! hb_FileExists( cFile )
+        RETURN 0
+    ENDIF
+    hIni := hb_iniRead( cFile, .F., "=", .F. )
+    IF ! HB_ISHASH( hIni )
+        RETURN 0
+    ENDIF
+    FOR EACH cSect IN hb_HKeys( hIni )
+        IF !( Upper( Left( cSect, 5 ) ) == "LANG_" ) .OR. Len( cSect ) < 6 .OR. ! HB_ISHASH( hIni[ cSect ] )
+            LOOP
+        ENDIF
+        h := hIni[ cSect ]
+        hb_HCaseMatch( h, .F. )
+        cName := Lower( SubStr( cSect, 6 ) )
+
+        aExt := {}
+        FOR EACH c IN hb_ATokens( StrTran( StrTran( hb_HGetDef( h, "ext", "" ), ",", " " ), ".", " ." ), " " )
+            IF Len( c ) > 1
+                AAdd( aExt, Lower( c ) )
+            ENDIF
+        NEXT
+
+        cBase := Lower( AllTrim( hb_HGetDef( h, "base", "" ) ) )
+        IF Empty( cBase ) .AND. Len( aExt ) > 0
+            cBase := ce_SyntaxBuiltin( aExt[ 1 ] )
+        ENDIF
+        hBase := IIF( Empty( cBase ) .OR. cBase == "none", NIL, ce_BuiltinDef( cBase ) )
+
+        IF hb_HHasKey( h, "case" )
+            lCase := ! ce_IsOff( h[ "case" ] )
+        ELSE
+            lCase := IIF( hBase == NIL, .T., hBase[ "case" ] )
+        ENDIF
+        IF hBase == NIL
+            hDef := ce_Def( lCase, "", {}, {}, NIL, ["'], lCase, "" )
+        ELSE
+            hDef := ce_CopyDef( hBase, lCase )
+        ENDIF
+
+        FOR n := 1 TO 9
+            FOR EACH c IN hb_ATokens( hb_HGetDef( h, "keywords" + hb_ntos( n ), "" ), " " )
+                IF ! Empty( c )
+                    hDef[ "kw" ][ IIF( lCase, c, Upper( c ) ) ] := .T.
+                ENDIF
+            NEXT
+        NEXT
+
+        /* "scomm=W+/B,-" (.hbp options) only colors, it is not a comment */
+        c := ce_LangValue( h, "scomm" )
+        IF ! Empty( c ) .AND. c == AllTrim( hb_HGetDef( h, "scomm", "" ) )
+            IF IsAlpha( c )                      /* "rem": a comment line */
+                ce_AddTok( hDef[ "first" ], c )
+            ELSE
+                ce_AddTok( hDef[ "line" ], c )
+            ENDIF
+        ENDIF
+        FOR EACH c IN hb_ATokens( ce_LangValue( h, "first" ), " " )
+            IF ! Empty( c )
+                ce_AddTok( hDef[ "first" ], c )
+            ENDIF
+        NEXT
+
+        a := ce_NoEmpty( hb_ATokens( ce_LangValue( h, "mcomm" ), " " ) )
+        IF Len( a ) >= 2
+            DO CASE
+            CASE a[ 1 ] == "<" .AND. a[ 2 ] == ">"
+                hDef[ "tags" ] := .T.
+            CASE a[ 1 ] == "[" .AND. a[ 2 ] == "]"
+                hDef[ "section" ] := .T.
+            OTHERWISE
+                hDef[ "block" ] := { a[ 1 ], a[ 2 ] }
+            ENDCASE
+        ENDIF
+
+        c := ce_LangValue( h, "startline" )
+        IF ! Empty( c )
+            hDef[ "pp" ] := Left( c, 1 )
+        ENDIF
+        c := StrTran( hb_HGetDef( h, "quotes", "" ), " ", "" )
+        IF ! Empty( c )
+            IF hBase == NIL
+                hDef[ "quotes" ] := ""
+            ENDIF
+            FOR n := 1 TO hb_BLen( c )                  /* quotes are one-byte characters */
+                IF !( hb_BSubStr( c, n, 1 ) $ hDef[ "quotes" ] )
+                    hDef[ "quotes" ] += hb_BSubStr( c, n, 1 )
+                ENDIF
+            NEXT
+        ENDIF
+        IF hb_HHasKey( h, "escape" )
+            hDef[ "esc" ] := ! ce_IsOff( h[ "escape" ] )
+        ENDIF
+        FOR EACH c IN hb_ATokens( hb_HGetDef( h, "dotwords", "" ), " " )
+            IF ! Empty( c )
+                ce_AddTok( hDef[ "dotkw" ], Upper( c ) )
+            ENDIF
+        NEXT
+
+        a := { cName, hb_HGetDef( h, "title", "" ), aExt, hDef }
+        IF Empty( a[ 2 ] )
+            a[ 2 ] := Upper( cName )
+            FOR EACH c IN aExt
+                a[ 2 ] += IIF( c:__enumIndex() == 1, " (", " " ) + c + IIF( c:__enumIsLast(), ")", "" )
+            NEXT
+            a[ 2 ] += " - cedit.lang"
+        ENDIF
+        n := AScan( s_aUser, {| x | x[ 1 ] == cName } )
+        IF n > 0
+            s_aUser[ n ] := a
+        ELSE
+            AAdd( s_aUser, a )
+        ENDIF
+    NEXT
+
+RETURN Len( s_aUser )
+
+/* a copy of a built-in language that the user's one adds to */
+STATIC FUNCTION ce_CopyDef( hBase, lCase )
+
+    LOCAL h := { => }, c
+
+    FOR EACH c IN hb_HKeys( hBase )
+        h[ c ] := hBase[ c ]
+    NEXT
+    h[ "kw" ] := { => }
+    FOR EACH c IN hb_HKeys( hBase[ "kw" ] )
+        h[ "kw" ][ IIF( lCase, c, Upper( c ) ) ] := .T.
+    NEXT
+    h[ "case" ]  := lCase
+    h[ "line" ]  := AClone( hBase[ "line" ] )
+    h[ "first" ] := AClone( hBase[ "first" ] )
+    h[ "dotkw" ] := AClone( hBase[ "dotkw" ] )
+    IF hBase[ "block" ] != NIL
+        h[ "block" ] := AClone( hBase[ "block" ] )
+    ENDIF
+
+RETURN h
+
+STATIC FUNCTION ce_IsOff( c )
+RETURN AScan( { "off", "no", "0", "false" }, {| x | x == Lower( AllTrim( c ) ) } ) > 0
+
+/* a value without HbEdit's color before a comma ("W+/B,-" -> "-") */
+STATIC FUNCTION ce_LangValue( h, cKey )
+
+    LOCAL c := AllTrim( hb_HGetDef( h, cKey, "" ) ), n := At( ",", c )
+
+    IF n > 1 .AND. "/" $ Left( c, n - 1 )
+        c := AllTrim( SubStr( c, n + 1 ) )
+    ENDIF
+
+RETURN c
+
+STATIC PROCEDURE ce_AddTok( a, c )
+    IF AScan( a, {| x | x == c } ) == 0
+        AAdd( a, c )
+    ENDIF
+RETURN
+
+STATIC FUNCTION ce_NoEmpty( a )
+
+    LOCAL aR := {}, c
+
+    FOR EACH c IN a
+        IF ! Empty( c )
+            AAdd( aR, c )
+        ENDIF
+    NEXT
+
+RETURN aR
