@@ -8,6 +8,18 @@ Made as a successor to BroPlus by Peter Volz (SmartCode Programming): the same F
 hot keys and status lines, written from scratch — no BroPlus source code is used.
 Its GUI sibling is GBro (HWGUI).
 
+## Download
+
+Ready-to-run programs, no build needed: **[CBro 1.0 release](https://github.com/digikv/Harbour-CUI/releases/tag/cbro-1.0)**
+
+| File | Platform |
+|---|---|
+| `cbro-1.0-win32.zip` | Windows (32-bit, runs on 64-bit Windows too) |
+| `cbro-1.0-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6`, `libodbc2` (unixODBC), `libgpm2` |
+
+Unpack and run `cbro` (`cbro /DEMO` opens demo tables, `cbro /?` lists the parameters). Both are
+the GPL build with the LetoDBf client. To build CBro yourself, see [Build](#build).
+
 ## What it does
 
 - DBF tables (DBFCDX / DBFNTX) in floating windows, one per table; any data codepage
