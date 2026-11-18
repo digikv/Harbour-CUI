@@ -233,13 +233,15 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTBrowse
     /* the window under the browse was cleared: redraw every row, from the
        rows TBrowse already read (invalidate). Data changed elsewhere is
        shown after refreshAll() / refreshCurrent(), as with a TBrowse. */
-    ::FoBrowse:invalidate()
-    ::FoBrowse:forceStable()
-
-    /* alignLeft: blank the cells right of the columns (a cut column left them) */
+    /* alignLeft: blank the cells right of the columns (a cut column left
+       them) - before forceStable(): it moves the screen cursor, which
+       TBrowse leaves on the current cell (the inline editor goes there) */
     IF ::FalignLeft .AND. ::FoBrowse:nRight - ::FoBrowse:nLeft + 1 < ::Fwidth
         ::clearRight( hb_tokenGet( cColor, 1, "," ) )
     ENDIF
+
+    ::FoBrowse:invalidate()
+    ::FoBrowse:forceStable()
 
     /* TBrowse writes one character per cell: give CJK characters their
        second cell (the whole browse was just redrawn - see ht_widenRegion) */
