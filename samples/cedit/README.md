@@ -7,6 +7,20 @@ commercial license from the author — see `LICENSE`.
 Made to work like HbEdit by Alexander S. Kresin — the same F-keys, so those who are used to it
 feel at home — but written from scratch on Harbour-CUI: no HbEdit source code is used.
 
+## Download
+
+Ready-to-run programs, no build needed: **[CEdit 1.0.1 release](https://github.com/digikv/Harbour-CUI/releases/tag/cedit-1.0.1)**
+
+| File | Platform |
+|---|---|
+| `cedit-1.0.1-win32.zip` | Windows 7 and newer (32-bit, runs on 64-bit Windows too) |
+| `cedit-1.0.1-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6` and `libgpm2` |
+
+Unpack and run `cedit` or `cedit file.txt`. To build CEdit yourself, see
+[Building CEdit, step by step](#building-cedit-step-by-step).
+
+New in 1.0.1: the mouse wheel and two-finger scrolling on a touchpad scroll the text and the lists.
+
 ## Keys
 
 F9 opens the menu (also Alt + the underlined letter, or the mouse); the menu shows the key of every

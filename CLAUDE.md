@@ -423,7 +423,7 @@ samples/          Demo applications (human-facing, require a display)
                   build.bat / build.sh build the library first when it is missing. Linux tests: WSL
                   Ubuntu-24.04 with Xvfb + xdotool (hidden display: no keys reach the user); UI tests
                   on Windows that send keys steal the user's keyboard: only when the user is away.
-                  On main since 1.0 (released as cedit-1.0: cedit-1.0-win32.zip, -linux-x86_64.tar.gz).
+                  On main since 1.0; releases cedit-1.0, cedit-1.0.1 (-win32.zip, -linux-x86_64.tar.gz).
 tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_basic      HTPoint, HTSize, all HTEvent subclasses
   test_eventloop  HTEventLoop schedule, scheduleRepeat, cancelTask, runPendingTasks
