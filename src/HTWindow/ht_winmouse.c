@@ -28,8 +28,10 @@
 
 #include "hbapi.h"
 #include "hbapigt.h"
+#include "hbapicdp.h"
 #include "hbapiitm.h"
 #include "hbvm.h"
+#include "hbgtinfo.ch"
 
 #include <string.h>
 
@@ -40,10 +42,6 @@
 
 /* set by ht_viewport.c once a wide (CJK) character was written */
 extern HB_BOOL ht_fWideWritten;
-
-#ifndef HB_GTI_WINHANDLE
-#define HB_GTI_WINHANDLE  69
-#endif
 
 #ifndef K_MOUSEMOVE
 #define K_MOUSEMOVE     1001
@@ -279,10 +277,317 @@ static void ht_ime_place( HWND hWnd )
    }
 }
 
+/* ---- Indic scripts (Devanagari, Bengali, Gurmukhi, Gujarati, Oriya,
+ * Tamil, Telugu, Kannada, Malayalam: U+0900..U+0D7F)
+ *
+ * A syllable is a consonant (or vowel) with vowel signs (matras) and other
+ * marks, consonants joined by a virama form one conjunct. The GT keeps one
+ * code point per cell, so a syllable takes as many cells as it has code
+ * points - the editors' cursor arithmetic (Len()) stays as it is.
+ * gtwvt draws a run of same-colored cells with one ExtTextOut(): Windows
+ * shapes the syllables but advances by the glyphs' own widths, so the rest
+ * of the run (Latin text after Gujarati, too) drifts off the cell grid, and
+ * a repaint starting inside a syllable draws its marks alone. After gtwvt
+ * painted, every run holding Indic text is drawn again: each syllable
+ * shaped and centered on its cells (narrowed when wider), every other
+ * character on its own cell in the GT font. */
+
+static HB_BOOL ht_wc_isindic( HB_WCHAR wc )
+{
+   return wc >= 0x0900 && wc <= 0x0D7F;
+}
+
+/* the signs that belong to the character before them; the nine scripts
+   share the layout of their 128-character blocks */
+static HB_BOOL ht_wc_isindicmark( HB_WCHAR wc )
+{
+   int o;
+
+   if( wc == 0x200C || wc == 0x200D )   /* ZWNJ, ZWJ */
+      return HB_TRUE;
+   if( ! ht_wc_isindic( wc ) )
+      return HB_FALSE;
+   o = wc & 0x7F;
+   return ( o >= 0x01 && o <= 0x03 ) || ( wc == 0x0900 || wc == 0x0C00 || wc == 0x0D00 ) ||
+          ( o >= 0x3A && o <= 0x3C ) || ( o >= 0x3E && o <= 0x4F ) ||
+          ( o >= 0x51 && o <= 0x57 ) || o == 0x62 || o == 0x63;
+}
+
+/* cells of the syllable starting at pwc[ i ] */
+static int ht_indic_cluster( const HB_WCHAR * pwc, int i, int n )
+{
+   int iLen = 1;
+
+   while( i + iLen < n && iLen < 16 )
+   {
+      HB_WCHAR wc = pwc[ i + iLen ], wcPrev = pwc[ i + iLen - 1 ];
+
+      if( ht_wc_isindicmark( wc ) ||
+          ( ht_wc_isindic( wc ) &&
+            ( wcPrev == 0x200D || ( ht_wc_isindic( wcPrev ) && ( wcPrev & 0x7F ) == 0x4D ) ) ) )
+         ++iLen;
+      else
+         break;
+   }
+   return iLen;
+}
+
+static int ht_gt_info_int( int iType )
+{
+   HB_GT_INFO gtInfo;
+   int iValue;
+
+   memset( &gtInfo, 0, sizeof( gtInfo ) );
+   gtInfo.pResult = hb_itemNew( NULL );
+   hb_gtInfo( iType, &gtInfo );
+   iValue = hb_itemGetNI( gtInfo.pResult );
+   hb_itemRelease( gtInfo.pResult );
+   return iValue;
+}
+
+static HFONT   s_hFontBase  = NULL;
+static HFONT   s_hFontIndic = NULL;
+static int     s_iFontKey[ 6 ];
+static WCHAR   s_wszFace[ LF_FACESIZE ];
+
+/* the GT font (as gtwvt creates it) and the Indic font, for cell height
+   iCellH; recreated when the GT font changes */
+static HB_BOOL ht_indic_fonts( int iCellW, int iCellH )
+{
+   HB_GT_INFO gtInfo;
+   WCHAR wszFace[ LF_FACESIZE ];
+   int aKey[ 6 ];
+   LOGFONTW lf;
+
+   memset( &gtInfo, 0, sizeof( gtInfo ) );
+   gtInfo.pResult = hb_itemNew( NULL );
+   hb_gtInfo( HB_GTI_FONTNAME, &gtInfo );
+   if( MultiByteToWideChar( CP_UTF8, 0, hb_itemGetCPtr( gtInfo.pResult ), -1, wszFace, LF_FACESIZE ) == 0 )
+      wszFace[ 0 ] = 0;
+   wszFace[ LF_FACESIZE - 1 ] = 0;
+   hb_itemRelease( gtInfo.pResult );
+
+   aKey[ 0 ] = iCellW;
+   aKey[ 1 ] = iCellH;
+   aKey[ 2 ] = ht_gt_info_int( HB_GTI_FONTWIDTH );
+   aKey[ 3 ] = ht_gt_info_int( HB_GTI_FONTWEIGHT );
+   aKey[ 4 ] = ht_gt_info_int( HB_GTI_FONTQUALITY );
+   aKey[ 5 ] = ht_gt_info_int( HB_GTI_CODEPAGE );
+
+   if( s_hFontBase && s_hFontIndic && memcmp( aKey, s_iFontKey, sizeof( aKey ) ) == 0 &&
+       wcscmp( wszFace, s_wszFace ) == 0 )
+      return HB_TRUE;
+
+   if( s_hFontBase )
+      DeleteObject( s_hFontBase );
+   if( s_hFontIndic )
+      DeleteObject( s_hFontIndic );
+
+   memset( &lf, 0, sizeof( lf ) );
+   lf.lfHeight         = iCellH;
+   lf.lfWidth          = aKey[ 2 ] < 0 ? -aKey[ 2 ] : aKey[ 2 ];
+   lf.lfWeight         = aKey[ 3 ];
+   lf.lfCharSet        = ( BYTE ) aKey[ 5 ];
+   lf.lfQuality        = ( BYTE ) aKey[ 4 ];
+   lf.lfPitchAndFamily = FIXED_PITCH | FF_MODERN;
+   memcpy( lf.lfFaceName, wszFace, sizeof( wszFace ) );
+   s_hFontBase = CreateFontIndirectW( &lf );
+
+   /* Nirmala UI (Windows 8+) has every Indic script */
+   memset( &lf, 0, sizeof( lf ) );
+   lf.lfHeight         = iCellH;
+   lf.lfWeight         = aKey[ 3 ];
+   lf.lfCharSet        = DEFAULT_CHARSET;
+   lf.lfQuality        = ( BYTE ) aKey[ 4 ];
+   lf.lfPitchAndFamily = VARIABLE_PITCH | FF_SWISS;
+   wcscpy( lf.lfFaceName, L"Nirmala UI" );
+   s_hFontIndic = CreateFontIndirectW( &lf );
+
+   memcpy( s_iFontKey, aKey, sizeof( aKey ) );
+   memcpy( s_wszFace, wszFace, sizeof( wszFace ) );
+   return s_hFontBase && s_hFontIndic;
+}
+
+/* draws pwc[ iFrom .. iTo - 1 ] (one run, color iColor) on its cells */
+static void ht_indic_run( HDC hdc, const HB_WCHAR * pwc, int iFrom, int iTo, int x0, int y,
+                          int iCellW, int iCellH, COLORREF fg, COLORREF bg )
+{
+   RECT rc;
+   HBRUSH hBrush;
+   int i, iSaved;
+
+   SetRect( &rc, x0 + iFrom * iCellW, y, x0 + iTo * iCellW, y + iCellH );
+   hBrush = CreateSolidBrush( bg );
+   FillRect( hdc, &rc, hBrush );
+   DeleteObject( hBrush );
+
+   iSaved = SaveDC( hdc );
+   IntersectClipRect( hdc, rc.left, rc.top, rc.right, rc.bottom );
+   SetBkMode( hdc, TRANSPARENT );
+   SetTextColor( hdc, fg );
+   SetTextAlign( hdc, TA_LEFT | TA_TOP );
+   SetGraphicsMode( hdc, GM_ADVANCED );
+
+   for( i = iFrom; i < iTo; )
+   {
+      int x = x0 + i * iCellW;
+
+      if( ht_wc_isindic( pwc[ i ] ) && ! ht_wc_isindicmark( pwc[ i ] ) )
+      {
+         int iLen = ht_indic_cluster( pwc, i, iTo );
+         int iAvail = iLen * iCellW;
+         WCHAR wsz[ 16 ];
+         SIZE size;
+         int n;
+
+         size.cx = 0;
+         for( n = 0; n < iLen; ++n )
+            wsz[ n ] = ( WCHAR ) pwc[ i + n ];
+
+         SelectObject( hdc, s_hFontIndic );
+         if( GetTextExtentPoint32W( hdc, wsz, iLen, &size ) && size.cx > iAvail )
+         {
+            XFORM xf;
+
+            xf.eM11 = ( FLOAT ) iAvail / ( FLOAT ) size.cx;
+            xf.eM12 = xf.eM21 = 0;
+            xf.eM22 = 1;
+            xf.eDx  = ( FLOAT ) x * ( 1 - xf.eM11 );
+            xf.eDy  = 0;
+            SetWorldTransform( hdc, &xf );
+            ExtTextOutW( hdc, x, y, 0, NULL, wsz, iLen, NULL );
+            ModifyWorldTransform( hdc, NULL, MWT_IDENTITY );
+         }
+         else
+            ExtTextOutW( hdc, x + ( iAvail - size.cx ) / 2, y, 0, NULL, wsz, iLen, NULL );
+         i += iLen;
+      }
+      else
+      {
+         WCHAR wc = ( WCHAR ) hb_cdpGetU16Ctrl( pwc[ i ] );
+
+         if( wc != ' ' && wc != 0x200B )
+         {
+            SelectObject( hdc, s_hFontBase );
+            ExtTextOutW( hdc, x, y, 0, NULL, &wc, 1, NULL );
+         }
+         ++i;
+      }
+   }
+   RestoreDC( hdc, iSaved );
+}
+
+/* draws again the runs holding Indic text on the rows of rcUpdate */
+static void ht_indic_paint( HWND hWnd, const RECT * prcUpdate )
+{
+   int iRows = hb_gtMaxRow() + 1, iCols = hb_gtMaxCol() + 1;
+   int iCellW, iCellH, x0, y0, iTop, iBottom, iRow;
+   HB_WCHAR * pwc = NULL;
+   int * piColor = NULL;
+   COLORREF aPal[ 16 ];
+   HB_BOOL fPal = HB_FALSE, fCaretHidden = HB_FALSE;
+   HDC hdc = NULL;
+   RECT rcClient;
+
+   if( iRows <= 0 || iCols <= 0 || ! GetClientRect( hWnd, &rcClient ) )
+      return;
+   iCellW = ht_gt_info_int( HB_GTI_SCREENWIDTH ) / iCols;
+   iCellH = ht_gt_info_int( HB_GTI_SCREENHEIGHT ) / iRows;
+   if( iCellW <= 0 || iCellH <= 0 )
+      return;
+   x0 = HB_MAX( 0, ( rcClient.right - iCellW * iCols ) / 2 );
+   y0 = HB_MAX( 0, ( rcClient.bottom - iCellH * iRows ) / 2 );
+
+   iTop    = HB_MAX( 0, ( prcUpdate->top - y0 ) / iCellH );
+   iBottom = HB_MIN( iRows - 1, ( prcUpdate->bottom - 1 - y0 ) / iCellH );
+
+   for( iRow = iTop; iRow <= iBottom; ++iRow )
+   {
+      HB_BOOL fIndic = HB_FALSE;
+      int iCol, iFrom;
+
+      if( pwc == NULL )
+      {
+         pwc = ( HB_WCHAR * ) hb_xgrab( sizeof( HB_WCHAR ) * iCols );
+         piColor = ( int * ) hb_xgrab( sizeof( int ) * iCols );
+      }
+      for( iCol = 0; iCol < iCols; ++iCol )
+      {
+         int iColor;
+         HB_BYTE bAttr;
+         HB_USHORT usChar;
+
+         if( hb_gtGetScrChar( iRow, iCol, &iColor, &bAttr, &usChar ) != HB_SUCCESS )
+         {
+            usChar = ' ';
+            iColor = 0;
+         }
+         pwc[ iCol ] = ( HB_WCHAR ) usChar;
+         piColor[ iCol ] = iColor & 0xFF;
+         if( ht_wc_isindic( pwc[ iCol ] ) )
+            fIndic = HB_TRUE;
+      }
+      if( ! fIndic )
+         continue;
+
+      if( hdc == NULL )
+      {
+         if( ! ht_indic_fonts( iCellW, iCellH ) || ( hdc = GetDC( hWnd ) ) == NULL )
+            break;
+         fCaretHidden = HideCaret( hWnd );
+      }
+      if( ! fPal )
+      {
+         HB_GT_INFO gtInfo;
+         int i;
+
+         memset( &gtInfo, 0, sizeof( gtInfo ) );
+         gtInfo.pResult = hb_itemNew( NULL );
+         hb_gtInfo( HB_GTI_PALETTE, &gtInfo );
+         for( i = 0; i < 16; ++i )
+            aPal[ i ] = ( COLORREF ) hb_arrayGetNL( gtInfo.pResult, i + 1 );
+         hb_itemRelease( gtInfo.pResult );
+         fPal = HB_TRUE;
+      }
+
+      /* runs as gtwvt draws them: same color */
+      for( iFrom = 0; iFrom < iCols; )
+      {
+         int iTo = iFrom + 1;
+         HB_BOOL fRunIndic = ht_wc_isindic( pwc[ iFrom ] );
+
+         while( iTo < iCols && piColor[ iTo ] == piColor[ iFrom ] )
+         {
+            if( ht_wc_isindic( pwc[ iTo ] ) )
+               fRunIndic = HB_TRUE;
+            ++iTo;
+         }
+         if( fRunIndic )
+            ht_indic_run( hdc, pwc, iFrom, iTo, x0, y0 + iRow * iCellH, iCellW, iCellH,
+                          aPal[ piColor[ iFrom ] & 0x0F ], aPal[ ( piColor[ iFrom ] >> 4 ) & 0x0F ] );
+         iFrom = iTo;
+      }
+   }
+
+   if( hdc )
+   {
+      if( fCaretHidden )
+         ShowCaret( hWnd );
+      ReleaseDC( hWnd, hdc );
+   }
+   if( pwc )
+   {
+      hb_xfree( pwc );
+      hb_xfree( piColor );
+   }
+}
+
 static LRESULT CALLBACK ht_WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam )
 {
    LRESULT lResult;
    int nKey, nRow, nCol;
+   RECT rcPaint;
+   HB_BOOL fIndicPaint = HB_FALSE;
 
    /* Wide (CJK) characters spill over their filler cell (ht_viewport.c).
       gtwvt repaints only the changed part of a row; when that part starts
@@ -296,8 +601,12 @@ static LRESULT CALLBACK ht_WndProc( HWND hWnd, UINT message, WPARAM wParam, LPAR
       Each rectangle of the update region counts: the bounding rectangle
       (GetUpdateRect) is full width as soon as one whole row is in it, and
       the partial rows next to it would be left out. */
-   if( message == WM_PAINT && ht_fWideWritten )
-      ht_rows_collect( hWnd );
+   if( message == WM_PAINT )
+   {
+      if( ht_fWideWritten )
+         ht_rows_collect( hWnd );
+      fIndicPaint = HB_CDP_ISCUSTOM( hb_vmCDP() ) && GetUpdateRect( hWnd, &rcPaint, FALSE );
+   }
    else if( message != 0 && message == ht_rows_msg() )
    {
       if( s_fRowsPending )
@@ -317,6 +626,9 @@ static LRESULT CALLBACK ht_WndProc( HWND hWnd, UINT message, WPARAM wParam, LPAR
       lResult = CallWindowProcW( s_oldProc, hWnd, message, wParam, lParam );
    else
       lResult = DefWindowProcW( hWnd, message, wParam, lParam );
+
+   if( fIndicPaint )
+      ht_indic_paint( hWnd, &rcPaint );
 
    nKey = ht_msg_to_key( message );
    if( nKey != 0 )

@@ -1,5 +1,6 @@
 /** @file unicode.prg
- * Unicode demo - typing and showing Chinese, Japanese and Korean text
+ * Unicode demo - typing and showing Chinese, Japanese and Korean text,
+ * and Indic scripts (Gujarati, Hindi)
  *
  * Demonstrates:
  *   - the UTF8EX codepage (HTApplication:new() selects it when the
@@ -8,6 +9,8 @@
  *     HTLineEdit, HTTextEdit and the HTBrowse inline editor
  *   - wide characters: each CJK character takes two screen cells and stays
  *     aligned with Latin, Cyrillic and Greek text
+ *   - Indic scripts on Windows: a syllable (consonant + vowel signs,
+ *     conjuncts) is shaped and drawn over one cell per code point
  *   - Unicode window buttons: minimize, maximize/restore, close, resize grip
  *
  * Keyboard:
@@ -49,6 +52,8 @@ PROCEDURE Main()
         "简体中文  欢迎使用 HBTui，请用输入法输入中文。", ;
         "日本語    HBTui へようこそ。かな・カナ・漢字。", ;
         "한국어    HBTui에 오신 것을 환영합니다.", ;
+        "ગુજરાતી   HBTui માં આપનું સ્વાગત છે. કૃપા કરીને લખો.", ;
+        "हिन्दी    HBTui में आपका स्वागत है।", ;
         "Српски    Добродошли · Ελληνικά Καλώς ήρθατε · Ünïcödé" }
     nRow := 2
     FOR EACH cLine IN aLines
@@ -64,8 +69,8 @@ PROCEDURE Main()
     /* --- Window 1: form ------------------------------------------------- */
     win := HTWidget():new()
     win:shadow := HT_SHADOW_ATTR
-    win:move( 4, 9 )   /* x = col, y = row */
-    win:resize( 50, 16 )
+    win:move( 4, 11 )   /* x = col, y = row */
+    win:resize( 50, 17 )
     win:setWindowTitle( "表單 Form" )
 
     oGet := HTGet():new( win )
@@ -90,18 +95,19 @@ PROCEDURE Main()
 
     txt := HTTextEdit():new( win )
     txt:move( 2, 9 )
-    txt:resize( 44, 5 )
+    txt:resize( 44, 6 )
     txt:text := "多行編輯器 multi-line editor" + hb_eol() + ;
                 "春眠不覺曉，處處聞啼鳥。" + hb_eol() + ;
                 "夜來風雨聲，花落知多少。" + hb_eol() + ;
+                "ગુજરાતી લખાણ / हिन्दी पाठ" + hb_eol() + ;
                 "Shift+Arrows = select, Ctrl+C/V = copy/paste"
     win:show()
 
     /* --- Window 2: browse ----------------------------------------------- */
     win := HTWidget():new()
     win:shadow := HT_SHADOW_ATTR
-    win:move( 58, 9 )
-    win:resize( 52, 14 )
+    win:move( 58, 11 )
+    win:resize( 52, 16 )
     win:setWindowTitle( "城市 Cities" )
 
     layout := HTVBoxLayout():new( win )
@@ -116,7 +122,9 @@ PROCEDURE Main()
           { "大阪 Osaka",      "日本 Japan",     2752412 }, ;
           { "서울 Seoul",      "한국 Korea",     9586195 }, ;
           { "Београд",         "Србија Serbia",  1681405 }, ;
-          { "Αθήνα Athens",    "Ελλάδα Greece",   643452 } } ) )
+          { "Αθήνα Athens",    "Ελλάδα Greece",   643452 }, ;
+          { "અમદાવાદ",         "ભારત India",     5570585 }, ;
+          { "नई दिल्ली",         "भारत India",       249998 } } ) )
     win:show()
 
     app:exec()

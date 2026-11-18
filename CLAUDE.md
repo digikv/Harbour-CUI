@@ -32,7 +32,7 @@ upper-case form; `__PLATFORM__Windows` is never defined):
   hbmk2 compiles C as ANSI by default, and an ANSI subclass turns the window into an ANSI
   window — IME/Unicode `WM_CHAR` (Chinese, Cyrillic on a Western system, …) then reaches
   gtwvt as `?`. Its `WM_PAINT` hook also widens the repaint to whole rows once wide (CJK)
-  text was written (see Unicode below)
+  text was written, and draws rows holding Indic text again on the cell grid (see Unicode below)
 - `ht_cuiSetupDisplay()` — gtwvt fullscreen + Consolas font fit (Windows) vs a resizable
   `SetMode( nRows, nCols )` window in the GT's own font (Linux)
 - `HTApplication:exec()` event mask — non-Windows adds `HB_INKEY_GTEVENT`, so gtxwc's
@@ -257,6 +257,14 @@ HTGet wraps Harbour's core `Get` class for full Clipper-compatible input editing
   gtnul); `ht_wideCells( lOn )` overrides. TBrowse paints through the core RTL, so
   `HTBrowse:paintEvent()` calls `ht_widenRegion()` right after `forceStable()` (fields end at
   a color change or a `DispOutAtBox` column separator; must only run on a freshly redrawn area).
+- **Indic scripts** (U+0900..U+0D7F: Devanagari, Bengali, Gurmukhi, Gujarati, Oriya, Tamil, Telugu,
+  Kannada, Malayalam): one cell per code point (vowel signs and viramas too), so `Len()` positions
+  stay. gtwvt draws a same-colored run with one `ExtTextOut()`: Windows shapes it but advances by
+  the glyphs' own widths, so the rest of the run drifted off the grid. `ht_winmouse.c`
+  (`ht_indic_paint()`, after gtwvt's `WM_PAINT`) draws every run holding Indic text again: each
+  syllable (base + marks, consonants joined by a virama / ZWJ) shaped in Nirmala UI, centered on its
+  cells (narrowed by a world transform when wider), other characters one per cell in a copy of the
+  GT font. Not done on gtxwc (Linux): there each code point stays in its own cell, unshaped.
 - **Measure on-screen text in cells** (`src/HTCells.prg`): `ht_strWidth()`, `ht_cellLeft()`,
   `ht_cellPadR/L/C()` instead of `PadR/PadL/PadC()`, `ht_cellCol()` (cursor column),
   `ht_cellPos()` (mouse click → character), `ht_scrollToCursor()` (horizontal scroll offset).
@@ -354,6 +362,8 @@ tools/            unifont-cell.sh/.py: builds the "Unifont Cell" X font (CJK in 
                   pixelfont.prg: builds the fonts of a .glyphs file (src/HTPixelFont.prg, no external tools)
 docs/             Documentation
   EVENT_SYSTEM.md HTEventLoop guide, event types, routing, focus, tasks, coordinates
+  DEPENDENCIES.md What the library, samples and CBro use (Harbour, fonts, XLSX class,
+                  LetoDB/LetoDBf, contribs, Linux packages)
 samples/          Demo applications (human-facing, require a display)
   hello/          Minimal Hello World (HTMainWindow + HTLabel)
   dialog/         Modal HTDialog + HTMessageBox (info/question/custom)
@@ -387,8 +397,9 @@ samples/          Demo applications (human-facing, require a display)
                   "Customers" (HTBrowse grids). Exercises the window stack:
                   drag/resize/maximize/minimize, click-to-raise, shadows,
                   Ctrl+F6 window cycling, Enter-to-next-field, cursor restore
-  unicode/        Chinese/Japanese/Korean/Cyrillic text: IME input in HTGet, HTLineEdit,
-                  HTTextEdit and the HTBrowse editor, wide (2-cell) characters
+  unicode/        Chinese/Japanese/Korean/Gujarati/Hindi/Cyrillic text: IME input in HTGet,
+                  HTLineEdit, HTTextEdit and the HTBrowse editor, wide (2-cell) characters,
+                  Indic syllables
   showcase/       Full controls demo with all features
   cbro/           CBro: xBase browser, BroPlus successor (own cbro.hbp + build.bat; dual license
                   GPL-3+ / commercial, see samples/cbro/LICENSE): DBF, LetoDB/LetoDBf, SQL (SQLMIX),

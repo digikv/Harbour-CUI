@@ -56,7 +56,8 @@ Older standalone CUI helpers (`win.prg`, `cui.ch`) are kept under [`legacy/`](le
 - On Windows, gtwvt draws CJK characters through a fallback font. Windows lays out Korean Hangul by its own glyph width, so the cell after a Hangul character holds a zero width space instead of a space: Chinese, Japanese and Korean all line up on the same grid.
 - The IME composition window and candidate list open at the text cursor. `ht_fullScreen( .F. )` before `ht_cuiSetupDisplay()` / `exec()` opens a maximized window instead of fullscreen, so the taskbar with the IME mode indicator stays visible (Alt+Enter still switches).
 - Multi-byte codepages such as `CP950` (Big5) keep their text through window moves and restores. Harbour's CP950 counts bytes, not characters, so for editing keep the VM in `UTF8EX` and open Big5 tables with `CODEPAGE "CP950"`.
-- `samples/unicode` shows labels, GETs, editors and a browse in Chinese, Japanese, Korean, Cyrillic and Greek.
+- Indic scripts (Gujarati, Hindi and the other scripts of India, U+0900–U+0D7F): a syllable — a consonant with its vowel signs, or a conjunct joined by a virama — takes one cell per code point, so `Len()`, the cursor and the columns stay as they are. On Windows, gtwvt would draw a whole row with the glyphs' own widths and the rest of the row drifted off the grid; the window bridge draws these rows again, each syllable shaped (Nirmala UI font) and centered on its cells. On Linux (gtxwc) they are not shaped yet.
+- `samples/unicode` shows labels, GETs, editors and a browse in Chinese, Japanese, Korean, Gujarati, Hindi, Cyrillic and Greek.
 - On Linux, `gtxwc` draws with a single X font, and its default `fixed` has no Chinese, Japanese or Korean glyphs: they show as empty boxes (Cyrillic, Greek and accented Latin are fine). Install the "Unifont Cell" font once and every application picks it up by itself:
 
   ```bash
@@ -127,7 +128,7 @@ cd samples/hello && hbmk2 hello.prg hbmk.hbm && ./hello
 | `charts` | HTSparkline (live, 4 rows) and HTBarChart, following the themes (F1–F7) |
 | `theme` | Switching among the seven built-in themes (F1–F7) |
 | `theme_editor` | Change theme colors and the palette, add own themes, save them to `themes.json` |
-| `unicode` | Chinese, Japanese, Korean, Cyrillic and Greek text: IME input, two-cell characters |
+| `unicode` | Chinese, Japanese, Korean, Gujarati, Hindi, Cyrillic and Greek text: IME input, two-cell characters, Indic syllables |
 | `toast` | HTToast notifications |
 | `fonteditor` | Pixel font editor for `.glyphs` files: draw with the mouse, preview, build TTF + X11 fonts (F9) |
 | `game` | NEBULA RAID: a shooter drawn entirely with its own 8×8 font, held keys for moving and firing ([release nebula-raid-1.0](https://github.com/digikv/Harbour-CUI/releases/tag/nebula-raid-1.0)) |
@@ -148,6 +149,10 @@ cd samples/cbro && hbmk2 cbro.hbp && ./cbro
 ```
 
 ## Requirements
+
+The library needs only Harbour (core, no contribs, no `hbct`). Everything else the samples and CBro
+use — the [XLSX class](https://github.com/digikv/xlsx) and the LetoDB/LetoDBf clients for CBro,
+fonts, Linux packages — is listed in [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md).
 
 - Harbour compiler
 - GT driver: `gtxwc` on Linux, `gtwvt` on Windows (tests: `gttrm` / `-gtnul`)
