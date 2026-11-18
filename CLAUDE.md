@@ -20,7 +20,7 @@ cd tests && for t in test_basic test_eventloop test_layout test_theme test_widge
 ```
 
 Requires: Harbour compiler at `~/git/core` (Windows: always the newest one,
-`D:	oolsharbour-coreinwinmingwhbmk2.exe`, 32-bit MinGW).
+`D:\tools\harbour-core\bin\win\mingw\hbmk2.exe`, 32-bit MinGW).
 
 GT driver: `gtxwc` on Linux (X11 window), `gtwvt` on Windows. Tests use `gttrm` / `-gtnul`.
 
