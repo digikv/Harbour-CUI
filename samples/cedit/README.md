@@ -60,11 +60,21 @@ Windows batch; INI and hbmk2 files (.hbp, .hbc); HTML and XML — chosen by the 
 The colors are picked for the theme's palette (they stay readable in every theme), the
 Turbo Pascal editor colors have their own.
 
+More languages: `cedit.lang` next to `cedit.ini`, in the format of HbEdit's `hbedit.ini` -
+its `[LANG_xxx]` sections (`ext=`, `keywords1=` .. , `scomm=`, `mcomm=`, `startline=`, `case=`,
+`quotes=`) can be copied there, or `hbedit.ini` itself can be copied as `cedit.lang`.
+View - Language definitions opens the file (a new one with an example: Lisp, Pascal); saving it
+in CEdit reads the languages again. A language for the extensions of a built-in one (`.prg`,
+`.c`, ...) adds its keywords and comments to it. All keyword groups get the keyword color
+(HbEdit has a color for each). CEdit's own keys: `title=`, `first=` (comment lines, `*`),
+`dotwords=` (`.AND.`), `escape=on|off`, `base=<built-in language>|none`.
+
 ## Settings
 
 `cedit.ini`: next to the program when it is there (a portable copy), else in `%APPDATA%\CEdit`
 (Windows) or `~/.config/cedit` (Linux). It keeps the options, the theme and the editor colors, and
 the last 20 files with the line and column of the cursor — a recent file opens where it was left.
+`cedit.lang` (languages, see above) is in the same folder.
 
 ## Build
 

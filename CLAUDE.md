@@ -415,7 +415,8 @@ samples/          Demo applications (human-facing, require a display)
                   cursor, grouped undo/redo, UTF-8 / CP852, CRLF/LF, BOM). Ctrl-Z vs Ctrl-Left (both
                   Inkey 26): ht_keyDown( 'Z' ). 1.0: search / replace (F7 ...), go to, Ctrl-B, Alt-B,
                   cesyntax.prg = highlighting (8 languages, states cached per line in CEBuffer,
-                  colors picked against the theme's palette), Shift-F8 codepage, cedit.ini (settings,
+                  colors picked against the theme's palette; more languages from cedit.lang in the
+                  format of HbEdit's hbedit.ini [LANG_xxx], ce_SyntaxLoad), Shift-F8 codepage, cedit.ini (settings,
                   recent files with the cursor). "Turbo Pascal" editor colors = an own theme with the
                   VGA palette (ce_TurboTheme). UI tests that send keys steal the user's keyboard:
                   run them only when the user is away.
