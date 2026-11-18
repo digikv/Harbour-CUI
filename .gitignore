@@ -15,4 +15,4 @@ lib
 deps/
 samples/theme_editor/themes.json
 samples/game/nebula.hi
-samples/cuibro/
+samples/cbro/
