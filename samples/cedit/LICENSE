@@ -1,0 +1,36 @@
+CEdit - text editor in character mode
+Copyright (c) 2026 Srđan Dragojlović
+
+CEdit is dual licensed. You may use it under the terms of ONE of these
+licenses, at your choice:
+
+1. GNU General Public License, version 3 or (at your option) any later
+   version, as published by the Free Software Foundation. The full text is
+   in the file COPYING.
+
+   Under the GPL you may use, study, change and share CEdit freely. If you
+   distribute CEdit or a work based on it, you must distribute it under the
+   GPL as well, with its complete source code.
+
+2. A commercial license from the author.
+
+   For use that the GPL does not allow - for example including CEdit or parts
+   of it in a closed source (proprietary) product, or distributing a changed
+   CEdit without its source code - a commercial license is needed. It is
+   granted in writing by the author:
+
+       Srđan Dragojlović, S.O.K. doo Kraljevo, https://sokdoo.com
+       e-mail: digikv@yahoo.com, sok@sokdoo.com
+
+Unless a commercial license says otherwise, CEdit is provided "as is",
+without warranty of any kind, express or implied, including but not limited
+to the warranties of merchantability, fitness for a particular purpose and
+noninfringement. In no event shall the author be liable for any claim,
+damages or other liability arising from the use of CEdit.
+
+CEdit was made to work like HbEdit by Alexander S. Kresin (the same keys).
+It contains no HbEdit source code. HbEdit is a name of its owner, used here
+only to describe CEdit.
+
+The components CEdit is built with keep their own licenses: the Harbour
+runtime (GPL-2.0-or-later with the Harbour exception) and Harbour-CUI (MIT).

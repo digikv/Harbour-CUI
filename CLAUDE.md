@@ -408,6 +408,15 @@ samples/          Demo applications (human-facing, require a display)
   cbro/           CBro: xBase browser, BroPlus successor (own cbro.hbp + build.bat; dual license
                   GPL-3+ / commercial, see samples/cbro/LICENSE): DBF, LetoDB/LetoDBf, SQL (SQLMIX),
                   .xlsx via the user's XLSX class (../../../xlsx), scripts, dynamic indexes, memo arrays/JSON
+  cedit/          CEdit: text editor with HbEdit's keys (F2 save, F3 block, F4 open, F9 menu,
+                  F10/Esc close, F12 files), written from scratch (own cedit.hbp + build.bat; dual
+                  license like cbro). htcodeedit.prg = HTCodeEdit widget (tabs, wide cells, stream +
+                  vertical block selection, clipboard, mouse drag), cebuffer.prg = CEBuffer (lines,
+                  cursor, grouped undo/redo, UTF-8 / CP852, CRLF/LF, BOM). Ctrl-Z vs Ctrl-Left (both
+                  Inkey 26): ht_keyDown( 'Z' ). In progress: search/replace, syntax highlight, settings.
+                  Not on GitHub yet: it lives only on the local branch `cedit` (on top of main) -
+                  never push it. Library / other changes go to main (commit them on main, push,
+                  then `git rebase main` on cedit)
 tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_basic      HTPoint, HTSize, all HTEvent subclasses
   test_eventloop  HTEventLoop schedule, scheduleRepeat, cancelTask, runPendingTasks

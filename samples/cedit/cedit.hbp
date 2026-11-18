@@ -1,0 +1,15 @@
+# CEdit - text editor in character mode (Harbour-CUI)
+# build.bat (Windows) builds it with the newest Harbour in D:\tools\harbour-core.
+#   hbmk2 cedit.hbp
+# Linux: the same with the hbmk2 of that Harbour (X11 for ht_keyDown()).
+
+-w3 -es2
+-ocedit
+
+../../hbtui.hbc
+
+cedit.prg
+htcodeedit.prg
+cebuffer.prg
+
+{unix}-lX11
