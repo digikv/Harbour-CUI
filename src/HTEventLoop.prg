@@ -241,18 +241,20 @@ METHOD PROCEDURE runPendingTasks() CLASS HTEventLoop
     nNow := Seconds()
 
     FOR i := Len( ::FaTasks ) TO 1 STEP -1
+        IF i > Len( ::FaTasks )       /* a task removed / ran others meanwhile */
+            LOOP
+        ENDIF
         task := ::FaTasks[ i ]
         IF nNow >= task[ 1 ]
-            /* execute the task */
-            Eval( task[ 2 ] )
+            /* reschedule / remove BEFORE running it: a task that opens a modal
+               dialog polls events (and so pending tasks) in its own loop - it
+               must not run again from there */
             IF task[ 3 ]
-                /* repeating: reschedule */
                 task[ 1 ] := nNow + task[ 4 ]
             ELSE
-                /* one-shot: remove */
-                ADel( ::FaTasks, i )
-                ASize( ::FaTasks, Len( ::FaTasks ) - 1 )
+                hb_ADel( ::FaTasks, i, .T. )
             ENDIF
+            Eval( task[ 2 ] )
         ENDIF
     NEXT
 

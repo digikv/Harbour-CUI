@@ -22,6 +22,7 @@ PROCEDURE Main()
     TestBrowseCallbacks()
     TestBrowseInlineEdit()
     TestBrowseExternal()
+    TestBrowseAlignLeft()
 
     nTotal := nPass + nFail
     QOut( "" )
@@ -207,5 +208,24 @@ STATIC PROCEDURE TestBrowseExternal()
     o:setColorSpec( NIL )
     o:paintEvent( HTPaintEvent():new() )
     Assert( "setColorSpec( NIL ): theme colors",   !( oTB:colorSpec == "W/B,N/W" ) )
+
+RETURN
+
+/* alignLeft: TBrowse gets the width of its columns when they all fit */
+STATIC PROCEDURE TestBrowseAlignLeft()
+
+    LOCAL brw := HTBrowse():new(), oTB := brw:browse()
+
+    QOut( "--- alignLeft / fitWidth ---" )
+    oTB:colSep := "|"
+    oTB:addColumn( TBColumnNew( "AAAAA", {|| "x" } ) )
+    oTB:addColumn( TBColumnNew( "BBB", {|| 1 } ) )
+    oTB:getColumn( 2 ):width := 3
+    Assert( "alignLeft is off by default", ! brw:alignLeft )
+    brw:alignLeft := .T.
+    Assert( "fitWidth: columns + separator", brw:fitWidth( 40 ) == 9 )
+    Assert( "fitWidth: wider than the widget -> widget width", brw:fitWidth( 6 ) == 6 )
+    brw:extraColors := "4/9"
+    Assert( "extraColors kept", brw:extraColors == "4/9" )
 
 RETURN

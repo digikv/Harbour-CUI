@@ -76,7 +76,8 @@ HTBase
                HTGridLayout
   HTLayoutItem (alignment mixin)
 
-HTEventLoop (singleton, unified event polling + task scheduling)
+HTEventLoop (singleton, unified event polling + task scheduling; a task is removed /
+             rescheduled before it runs, so one that opens a modal dialog is not re-entered)
 HTGetBackend (TGet subclass, suppresses display() for viewport rendering)
 HTWinApi (CT-compatible window shims: wOpen/wSelect/wFormat/… via SaveScreen)
 
@@ -136,7 +137,10 @@ columns/blocks stay). `setColorSpec( c )` keeps own colors (NIL = theme). A pain
 rows TBrowse already read (`invalidate()`); position and colors are assigned only when they change
 (each assignment makes TBrowse re-read every row) — after data changes call `refreshAll()` /
 `refreshCurrent()`, as with a plain TBrowse. `stabilize()` leaves the screen cursor on the current
-cell (a GET at `Row(), Col()` edits it in place).
+cell (a GET at `Row(), Col()` edits it in place). `alignLeft := .T.`: TBrowse centers columns that
+fit (half the free width on the left) - with it the TBrowse ends with its last column
+(`fitWidth()`) and the rest of the row is blanked. `extraColors`: color pairs appended to the
+theme's six, for column `colorBlock`s (pair 7, 8, ...).
 
 **Theme system**: `HTTheme()` singleton, `HT_CLR_MAX` (59) color categories. All widgets use `HTTheme():getColor(HT_CLR_xxx)` instead of hardcoded colors, at paint time.
 - A theme = one color string per category + optionally a **palette** (16 COLORREF values, `ht_rgb()`:

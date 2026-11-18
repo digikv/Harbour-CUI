@@ -39,6 +39,7 @@ PROTECTED:
     METHOD configureBrowse()
     METHOD editKey( nKey )
     METHOD repaintSelf()
+    METHOD clearRight( cColor )
 
 PUBLIC:
 
@@ -93,6 +94,9 @@ PUBLIC:
 
     PROPERTY onActivated READWRITE               /* {|nRow, nCol| ... } Enter/dblclick */
     PROPERTY editable READWRITE INIT .F.           /* .T. to enable inline cell editing */
+    PROPERTY alignLeft READWRITE INIT .F.          /* .T.: columns start at the left edge (TBrowse centers them) */
+    METHOD fitWidth( nWidth )                     /* width TBrowse gets with alignLeft */
+    PROPERTY extraColors READWRITE INIT ""        /* color pairs after the theme's six (pair 7, ...): colorBlock */
     PROPERTY onBeginEdit READWRITE               /* {|nRow, nCol, xValue| lAllow} */
     PROPERTY onEndEdit READWRITE                 /* {|nRow, nCol, xOldValue, xNewValue| lAccept} */
 
@@ -171,6 +175,12 @@ METHOD PROCEDURE configureBrowse() CLASS HTBrowse
         nRight  := nLeft + ht_MaxCol()
     ENDIF
 
+    /* alignLeft: when all columns fit, TBrowse ends with the last one - it
+       would center them, putting half of the free width on the left */
+    IF ::FalignLeft
+        nRight := nLeft + ::fitWidth( nRight - nLeft + 1 ) - 1
+    ENDIF
+
     /* each assignment makes TBrowse re-read every visible row: only on a
        change (moved / resized window) */
     IF ::FoBrowse:nTop != nTop .OR. ::FoBrowse:nLeft != nLeft .OR. ;
@@ -209,6 +219,9 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTBrowse
         cColor := HTTheme():getColor( HT_CLR_BROWSE_NORMAL ) + "," + ;
             HTTheme():getColor( HT_CLR_BROWSE_NORMAL )
     ENDIF
+    IF ::FcColorSpec == NIL .AND. ! Empty( ::FextraColors )
+        cColor += "," + ::FextraColors
+    ENDIF
     IF !( ::FoBrowse:colorSpec == cColor )
         ::FoBrowse:colorSpec := cColor
     ENDIF
@@ -222,6 +235,11 @@ METHOD PROCEDURE paintEvent( paintEvent ) CLASS HTBrowse
        shown after refreshAll() / refreshCurrent(), as with a TBrowse. */
     ::FoBrowse:invalidate()
     ::FoBrowse:forceStable()
+
+    /* alignLeft: blank the cells right of the columns (a cut column left them) */
+    IF ::FalignLeft .AND. ::FoBrowse:nRight - ::FoBrowse:nLeft + 1 < ::Fwidth
+        ::clearRight( hb_tokenGet( cColor, 1, "," ) )
+    ENDIF
 
     /* TBrowse writes one character per cell: give CJK characters their
        second cell (the whole browse was just redrawn - see ht_widenRegion) */
@@ -798,5 +816,42 @@ METHOD PROCEDURE refreshCurrent() CLASS HTBrowse
     IF parent != NIL .AND. parent:isDerivedFrom( "HTWidget" )
         parent:repaintChild( self )
     ENDIF
+
+RETURN
+
+/** alignLeft: the width the columns take when all fit in nWidth cells
+ * (column widths + separators), else nWidth.
+ * @param nWidth Width of the widget
+ * @return Width TBrowse should get
+ */
+METHOD FUNCTION fitWidth( nWidth ) CLASS HTBrowse
+
+    LOCAL nTotal := 0, n, oCol, cSep
+
+    FOR n := 1 TO ::FoBrowse:colCount
+        oCol := ::FoBrowse:getColumn( n )
+        IF n > 1
+            cSep := IIF( oCol:colSep == NIL, ::FoBrowse:colSep, oCol:colSep )
+            nTotal += IIF( HB_ISSTRING( cSep ), Len( cSep ), 1 )
+        ENDIF
+        nTotal += ::FoBrowse:colWidth( n )
+        IF nTotal >= nWidth
+            RETURN nWidth
+        ENDIF
+    NEXT
+
+RETURN Max( 1, nTotal )
+
+/** alignLeft: blanks the cells right of the TBrowse (viewport coordinates).
+ * @param cColor Color of the blank cells
+ */
+METHOD PROCEDURE clearRight( cColor ) CLASS HTBrowse
+
+    LOCAL nCol := ::FoBrowse:nRight - ::FoBrowse:nLeft + 1, nRow
+    LOCAL cBlank := Space( ::Fwidth - nCol )
+
+    FOR nRow := 0 TO ::Fheight - 1
+        DispOutAt( nRow, nCol, cBlank, cColor )
+    NEXT
 
 RETURN

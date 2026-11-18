@@ -31,6 +31,7 @@ PROCEDURE Main()
     TestCancelTask()
     TestRunPendingTasks()
     TestRepeatSurvivesExecution()
+    TestTaskRunsOnceWhenNested()
 
     nTotal := nPass + nFail
     QOut( "" )
@@ -195,5 +196,20 @@ STATIC PROCEDURE TestRepeatSurvivesExecution()
 
     /* clean up */
     el:cancelTask( nId )
+
+RETURN
+
+/* a one-shot task whose code polls pending tasks again (a modal dialog's
+   event loop does) must not run a second time from there */
+STATIC PROCEDURE TestTaskRunsOnceWhenNested()
+
+    LOCAL el := HTEventLoop(), nRuns := 0
+
+    QOut( "--- one-shot task with a nested event loop ---" )
+    el:schedule( {|| nRuns++, el:runPendingTasks() }, 0 )
+    el:runPendingTasks()
+    Assert( "nested runPendingTasks() does not run the task again", nRuns == 1 )
+    el:runPendingTasks()
+    Assert( "the task is gone after it ran", nRuns == 1 )
 
 RETURN
