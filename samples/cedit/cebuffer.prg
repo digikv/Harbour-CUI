@@ -53,8 +53,17 @@ EXPORTED:
     DATA nLastRow   INIT 0
     DATA nLastCol   INIT 0
 
+    DATA cSyntax    INIT ""            /* cesyntax.prg: "harbour", "c", ... "" = none */
+    DATA lHilite    INIT .T.           /* F8 */
+    DATA aStates                       /* syntax state at the start of each line */
+    DATA nStateValid INIT 1            /* aStates[ 1 .. n ] are valid */
+    DATA aBack                         /* positions before a jump (search, go to): Alt-B */
+
     METHOD new()
-    METHOD load( cFile, cDefCP )
+    METHOD load( cFile, cDefCP, lForce )
+    METHOD find( cWhat, nRow, nCol, lCase, lWord, lBack, lWrap )
+    METHOD invalidate( nRow ) INLINE ::nStateValid := Min( ::nStateValid, Max( 1, nRow ) )
+    METHOD pushBack()
     METHOD save( cFile )
     METHOD setText( cText )
     METHOD getText()
@@ -81,11 +90,23 @@ METHOD new() CLASS CEBuffer
     ::aLines := { "" }
     ::aUndo := {}
     ::aRedo := {}
+    ::aStates := { 0 }
+    ::aBack := {}
 RETURN self
 
+/* the cursor before a jump, for Alt-B */
+METHOD pushBack() CLASS CEBuffer
+    AAdd( ::aBack, { ::nRow, ::nCol } )
+    IF Len( ::aBack ) > 50
+        hb_ADel( ::aBack, 1, .T. )
+    ENDIF
+RETURN NIL
+
 /* Reads a file. A missing file gives an empty buffer with that name (it is
-   made by the first save). .F. and ::cError when the file cannot be read. */
-METHOD load( cFile, cDefCP ) CLASS CEBuffer
+   made by the first save). .F. and ::cError when the file cannot be read.
+   A file that is not UTF-8 is read in cDefCP; lForce: in cDefCP always
+   (Shift-F8: the file read again in another codepage). */
+METHOD load( cFile, cDefCP, lForce ) CLASS CEBuffer
 
     LOCAL cRaw
 
@@ -111,7 +132,12 @@ METHOD load( cFile, cDefCP ) CLASS CEBuffer
         ::lBOM := .T.
         cRaw := hb_BSubStr( cRaw, 4 )
     ENDIF
-    IF ! hb_StrIsUTF8( cRaw )
+    IF hb_defaultValue( lForce, .F. )
+        ::cCP := cDefCP
+        IF !( cDefCP == "UTF8" )
+            cRaw := hb_StrToUTF8( cRaw, cDefCP )
+        ENDIF
+    ELSEIF ! hb_StrIsUTF8( cRaw )
         ::cCP := cDefCP
         cRaw := hb_StrToUTF8( cRaw, cDefCP )
     ENDIF
@@ -188,6 +214,8 @@ METHOD setText( cText ) CLASS CEBuffer
     ::aRedo := {}
     ::nSavedGroup := 0
     ::cLastKind := ""
+    ::aStates := { 0 }
+    ::nStateValid := 1
 
 RETURN NIL
 
@@ -230,6 +258,7 @@ METHOD insertText( nRow, nCol, cText ) CLASS CEBuffer
         RETURN { nRow, nCol }
     ENDIF
     aEnd := ce_BufIns( ::aLines, nRow, nCol, cText )
+    ::invalidate( nRow )
 
     aLast := IIF( Empty( ::aUndo ), NIL, ATail( ::aUndo ) )
     IF aLast != NIL .AND. aLast[ UR_GROUP ] == ::nGroup .AND. aLast[ UR_TYPE ] == "I" .AND. ;
@@ -253,6 +282,7 @@ METHOD deleteRange( nR1, nC1, nR2, nC2 ) CLASS CEBuffer
         RETURN ""
     ENDIF
     cText := ce_BufDel( ::aLines, nR1, nC1, nR2, nC2 )
+    ::invalidate( nR1 )
 
     aLast := IIF( Empty( ::aUndo ), NIL, ATail( ::aUndo ) )
     IF aLast != NIL .AND. aLast[ UR_GROUP ] == ::nGroup .AND. aLast[ UR_TYPE ] == "D" .AND. ;
@@ -285,6 +315,7 @@ METHOD undo() CLASS CEBuffer
     DO WHILE ! Empty( ::aUndo ) .AND. ATail( ::aUndo )[ UR_GROUP ] == nGroup
         aRec := ATail( ::aUndo )
         ASize( ::aUndo, Len( ::aUndo ) - 1 )
+        ::invalidate( aRec[ UR_ROW1 ] )
         IF aRec[ UR_TYPE ] == "I"
             ce_BufDel( ::aLines, aRec[ UR_ROW1 ], aRec[ UR_COL1 ], aRec[ UR_ROW2 ], aRec[ UR_COL2 ] )
         ELSE
@@ -313,6 +344,7 @@ METHOD redo() CLASS CEBuffer
     ASize( ::aRedo, Len( ::aRedo ) - 1 )
     FOR i := Len( aDone ) TO 1 STEP -1
         aRec := aDone[ i ]
+        ::invalidate( aRec[ UR_ROW1 ] )
         IF aRec[ UR_TYPE ] == "I"
             aEnd := ce_BufIns( ::aLines, aRec[ UR_ROW1 ], aRec[ UR_COL1 ], aRec[ UR_TEXT ] )
             ::nRow := aEnd[ 1 ]
@@ -362,7 +394,81 @@ METHOD selText() CLASS CEBuffer
 
 RETURN ce_RangeText( ::aLines, a[ 1 ], a[ 2 ], a[ 3 ], a[ 4 ] )
 
+/* Finds cWhat (one line of text). Forward: at nRow, nCol or after it; back:
+   ending before it. lCase: case sensitive, lWord: whole words, lWrap: past
+   the end go on from the start (from the end going back).
+   Returns { nRow, nCol, lWrapped } or NIL. */
+METHOD find( cWhat, nRow, nCol, lCase, lWord, lBack, lWrap ) CLASS CEBuffer
+
+    LOCAL nCount := Len( ::aLines ), n, nLine, p, cFind, cLine, lWrapped := .F.
+
+    IF Len( cWhat ) == 0
+        RETURN NIL
+    ENDIF
+    cFind := IIF( lCase, cWhat, Upper( cWhat ) )
+    FOR n := 0 TO nCount
+        IF lBack
+            nLine := nRow - n
+            IF nLine < 1
+                IF ! lWrap
+                    EXIT
+                ENDIF
+                nLine += nCount
+                lWrapped := .T.
+            ENDIF
+        ELSE
+            nLine := nRow + n
+            IF nLine > nCount
+                IF ! lWrap
+                    EXIT
+                ENDIF
+                nLine -= nCount
+                lWrapped := .T.
+            ENDIF
+        ENDIF
+        cLine := IIF( lCase, ::aLines[ nLine ], Upper( ::aLines[ nLine ] ) )
+        IF lBack
+            p := ce_LastMatch( cLine, cFind, IIF( n == 0, nCol - 1, Len( cLine ) ), lWord, ::aLines[ nLine ] )
+        ELSE
+            p := ce_NextMatch( cLine, cFind, IIF( n == 0, nCol, 1 ), lWord, ::aLines[ nLine ] )
+        ENDIF
+        IF p > 0
+            RETURN { nLine, p, lWrapped }
+        ENDIF
+    NEXT
+
+RETURN NIL
+
 /*----------------------------------------------------------- helpers */
+
+/* first match at nFrom or after it (0 = none) */
+STATIC FUNCTION ce_NextMatch( cLine, cFind, nFrom, lWord, cOrig )
+
+    LOCAL p := hb_At( cFind, cLine, nFrom )
+
+    DO WHILE p > 0 .AND. lWord .AND. ! ce_WholeWord( cOrig, p, Len( cFind ) )
+        p := hb_At( cFind, cLine, p + 1 )
+    ENDDO
+
+RETURN p
+
+/* last match that ends at nTo or before it (0 = none) */
+STATIC FUNCTION ce_LastMatch( cLine, cFind, nTo, lWord, cOrig )
+
+    LOCAL p := hb_At( cFind, cLine ), nLast := 0
+
+    DO WHILE p > 0 .AND. p + Len( cFind ) - 1 <= nTo
+        IF ! lWord .OR. ce_WholeWord( cOrig, p, Len( cFind ) )
+            nLast := p
+        ENDIF
+        p := hb_At( cFind, cLine, p + 1 )
+    ENDDO
+
+RETURN nLast
+
+STATIC FUNCTION ce_WholeWord( cLine, p, nLen )
+RETURN ( p == 1 .OR. ! ce_IsWordChar( SubStr( cLine, p - 1, 1 ) ) ) .AND. ;
+       ! ce_IsWordChar( SubStr( cLine, p + nLen, 1 ) )
 
 /* inserts cText into aLines at nRow, nCol; returns the end position */
 FUNCTION ce_BufIns( aLines, nRow, nCol, cText )

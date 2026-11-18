@@ -41,6 +41,8 @@ EXPORTED:
     DATA lDragging   INIT .F.
     DATA nDragRow    INIT 0
     DATA nDragCol    INIT 0
+    DATA cColor      INIT ""          /* text color, "" = the theme's (HT_CLR_LINEEDIT_FOCUSED) */
+    DATA cSelColor   INIT ""          /* selection, "" = the theme's */
 
     PROPERTY onCursor READWRITE      /* {|| ... } after a key / click: status line */
     PROPERTY onChange READWRITE      /* {|| ... } the text changed */
@@ -77,6 +79,9 @@ EXPORTED:
     METHOD redo()
     METHOD gotoPos( nRow, nCol )
     METHOD selectWord( nRow, nCol )
+    METHOD wordAtCursor()
+    METHOD matchBracket()
+    METHOD lineState( nLine, hDef, aClr )
     METHOD changed()
     METHOD canEdit() INLINE ::oBuf != NIL .AND. ! ::oBuf:lReadOnly
 
@@ -98,9 +103,9 @@ RETURN NIL
 METHOD PROCEDURE paintEvent( event ) CLASS HTCodeEdit
 
     LOCAL nRows := MaxRow() + 1, nCols := MaxCol() + 1, nRow, nLine
-    LOCAL cBase := HTTheme():getColor( HT_CLR_LINEEDIT_FOCUSED )
-    LOCAL cSel := HTTheme():getColor( HT_CLR_LINEEDIT_SELECTED )
-    LOCAL oB := ::oBuf, aSel
+    LOCAL cBase := IIF( Empty( ::cColor ), HTTheme():getColor( HT_CLR_LINEEDIT_FOCUSED ), ::cColor )
+    LOCAL cSel := IIF( Empty( ::cSelColor ), HTTheme():getColor( HT_CLR_LINEEDIT_SELECTED ), ::cSelColor )
+    LOCAL oB := ::oBuf, aSel, hDef, aClr, aCh, aColors
 
     HB_SYMBOL_UNUSED( event )
 
@@ -123,10 +128,18 @@ METHOD PROCEDURE paintEvent( event ) CLASS HTCodeEdit
         ENDIF
     ENDIF
 
+    /* syntax highlighting (cesyntax.prg) */
+    hDef := IIF( oB:lHilite .AND. ! Empty( oB:cSyntax ), ce_SyntaxDef( oB:cSyntax ), NIL )
+    IF hDef != NIL
+        aClr := ce_SyntaxColors( cBase )
+    ENDIF
+
     FOR nRow := 0 TO nRows - 1
         nLine := oB:nTop + nRow
         IF nLine <= oB:lineCount()
-            ce_PaintLine( nRow, oB:aLines[ nLine ], nLine, oB:nLeft, nCols, oB:nTab, cBase, cSel, aSel )
+            aCh := ce_Chars( oB:aLines[ nLine ] )
+            aColors := IIF( hDef == NIL, NIL, ce_Colorize( aCh, ::lineState( nLine, hDef, aClr ), hDef, aClr )[ 1 ] )
+            ce_PaintLine( nRow, aCh, aColors, nLine, oB:nLeft, nCols, oB:nTab, cBase, cSel, aSel )
         ELSE
             DispOutAt( nRow, 0, Space( nCols ), cBase )
         ENDIF
@@ -225,8 +238,9 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS HTCodeEdit
                 RETURN
             ENDIF
             EXIT
-        CASE 2                         /* Ctrl-B (bracket, later), or Ctrl-Right */
+        CASE 2                         /* Ctrl-B (matching bracket), or Ctrl-Right */
             IF ce_KeyDown( VK_KEY_B )
+                ::matchBracket()
                 keyEvent:accept()
                 RETURN
             ENDIF
@@ -807,6 +821,97 @@ METHOD selectWord( nRow, nCol ) CLASS HTCodeEdit
 
 RETURN NIL
 
+/* the word at the cursor (or right before it), "" if none */
+METHOD wordAtCursor() CLASS HTCodeEdit
+
+    LOCAL oB := ::oBuf, cLine := oB:line( oB:nRow ), n1 := oB:nCol, n2
+
+    IF ! ce_IsWordChar( SubStr( cLine, n1, 1 ) ) .AND. n1 > 1 .AND. ce_IsWordChar( SubStr( cLine, n1 - 1, 1 ) )
+        n1--
+    ENDIF
+    IF ! ce_IsWordChar( SubStr( cLine, n1, 1 ) )
+        RETURN ""
+    ENDIF
+    DO WHILE n1 > 1 .AND. ce_IsWordChar( SubStr( cLine, n1 - 1, 1 ) )
+        n1--
+    ENDDO
+    n2 := n1
+    DO WHILE n2 <= Len( cLine ) .AND. ce_IsWordChar( SubStr( cLine, n2, 1 ) )
+        n2++
+    ENDDO
+
+RETURN SubStr( cLine, n1, n2 - n1 )
+
+/* Ctrl-B: to the pair of the bracket at the cursor (or right before it) */
+METHOD matchBracket() CLASS HTCodeEdit
+
+    LOCAL oB := ::oBuf, cPairs := "()[]{}", cLine := oB:line( oB:nRow ), nCol := oB:nCol
+    LOCAL c, p, cOpen, cClose, nDir, nDepth := 0, nRow, aCh, i, nLines := 0
+
+    c := SubStr( cLine, nCol, 1 )
+    IF Empty( c ) .OR. !( c $ cPairs )
+        nCol--
+        c := SubStr( cLine, nCol, 1 )
+        IF nCol < 1 .OR. Empty( c ) .OR. !( c $ cPairs )
+            RETURN .F.
+        ENDIF
+    ENDIF
+    p := At( c, cPairs )
+    IF p % 2 == 1
+        cOpen := c
+        cClose := SubStr( cPairs, p + 1, 1 )
+        nDir := 1
+    ELSE
+        cOpen := SubStr( cPairs, p - 1, 1 )
+        cClose := c
+        nDir := -1
+    ENDIF
+
+    nRow := oB:nRow
+    aCh := ce_Chars( cLine )
+    i := nCol
+    DO WHILE nLines < 20000
+        DO WHILE i >= 1 .AND. i <= Len( aCh )
+            IF aCh[ i ] == cOpen
+                nDepth += nDir
+            ELSEIF aCh[ i ] == cClose
+                nDepth -= nDir
+            ENDIF
+            IF nDepth == 0
+                oB:pushBack()
+                ::gotoPos( nRow, i )
+                RETURN .T.
+            ENDIF
+            i += nDir
+        ENDDO
+        nRow += nDir
+        IF nRow < 1 .OR. nRow > oB:lineCount()
+            EXIT
+        ENDIF
+        aCh := ce_Chars( oB:aLines[ nRow ] )
+        i := IIF( nDir > 0, 1, Len( aCh ) )
+        nLines++
+    ENDDO
+
+RETURN .F.
+
+/* syntax state at the start of nLine; the states of the lines before it are
+   computed once and kept in the buffer until a change above them */
+METHOD lineState( nLine, hDef, aClr ) CLASS HTCodeEdit
+
+    LOCAL oB := ::oBuf, n
+
+    DO WHILE oB:nStateValid < nLine
+        n := oB:nStateValid
+        IF Len( oB:aStates ) <= n
+            ASize( oB:aStates, n + 64 )
+        ENDIF
+        oB:aStates[ n + 1 ] := ce_Colorize( ce_Chars( oB:aLines[ n ] ), oB:aStates[ n ], hDef, aClr )[ 2 ]
+        oB:nStateValid++
+    ENDDO
+
+RETURN oB:aStates[ nLine ]
+
 /*----------------------------------------------------------- mouse */
 
 METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTCodeEdit
@@ -884,9 +989,9 @@ RETURN
 /*----------------------------------------------------------- helpers */
 
 /* one screen row: the visible cells of cLine, the selection in cSel */
-STATIC PROCEDURE ce_PaintLine( nRow, cLine, nLine, nLeft, nCols, nTab, cBase, cSel, aSel )
+STATIC PROCEDURE ce_PaintLine( nRow, aCh, aColors, nLine, nLeft, nCols, nTab, cBase, cSel, aSel )
 
-    LOCAL aCh := ce_Chars( cLine ), nCell := 0, i, ch, nW, cClr, cOut
+    LOCAL nCell := 0, i, ch, nW, cClr, cOut
     LOCAL cRun := "", cRunClr := NIL, nRunCell := 0, nEnd, lSel, nStart
 
     FOR i := 1 TO Len( aCh )
@@ -901,7 +1006,7 @@ STATIC PROCEDURE ce_PaintLine( nRow, cLine, nLine, nLeft, nCols, nTab, cBase, cS
                     lSel := ( nLine > aSel[ 2 ] .OR. i >= aSel[ 3 ] ) .AND. ( nLine < aSel[ 4 ] .OR. i < aSel[ 5 ] )
                 ENDIF
             ENDIF
-            cClr := IIF( lSel, cSel, cBase )
+            cClr := IIF( lSel, cSel, IIF( aColors == NIL, cBase, aColors[ i ] ) )
             nStart := Max( nCell, nLeft )
             IF ch == Chr( 9 ) .OR. nCell < nLeft .OR. nCell + nW > nLeft + nCols
                 /* tab, or a wide character cut by the edge: spaces */
