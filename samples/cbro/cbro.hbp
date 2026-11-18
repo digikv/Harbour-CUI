@@ -1,0 +1,41 @@
+# CBro - xBase database browser in character mode (Harbour-CUI)
+# build.bat (Windows) builds it with the newest Harbour in D:\tools\harbour-core.
+#   hbmk2 cbro.hbp                LetoDBf client (default)
+#   hbmk2 cbro.hbp -env:CBRO_LETODB=yes   LetoDB client
+# Linux: the same with the hbmk2 of that Harbour.
+# The XLSX class: ../../../xlsx/XLSXClass.prg (see below);
+#   LETO client libs in lib/linux/letodbf | letodb (rddleto.hbp of LetoDBf / LetoDB)
+
+-w3 -es2
+-ocbro
+{win}cbro.rc
+
+../../hbtui.hbc
+
+cbro.prg
+cbhelp.prg
+cbcalc.prg
+cbxlsx.prg
+cbmemo.prg
+# the XLSX class of Srđan Dragojlović (github.com/digikv/xlsx)
+# in ../../../xlsx (next to the repository); another folder: build.bat with CBRO_XLSXDIR,
+# or: hbmk2 cbro.hbp -env:CBRO_XLSXOWN=yes <folder>/XLSXClass.prg
+{!CBRO_XLSXOWN}../../../xlsx/XLSXClass.prg
+
+hbziparc.hbc
+hbmzip.hbc
+hbmemio.hbc
+rddsql.hbc
+sddodbc.hbc
+sddsqlt3.hbc
+{win}hbwin.hbc
+
+# without the Harbour compiler in the program (its license is GPL without the
+# linking exception): -env:CBRO_NOCOMPILER=yes - scripts compile with harbour.exe
+{CBRO_NOCOMPILER}-prgflag=-DCBRO_NO_COMPILER
+
+# LETO driver: LetoDBf, or LetoDB with -env:CBRO_LETODB=yes (one of them: both are "LETO")
+{!CBRO_LETODB}-Llib/${hb_plat}/letodbf
+{CBRO_LETODB}-Llib/${hb_plat}/letodb
+-lrddleto
+{win}-lws2_32

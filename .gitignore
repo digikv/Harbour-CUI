@@ -15,4 +15,12 @@ lib
 deps/
 samples/theme_editor/themes.json
 samples/game/nebula.hi
-samples/cbro/
+samples/cbro/*.dbf
+samples/cbro/*.dbt
+samples/cbro/*.fpt
+samples/cbro/*.cdx
+samples/cbro/*.ntx
+samples/cbro/*.cbv
+samples/cbro/*.xlsx
+samples/cbro/cbro.ini
+!COPYING

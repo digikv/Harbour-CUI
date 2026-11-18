@@ -1,0 +1,40 @@
+CBro - xBase database browser and file manager in character mode
+Copyright (c) 2026 Srđan Dragojlović
+
+CBro is dual licensed. You may use it under the terms of ONE of these
+licenses, at your choice:
+
+1. GNU General Public License, version 3 or (at your option) any later
+   version, as published by the Free Software Foundation. The full text is
+   in the file COPYING.
+
+   Under the GPL you may use, study, change and share CBro freely. If you
+   distribute CBro or a work based on it, you must distribute it under the
+   GPL as well, with its complete source code.
+
+2. A commercial license from the author.
+
+   For use that the GPL does not allow - for example including CBro or parts
+   of it in a closed source (proprietary) product, or distributing a changed
+   CBro without its source code - a commercial license is needed. It is
+   granted in writing by the author:
+
+       Srđan Dragojlović, S.O.K. doo Kraljevo, https://sokdoo.com
+       e-mail: digikv@yahoo.com, sok@sokdoo.com
+
+   A program distributed under the commercial license must be built without
+   the Harbour compiler (build.bat commercial, -env:CBRO_NOCOMPILER=yes): the
+   Harbour compiler is licensed under the GPL without a linking exception.
+
+Unless a commercial license says otherwise, CBro is provided "as is",
+without warranty of any kind, express or implied, including but not limited
+to the warranties of merchantability, fitness for a particular purpose and
+noninfringement. In no event shall the author be liable for any claim,
+damages or other liability arising from the use of CBro.
+
+CBro was made as a successor to BroPlus by Peter Volz (SmartCode
+Programming). It contains no BroPlus source code. BroPlus is a name of its
+owner, used here only to describe CBro.
+
+The components CBro is built with keep their own licenses: see
+THIRD-PARTY.md.

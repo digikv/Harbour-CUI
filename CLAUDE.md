@@ -390,6 +390,9 @@ samples/          Demo applications (human-facing, require a display)
   unicode/        Chinese/Japanese/Korean/Cyrillic text: IME input in HTGet, HTLineEdit,
                   HTTextEdit and the HTBrowse editor, wide (2-cell) characters
   showcase/       Full controls demo with all features
+  cbro/           CBro: xBase browser, BroPlus successor (own cbro.hbp + build.bat; dual license
+                  GPL-3+ / commercial, see samples/cbro/LICENSE): DBF, LetoDB/LetoDBf, SQL (SQLMIX),
+                  .xlsx via the user's XLSX class (../../../xlsx), scripts, dynamic indexes, memo arrays/JSON
 tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_basic      HTPoint, HTSize, all HTEvent subclasses
   test_eventloop  HTEventLoop schedule, scheduleRepeat, cancelTask, runPendingTasks

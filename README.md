@@ -128,12 +128,16 @@ cd samples/hello && hbmk2 hello.prg hbmk.hbm && ./hello
 | `fonteditor` | Pixel font editor for `.glyphs` files: draw with the mouse, preview, build TTF + X11 fonts (F9) |
 | `game` | NEBULA RAID: a shooter drawn entirely with its own 8×8 font, held keys for moving and firing |
 | `showcase` | Full controls demo |
+| `cbro` | CBro: xBase database browser and file manager, a successor to BroPlus - DBF, LetoDB/LetoDBf, SQL, Excel, scripts (own build: `samples/cbro/README.md`; dual license GPL-3+ / commercial) |
 
 ```bash
 cd samples/<name> && hbmk2 <name>.prg hbmk.hbm && ./<name>
 
 # the window sample's source is window_01.prg
 cd samples/window && hbmk2 window_01.prg hbmk.hbm && ./window_01
+
+# CBro has its own project (see samples/cbro/README.md)
+cd samples/cbro && hbmk2 cbro.hbp && ./cbro
 ```
 
 ## Requirements
