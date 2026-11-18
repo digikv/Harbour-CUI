@@ -421,7 +421,8 @@ samples/          Demo applications (human-facing, require a display)
                   run them only when the user is away.
                   Not on GitHub yet: it lives only on the local branch `cedit` (on top of main) -
                   never push it. Library / other changes go to main (commit them on main, push,
-                  then `git rebase main` on cedit)
+                  then `git rebase main` on cedit). One folder (D:\projekti\Harbour-CUI, no extra
+                  worktree): `git switch main` -> commit -> push, `git switch cedit` -> `git rebase main`
 tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_basic      HTPoint, HTSize, all HTEvent subclasses
   test_eventloop  HTEventLoop schedule, scheduleRepeat, cancelTask, runPendingTasks
