@@ -413,7 +413,12 @@ samples/          Demo applications (human-facing, require a display)
                   license like cbro). htcodeedit.prg = HTCodeEdit widget (tabs, wide cells, stream +
                   vertical block selection, clipboard, mouse drag), cebuffer.prg = CEBuffer (lines,
                   cursor, grouped undo/redo, UTF-8 / CP852, CRLF/LF, BOM). Ctrl-Z vs Ctrl-Left (both
-                  Inkey 26): ht_keyDown( 'Z' ). In progress: search/replace, syntax highlight, settings.
+                  Inkey 26): ht_keyDown( 'Z' ). 1.0: search / replace (F7 ...), go to, Ctrl-B, Alt-B,
+                  cesyntax.prg = highlighting (8 languages, states cached per line in CEBuffer,
+                  colors picked against the theme's palette), Shift-F8 codepage, cedit.ini (settings,
+                  recent files with the cursor). "Turbo Pascal" editor colors = an own theme with the
+                  VGA palette (ce_TurboTheme). UI tests that send keys steal the user's keyboard:
+                  run them only when the user is away.
                   Not on GitHub yet: it lives only on the local branch `cedit` (on top of main) -
                   never push it. Library / other changes go to main (commit them on main, push,
                   then `git rebase main` on cedit)

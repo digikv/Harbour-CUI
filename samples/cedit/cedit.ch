@@ -6,7 +6,7 @@
 #ifndef CEDIT_CH_
 #define CEDIT_CH_
 
-#define CE_VERSION      "0.1"
+#define CE_VERSION      "1.0"
 
 /* selection: none, stream (Shift + arrows, F3), vertical block (Ctrl-F3) */
 #define CE_SEL_NONE     0

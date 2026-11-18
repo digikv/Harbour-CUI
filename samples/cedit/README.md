@@ -7,10 +7,6 @@ commercial license from the author — see `LICENSE`.
 Made to work like HbEdit by Alexander S. Kresin — the same F-keys, so those who are used to it
 feel at home — but written from scratch on Harbour-CUI: no HbEdit source code is used.
 
-Status: **version 0.1, part 1 of version 1** — files, editing, selection, clipboard, undo, menu.
-Coming next: search / replace / go to line, syntax highlighting and codepage switching, settings
-and recent files kept between sessions.
-
 ## Keys
 
 F9 opens the menu (also Alt + the underlined letter, or the mouse); the menu shows the key of every
@@ -31,19 +27,44 @@ command. F1 shows the keys in the editor.
 | Ctrl-Y | delete line |
 | Ctrl-Z, Alt-Backspace / Ctrl-R | undo / redo |
 | Ins | insert / overwrite |
+| Tab | spaces to the next tab stop; with several lines selected: indent |
+| F7 / Ctrl-F7 | find / replace (case, whole words; replace asks: Yes / No / All / Cancel) |
+| Shift-F7 / Alt-F7 | next / previous |
+| Alt-8 / Alt-3 | the word at the cursor, forwards / backwards |
+| Alt-F8 | go to line[,column] |
+| Ctrl-B | matching bracket |
+| Alt-B | back to where the cursor was before a jump |
+| F8 | syntax highlighting on / off (View - Language: choose the language) |
+| Shift-F8 | codepage: an unchanged file is read again in it, a changed one is saved in it |
 | Home | first text of the line, again: line start |
 | Ctrl-Left / Ctrl-Right | word left / right |
 | Ctrl-Home / Ctrl-End, Ctrl-PgUp / Ctrl-PgDn | start / end of the text, top / bottom of the screen |
 | Ctrl-Up / Ctrl-Down | scroll a line |
-| Tab | spaces to the next tab stop; with several lines selected: indent |
+
+The menu View also has Theme, Editor colors (theme colors, Turbo Pascal - yellow on blue with the
+VGA palette, white on blue, ...) and Options (tab size, Tab with spaces, highlighting, the codepage
+of files that are not UTF-8).
 
 ## Files
 
 - Text is edited in UTF-8. A file that is not valid UTF-8 is read and written in CP852 (DOS /
-  Harbour DBF Latin); the status line shows the codepage.
+  Harbour DBF Latin; Options: another codepage); the status line shows the codepage.
 - Line ends (CRLF or LF), the final line end and a UTF-8 BOM are kept as they were.
-- Tabs are kept and shown up to the next tab stop (4); wide (CJK) characters take two cells.
+- Tabs are kept and shown up to the next tab stop; wide (CJK) characters take two cells.
 - A file given on the command line that does not exist is made by the first save.
+
+## Syntax highlighting
+
+Harbour / Clipper / xBase; C, C++, C#, Java, JavaScript, PHP, Go; SQL; Python; shell scripts;
+Windows batch; INI and hbmk2 files (.hbp, .hbc); HTML and XML — chosen by the file extension.
+The colors are picked for the theme's palette (they stay readable in every theme), the
+Turbo Pascal editor colors have their own.
+
+## Settings
+
+`cedit.ini`: next to the program when it is there (a portable copy), else in `%APPDATA%\CEdit`
+(Windows) or `~/.config/cedit` (Linux). It keeps the options, the theme and the editor colors, and
+the last 20 files with the line and column of the cursor — a recent file opens where it was left.
 
 ## Build
 
@@ -58,5 +79,6 @@ Usage: `cedit [file ...]`
 
 - Ctrl-Z and Ctrl-Left (also Ctrl-B and Ctrl-Right) give the same Inkey code; CEdit tells them apart
   by the state of the Z / B key (`ht_keyDown()`).
-- `htcodeedit.prg` (the editor widget `HTCodeEdit`) and `cebuffer.prg` (`CEBuffer`: text, cursor,
-  selection, undo / redo of one file) do not depend on the rest of CEdit.
+- `htcodeedit.prg` (the editor widget `HTCodeEdit`), `cebuffer.prg` (`CEBuffer`: text, cursor,
+  selection, undo / redo, search of one file) and `cesyntax.prg` (languages, colorizer) do not
+  depend on the rest of CEdit.

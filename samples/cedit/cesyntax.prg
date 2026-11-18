@@ -137,19 +137,88 @@ STATIC FUNCTION ce_Def( lCase, cKeywords, aLine, aFirst, aBlock, cQuotes, lEsc, 
 
 RETURN h
 
-/* colors: base = the text color of the editor; the others with its
-   background, chosen for a light or a dark one */
+/* Colors: base = the text color of the editor; keyword, string, comment,
+   number, preprocessor on its background. A theme's palette can make any
+   color index look like anything (Classic: 14 = light blue), so for every
+   role the first candidate that stands out from the background in the
+   palette of the theme is taken. */
 FUNCTION ce_SyntaxColors( cBase )
 
-    LOCAL n := At( "/", cBase ), cBg := IIF( n > 0, SubStr( cBase, n + 1 ), "N" ), aFg
+    LOCAL n := At( "/", cBase ), cBg := IIF( n > 0, SubStr( cBase, n + 1 ), "0" )
+    LOCAL nBg := ce_ColorIndex( cBg ), nText := ce_ColorIndex( IIF( n > 0, Left( cBase, n - 1 ), cBase ) )
+    LOCAL aPal, nLBg, aRoles, aOut := { cBase }, aTaken := {}, a, nFg, nPick, nPass
 
-    IF "*" $ cBg .OR. "+" $ cBg .OR. Upper( StrTran( cBg, "+", "" ) ) == "W"
-        aFg := { "B", "R", "G", "RB", "BG" }            /* light background */
+    aPal := HTTheme():themePalette( HTTheme():themeName() )
+    IF ! HB_ISARRAY( aPal ) .OR. Len( aPal ) < 16
+        aPal := { 0, 8388608, 32768, 8421376, 128, 8388736, 32896, 12632256, ;
+                  8421504, 16711680, 65280, 16776960, 255, 16711935, 65535, 16777215 }   /* VGA */
+    ENDIF
+    nLBg := ce_Lum( aPal[ nBg + 1 ] )
+    IF nLBg > 128
+        /* light background: blue, red, green, magenta, cyan (dark ones first) */
+        aRoles := { { 1, 9, 0, 5, 4, 3, 2, 6, 8 }, { 4, 12, 5, 6, 1, 2 }, { 2, 10, 8, 3, 6 }, ;
+                    { 5, 13, 4, 1, 3 }, { 3, 11, 6, 8, 1 } }
     ELSE
-        aFg := { "W+", "GR+", "BG", "RB+", "G+" }       /* dark background */
+        /* dark background: white, yellow, green, magenta, cyan (bright ones first) */
+        aRoles := { { 15, 14, 11, 7, 10, 9, 13, 12 }, { 14, 12, 10, 6, 11, 7, 13 }, { 10, 2, 11, 8, 7, 3, 13 }, ;
+                    { 13, 11, 12, 5, 9, 7 }, { 11, 10, 3, 13, 6, 7 } }
+    ENDIF
+    FOR EACH a IN aRoles
+        /* 1st pass: readable on the background, unlike the text and the
+           other roles; 2nd: readable, not taken; else the last candidate */
+        nPick := -1
+        FOR nPass := 1 TO 2
+            FOR EACH nFg IN a
+                IF nFg != nBg .AND. AScan( aTaken, nFg ) == 0 .AND. ;
+                   Abs( ce_Lum( aPal[ nFg + 1 ] ) - nLBg ) >= 90 .AND. ;
+                   ( nPass == 2 .OR. ( nFg != nText .AND. ce_Dist( aPal[ nFg + 1 ], aPal[ nText + 1 ] ) >= 80 ) )
+                    nPick := nFg
+                    EXIT
+                ENDIF
+            NEXT
+            IF nPick >= 0
+                EXIT
+            ENDIF
+        NEXT
+        IF nPick < 0
+            nPick := ATail( a )
+        ENDIF
+        AAdd( aTaken, nPick )
+        AAdd( aOut, hb_ntos( nPick ) + "/" + cBg )
+    NEXT
+
+RETURN aOut
+
+/* distance of two COLORREFs */
+STATIC FUNCTION ce_Dist( n1, n2 )
+RETURN Sqrt( ( n1 % 256 - n2 % 256 ) ^ 2 + ;
+             ( Int( n1 / 256 ) % 256 - Int( n2 / 256 ) % 256 ) ^ 2 + ;
+             ( Int( n1 / 65536 ) % 256 - Int( n2 / 65536 ) % 256 ) ^ 2 )
+
+/* "14", "GR+", "W*" -> color index 0..15 */
+STATIC FUNCTION ce_ColorIndex( c )
+
+    LOCAL lBright, n
+
+    c := Upper( AllTrim( c ) )
+    IF IsDigit( c )
+        RETURN Max( 0, Min( 15, Val( c ) ) )
+    ENDIF
+    lBright := "+" $ c .OR. "*" $ c
+    c := StrTran( StrTran( c, "+", "" ), "*", "" )
+    n := AScan( { "N", "B", "G", "BG", "R", "RB", "GR", "W" }, {| x | x == c } )
+    IF n == 0
+        n := AScan( { "N", "B", "G", "GB", "R", "BR", "RG", "W" }, {| x | x == c } )
     ENDIF
 
-RETURN { cBase, aFg[ 1 ] + "/" + cBg, aFg[ 2 ] + "/" + cBg, aFg[ 3 ] + "/" + cBg, aFg[ 4 ] + "/" + cBg, aFg[ 5 ] + "/" + cBg }
+RETURN Max( 0, n - 1 ) + IIF( lBright, 8, 0 )
+
+/* brightness 0..255 of a COLORREF (0x00BBGGRR) */
+STATIC FUNCTION ce_Lum( nRGB )
+
+    LOCAL nR := nRGB % 256, nG := Int( nRGB / 256 ) % 256, nB := Int( nRGB / 65536 ) % 256
+
+RETURN 0.299 * nR + 0.587 * nG + 0.114 * nB
 
 /* { aColors, nEndState } of the characters aCh of a line, starting in nState */
 FUNCTION ce_Colorize( aCh, nState, hDef, aClr )

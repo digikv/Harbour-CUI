@@ -54,11 +54,11 @@ PROCEDURE Main( ... )
     ce_LoadSettings()
 
     s_oApp := HTApplication():new()
-    /* the grid before the first window takes its size; a maximized window
-       instead of fullscreen: the taskbar (IME mode indicator) stays visible */
-    ht_fullScreen( .F. )
+    /* full screen; the grid is set up before the first window takes its size.
+       The input language / IME mode is shown in the status line (no taskbar). */
     ht_cuiSetupDisplay( s_oApp:rows(), s_oApp:cols() )
     hb_gtInfo( HB_GTI_WINTITLE, "CEdit" )
+    ce_TurboTheme()
     IF ! s_hSet[ "theme" ] == "Classic" .AND. HTTheme():hasTheme( s_hSet[ "theme" ] )
         HTTheme():loadTheme( s_hSet[ "theme" ] )
     ENDIF
@@ -385,7 +385,7 @@ RETURN .F.
 
 STATIC FUNCTION ce_AskAll()
 
-    LOCAL n
+    LOCAL n, nCur := s_nBuf
 
     FOR n := 1 TO Len( s_aBufs )
         IF s_aBufs[ n ]:isModified() .AND. ! s_aBufs[ n ]:lReadOnly
@@ -395,7 +395,15 @@ STATIC FUNCTION ce_AskAll()
             ENDIF
         ENDIF
     NEXT
-    AEval( s_aBufs, {| o | ce_AddRecent( o ) } )
+    /* all open files to the recent ones, the file worked on last at the top */
+    FOR n := 1 TO Len( s_aBufs )
+        IF n != nCur
+            ce_AddRecent( s_aBufs[ n ] )
+        ENDIF
+    NEXT
+    IF nCur >= 1 .AND. nCur <= Len( s_aBufs )
+        ce_AddRecent( s_aBufs[ nCur ] )
+    ENDIF
 
 RETURN .T.
 
@@ -722,7 +730,7 @@ RETURN
 /* the Find / Replace dialog; .T. = OK with a text to find */
 STATIC FUNCTION ce_SearchDialog( lReplace )
 
-    LOCAL dlg, oFind, oRepl, oCase, oWord, oAsk, nW := 64, nH := IIF( lReplace, 11, 8 ), nRow
+    LOCAL dlg, oFind, oRepl, oCase, oWord, oAsk, nW := 64, nH := IIF( lReplace, 12, 9 ), nRow
     LOCAL oB := ce_Cur(), cInit := s_cFind, a
 
     /* the selection (one line) or the word at the cursor */
@@ -788,7 +796,7 @@ STATIC PROCEDURE ce_CmdGoto()
     IF oB == NIL
         RETURN
     ENDIF
-    cText := ce_InputDialog( "Go to", "Line[,column]:", hb_ntos( oB:nRow ) )
+    cText := ce_InputDialog( "Go to", "Line[,column]:", "" )
     IF Empty( cText )
         RETURN
     ENDIF
@@ -893,19 +901,24 @@ STATIC PROCEDURE ce_CmdTheme()
 
 RETURN
 
-/* the colors of the text: the theme's, or a classic editor look */
+/* The colors of the text: the theme's, or a classic editor look:
+   { text, selection, name, syntax colors (NIL = chosen for the theme's
+   palette), theme to load with them ("" = keep the theme) } */
 STATIC FUNCTION ce_ColorSets()
-RETURN { { "",      "",     "Theme colors" }, ;
-         { "W+/B",  "N/BG", "White on blue (HbEdit, Norton)" }, ;
-         { "GR+/B", "B/W",  "Yellow on blue" }, ;
-         { "W/N",   "N/W",  "Gray on black" }, ;
-         { "N/W*",  "W+/B", "Black on white" } }
+RETURN { { "",      "",     "Theme colors", NIL, "" }, ;
+         { "14/1",  "1/7",  "Turbo Pascal (yellow on blue)", ;
+           { "14/1", "15/1", "11/1", "7/1", "11/1", "10/1" }, "Turbo Pascal" }, ;
+         { "W+/B",  "N/BG", "White on blue (HbEdit, Norton)", NIL, "" }, ;
+         { "GR+/B", "B/W",  "Yellow on blue", NIL, "" }, ;
+         { "W/N",   "N/W",  "Gray on black", NIL, "" }, ;
+         { "N/W*",  "W+/B", "Black on white", NIL, "" } }
 
 STATIC PROCEDURE ce_SetEditorColors( cColor )
     LOCAL a := ce_ColorSets(), n := AScan( a, {| x | x[ 1 ] == cColor } )
     n := Max( 1, n )
     s_oEdit:cColor := a[ n ][ 1 ]
     s_oEdit:cSelColor := a[ n ][ 2 ]
+    s_oEdit:aSyntaxColors := a[ n ][ 4 ]
 RETURN
 
 STATIC PROCEDURE ce_CmdColors()
@@ -917,8 +930,48 @@ STATIC PROCEDURE ce_CmdColors()
     IF n > 0
         s_hSet[ "colors" ] := a[ n ][ 1 ]
         ce_SetEditorColors( a[ n ][ 1 ] )
+        /* Turbo Pascal: its yellow, white and light cyan need the VGA palette */
+        IF ! Empty( a[ n ][ 5 ] ) .AND. HTTheme():hasTheme( a[ n ][ 5 ] )
+            HTTheme():loadTheme( a[ n ][ 5 ] )
+            s_hSet[ "theme" ] := a[ n ][ 5 ]
+            HTApplication():repaintAll()
+        ENDIF
         ce_SaveSettings()
     ENDIF
+
+RETURN
+
+/* the Turbo Pascal 7 look: the VGA palette, menus black on light gray with
+   red hot keys and the chosen entry on green, light gray dialogs, green
+   buttons, a blue desktop (made from HighContrast, which has the VGA palette) */
+STATIC PROCEDURE ce_TurboTheme()
+
+    LOCAL a, aPal
+
+    IF HTTheme():hasTheme( "Turbo Pascal" ) .OR. ! HTTheme():hasTheme( "HighContrast" )
+        RETURN
+    ENDIF
+    a := AClone( HTTheme():themeColors( "HighContrast" ) )
+    aPal := { 0, 8388608, 32768, 8421376, 128, 8388736, 32896, 12632256, ;
+              8421504, 16711680, 65280, 16776960, 255, 16711935, 65535, 16777215 }
+    AEval( { HT_CLR_MENU_BAR, HT_CLR_MENU_ITEM, HT_CLR_MENU_SEP, HT_CLR_CTXMENU_NORMAL, HT_CLR_CTXMENU_SEP, ;
+             HT_CLR_STATUSBAR, HT_CLR_WINDOW, HT_CLR_LABEL, HT_CLR_FRAME, HT_CLR_GET_LABEL, HT_CLR_CHECK_NORMAL, ;
+             HT_CLR_TAB_INACTIVE, HT_CLR_TAB_BAR }, {| n | a[ n ] := "0/7" } )
+    AEval( { HT_CLR_MENU_BAR_SEL, HT_CLR_MENU_ITEM_SEL, HT_CLR_CTXMENU_SELECTED, HT_CLR_BUTTON_NORMAL, ;
+             HT_CLR_TAB_ACTIVE }, {| n | a[ n ] := "0/2" } )
+    a[ HT_CLR_MENU_HOTKEY ]     := "4/7"
+    a[ HT_CLR_MENU_HOTKEY_SEL ] := "4/2"
+    a[ HT_CLR_BUTTON_FOCUSED ]  := "15/2"
+    a[ HT_CLR_CHECK_FOCUSED ]   := "15/7"
+    a[ HT_CLR_TITLEBAR ]        := "15/7"
+    a[ HT_CLR_TITLEBTN ]        := "15/7"
+    AEval( { HT_CLR_GET_NORMAL, HT_CLR_LINEEDIT_NORMAL, HT_CLR_COMBO_NORMAL, HT_CLR_SPINNER_NORMAL }, {| n | a[ n ] := "15/1" } )
+    AEval( { HT_CLR_GET_FOCUSED, HT_CLR_LINEEDIT_FOCUSED, HT_CLR_COMBO_FOCUSED, HT_CLR_SPINNER_FOCUSED }, {| n | a[ n ] := "14/1" } )
+    a[ HT_CLR_LINEEDIT_SELECTED ] := "1/7"
+    AEval( { HT_CLR_LIST_NORMAL, HT_CLR_CHECKLIST_NORMAL, HT_CLR_COMBO_DROP_N }, {| n | a[ n ] := "0/3" } )
+    AEval( { HT_CLR_LIST_SELECTED, HT_CLR_CHECKLIST_SELECTED, HT_CLR_COMBO_DROP_S }, {| n | a[ n ] := "15/1" } )
+    a[ HT_CLR_DESKTOP ] := "7/1"
+    HTTheme():addTheme( "Turbo Pascal", a, aPal )
 
 RETURN
 
@@ -1004,6 +1057,7 @@ STATIC PROCEDURE ce_LoadSettings()
         RETURN
     ENDIF
     h := hb_HGetDef( hIni, "OPTIONS", { => } )
+    hb_HCaseMatch( h, .F. )          /* hb_iniRead() gives the keys in upper case */
     s_hSet[ "theme" ]     := hb_HGetDef( h, "theme", s_hSet[ "theme" ] )
     s_hSet[ "colors" ]    := hb_HGetDef( h, "colors", "" )
     s_hSet[ "tab" ]       := Max( 1, Min( 16, Val( hb_HGetDef( h, "tab", "4" ) ) ) )

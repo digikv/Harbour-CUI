@@ -43,6 +43,7 @@ EXPORTED:
     DATA nDragCol    INIT 0
     DATA cColor      INIT ""          /* text color, "" = the theme's (HT_CLR_LINEEDIT_FOCUSED) */
     DATA cSelColor   INIT ""          /* selection, "" = the theme's */
+    DATA aSyntaxColors                /* { base, keyword, string, comment, number, preproc }, NIL = for the theme */
 
     PROPERTY onCursor READWRITE      /* {|| ... } after a key / click: status line */
     PROPERTY onChange READWRITE      /* {|| ... } the text changed */
@@ -131,7 +132,7 @@ METHOD PROCEDURE paintEvent( event ) CLASS HTCodeEdit
     /* syntax highlighting (cesyntax.prg) */
     hDef := IIF( oB:lHilite .AND. ! Empty( oB:cSyntax ), ce_SyntaxDef( oB:cSyntax ), NIL )
     IF hDef != NIL
-        aClr := ce_SyntaxColors( cBase )
+        aClr := IIF( HB_ISARRAY( ::aSyntaxColors ), ::aSyntaxColors, ce_SyntaxColors( cBase ) )
     ENDIF
 
     FOR nRow := 0 TO nRows - 1
