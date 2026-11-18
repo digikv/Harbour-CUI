@@ -10,15 +10,19 @@ Its GUI sibling is GBro (HWGUI).
 
 ## Download
 
-Ready-to-run programs, no build needed: **[CBro 1.0 release](https://github.com/digikv/Harbour-CUI/releases/tag/cbro-1.0)**
+Ready-to-run programs, no build needed: **[CBro 1.1 release](https://github.com/digikv/Harbour-CUI/releases/tag/cbro-1.1)**
 
 | File | Platform |
 |---|---|
-| `cbro-1.0-win32.zip` | Windows (32-bit, runs on 64-bit Windows too) |
-| `cbro-1.0-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6`, `libodbc2` (unixODBC), `libgpm2` |
+| `cbro-1.1-win32.zip` | Windows (32-bit, runs on 64-bit Windows too) |
+| `cbro-1.1-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6`, `libodbc2` (unixODBC), `libgpm2` |
 
 Unpack and run `cbro` (`cbro /DEMO` opens demo tables, `cbro /?` lists the parameters). Both are
 the GPL build with the LetoDBf client. To build CBro yourself, see [Build](#build).
+
+New in 1.1: Indic scripts (Gujarati, Hindi, …) stay on the cell grid on Windows, and the bottom
+line starts with the input language / IME mode (`HR`, `GU`, `ZH 中`, …), hidden in the taskbar
+under the fullscreen window.
 
 ## What it does
 
@@ -41,7 +45,7 @@ the GPL build with the LetoDBf client. To build CBro yourself, see [Build](#buil
 
 ### Tools used
 
-CBro 1.0 was built and tested with:
+CBro 1.1 was built and tested with:
 
 | | Windows | Linux |
 |---|---|---|
