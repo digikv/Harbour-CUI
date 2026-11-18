@@ -3344,9 +3344,17 @@ STATIC FUNCTION DemoTables( cDir )
             FieldPut( 4, 0d19500101 + ( n * 389 ) % 20000 )
             FieldPut( 5, ( ( n * 7919 ) % 200000 ) / 100 - 300 )
             FieldPut( 6, n % 4 != 0 )
-            IF n % 6 == 0
+            /* memos of every kind: JSON text, an array (FPT stores it as it is), text */
+            DO CASE
+            CASE n % 15 == 0
+                FieldPut( 7, '{"email":"' + Lower( StrTran( FieldGet( 2 ), " ", "." ) ) + '@example.com",' + ;
+                             '"tags":["vip","' + hb_ntos( 2000 + n % 26 ) + '"],"limit":' + hb_ntos( 1000 + n * 10 ) + '}' )
+            CASE n % 10 == 0
+                FieldPut( 7, { "Contact", { "phone", "036/" + StrZero( n * 37 % 1000, 3 ) + "-" + StrZero( n * 91 % 1000, 3 ) }, ;
+                               { "since", 0d20000101 + n * 17 }, { "discount", ( n % 20 ) / 2 }, { "newsletter", n % 20 == 0 } } )
+            CASE n % 6 == 0
                 FieldPut( 7, "Customer since " + hb_ntos( 1990 + n % 30 ) + "." + hb_eol() + "Preferred contact: phone." )
-            ENDIF
+            ENDCASE
             IF n % 23 == 0
                 dbDelete()
             ENDIF
