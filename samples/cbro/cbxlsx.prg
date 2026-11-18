@@ -1,5 +1,5 @@
 /** @file cbxlsx.prg
- * CBro - .xlsx through Srđan Dragojlović's XLSX class (D:\xlsx\XLSXClass.prg,
+ * CBro - .xlsx through Srđan Dragojlović's XLSX class (../xlsx/XLSXClass.prg next to the repository,
  * https://github.com/digikv/xlsx): this file only adapts it to CBro.
  *
  *   CBX_Open( cFile, @cErr )                -> oWorkBook (read) or NIL

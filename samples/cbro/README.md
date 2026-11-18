@@ -79,7 +79,8 @@ Build switches (hbmk2 `-env:`):
 1. Harbour in `D:\tools\harbour-core` (32-bit MinGW, `bin\win\mingw\hbmk2.exe`); the MinGW
    compiler (`C:\msys64\mingw32\bin`) in the PATH. The contribs CBro needs are part of the Harbour
    build.
-2. Harbour-CUI library, in the repository root:
+2. Harbour-CUI library, in the repository root (here `D:\projekti\Harbour-CUI`, with the XLSX class
+   next to it in `D:\projekti\xlsx`):
 
    ```
    D:\tools\harbour-core\bin\win\mingw\hbmk2.exe hbtui.hbp
@@ -90,12 +91,12 @@ Build switches (hbmk2 `-env:`):
 
    ```
    cd /d D:\letodbf
-   mkdir D:\Harbour-CUI\samples\cbro\lib\win\letodbf\.hbmk
-   D:\tools\harbour-core\bin\win\mingw\hbmk2.exe rddleto.hbp -oD:/Harbour-CUI/samples/cbro/lib/win/letodbf/rddleto -workdir=D:/Harbour-CUI/samples/cbro/lib/win/letodbf/.hbmk
+   mkdir D:\projekti\Harbour-CUI\samples\cbro\lib\win\letodbf\.hbmk
+   D:\tools\harbour-core\bin\win\mingw\hbmk2.exe rddleto.hbp -oD:/projekti/Harbour-CUI/samples/cbro/lib/win/letodbf/rddleto -workdir=D:/projekti/Harbour-CUI/samples/cbro/lib/win/letodbf/.hbmk
 
    cd /d C:\letodb
-   mkdir D:\Harbour-CUI\samples\cbro\lib\win\letodb\.hbmk
-   D:\tools\harbour-core\bin\win\mingw\hbmk2.exe rddleto.hbp -oD:/Harbour-CUI/samples/cbro/lib/win/letodb/rddleto -workdir=D:/Harbour-CUI/samples/cbro/lib/win/letodb/.hbmk
+   mkdir D:\projekti\Harbour-CUI\samples\cbro\lib\win\letodb\.hbmk
+   D:\tools\harbour-core\bin\win\mingw\hbmk2.exe rddleto.hbp -oD:/projekti/Harbour-CUI/samples/cbro/lib/win/letodb/rddleto -workdir=D:/projekti/Harbour-CUI/samples/cbro/lib/win/letodb/.hbmk
    ```
 
 4. CBro, in `samples\cbro`:
