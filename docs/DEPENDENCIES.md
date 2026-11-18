@@ -45,7 +45,7 @@ CBro is an application, not a part of the library; its build is described in
 
 | What | Where it comes from | Used for |
 |---|---|---|
-| XLSX class (`XLSXClass.prg`) | https://github.com/digikv/xlsx - clone it next to this repository (`../xlsx`), or `set CBRO_XLSXDIR=<folder>` | Excel: open a sheet as a table, Copy To / Export `.xlsx`, Append From a sheet |
+| XLSX class (`XLSXClass.prg`) | https://github.com/digikv/xlsx - next to this repository (`../xlsx`); `build.bat` clones it when it is missing, or `set CBRO_XLSXDIR=<folder>`. Optional: without it CBro is built without Excel (see [BUILD.md](BUILD.md)) | Excel: open a sheet as a table, Copy To / Export `.xlsx`, Append From a sheet |
 | LetoDBf client (default) or LetoDB client | the LetoDBf / LetoDB sources, built with `rddleto.hbp` into `samples/cbro/lib/<platform>/` | `leto://` tables on a LetoDB server |
 | Harbour contribs: hbmzip, hbziparc, hbmemio, rddsql, sddodbc, sddsqlt3 (SQLite), hbwin (Windows) | part of Harbour | zip/xlsx files, SQL (SQLite, ODBC), printing |
 | unixODBC | Linux: `unixodbc-dev` (build), `libodbc2` (run) | ODBC data sources |

@@ -16,6 +16,31 @@
  * license from the author - see LICENSE.
  */
 
+/* the message of a CBro built without the XLSX class */
+FUNCTION CBX_NoXlsx()
+RETURN "Excel (.xlsx) is not available: CBro was built without the XLSX class" + ;
+       " (https://github.com/digikv/xlsx - clone it next to the Harbour-CUI folder" + ;
+       " and build CBro again, see samples/cbro/README.md)"
+
+#ifdef CBRO_NO_XLSX
+
+/* built without the XLSX class (cbro.hbp: CBRO_NO_XLSX) */
+FUNCTION CBX_Open( cFile, cErr )
+    HB_SYMBOL_UNUSED( cFile )
+    cErr := CBX_NoXlsx()
+RETURN NIL
+
+FUNCTION CBX_Write( cFile, cSheet, aCols, bRow, cErr, cCdp )
+    HB_SYMBOL_UNUSED( cFile )
+    HB_SYMBOL_UNUSED( cSheet )
+    HB_SYMBOL_UNUSED( aCols )
+    HB_SYMBOL_UNUSED( bRow )
+    HB_SYMBOL_UNUSED( cCdp )
+    cErr := CBX_NoXlsx()
+RETURN .F.
+
+#else
+
 /* reads a workbook */
 FUNCTION CBX_Open( cFile, cErr )
 
@@ -31,6 +56,8 @@ FUNCTION CBX_Open( cFile, cErr )
     ENDIF
 
 RETURN oBook
+
+#endif
 
 /* the values of sheet nSheet, row by row; a formula gives its last value */
 FUNCTION CBX_SheetRows( oBook, nSheet )
@@ -62,6 +89,8 @@ FUNCTION CBX_SheetRows( oBook, nSheet )
     ENDDO
 
 RETURN aRows
+
+#ifndef CBRO_NO_XLSX
 
 /* writes one worksheet: heading row (bold, shaded), then the rows bRow
    gives until it returns NIL; cErr gets the error or the row count */
@@ -140,6 +169,8 @@ STATIC FUNCTION DateCode()
     ENDIF
 
 RETURN cFmt
+
+#endif
 
 /* 28 -> "AB" */
 FUNCTION CBX_ColName( n )

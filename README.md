@@ -152,7 +152,7 @@ cd samples/cbro && hbmk2 cbro.hbp && ./cbro
 
 The library needs only Harbour (core, no contribs, no `hbct`). Everything else the samples and CBro
 use — the [XLSX class](https://github.com/digikv/xlsx) and the LetoDB/LetoDBf clients for CBro,
-fonts, Linux packages — is listed in [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md).
+fonts, Linux packages — is listed in [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md). How to build the library, the samples and CBro: [docs/BUILD.md](docs/BUILD.md).
 
 - Harbour compiler
 - GT driver: `gtxwc` on Linux, `gtwvt` on Windows (tests: `gttrm` / `-gtnul`)

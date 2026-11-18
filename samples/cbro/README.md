@@ -65,9 +65,11 @@ Libraries built with another Harbour version must be built again.
 
 - Harbour-CUI: `hbtui.hbp` in the repository root (`../../hbtui.hbc`)
 - Harbour contribs: hbmzip, hbziparc, hbmemio, rddsql, sddodbc, sddsqlt3 (with SQLite), on Windows also hbwin
-- the XLSX class: `../../../xlsx/XLSXClass.prg` (clone https://github.com/digikv/xlsx next to the
-  repository); in another folder: `set CBRO_XLSXDIR=<folder>` before `build.bat`, or
-  `hbmk2 cbro.hbp -env:CBRO_XLSXOWN=yes <folder>/XLSXClass.prg`
+- the XLSX class: `../../../xlsx/XLSXClass.prg` (https://github.com/digikv/xlsx next to the
+  repository - `build.bat` clones it when git is there, `build.bat update` pulls it); in another
+  folder: `set CBRO_XLSXDIR=<folder>` before `build.bat`, or
+  `hbmk2 cbro.hbp -env:CBRO_XLSXOWN=yes <folder>/XLSXClass.prg`. Without the class CBro is built
+  without Excel (also `-env:CBRO_NOXLSX=yes`). See also [docs/BUILD.md](../../docs/BUILD.md).
 - the LETO client library `librddleto.a`: LetoDBf (default) from `lib/<platform>/letodbf`, or
   LetoDB from `lib/<platform>/letodb` (`<platform>` = `win` | `linux`)
 
@@ -75,6 +77,7 @@ Build switches (hbmk2 `-env:`):
 
 | Switch | Effect |
 |---|---|
+| `-env:CBRO_NOXLSX=yes` | without Excel (.xlsx), also when the XLSX class is next to the repository |
 | `-env:CBRO_LETODB=yes` | the LetoDB client instead of LetoDBf (both are the LETO driver: only one per program) |
 | `-env:CBRO_NOCOMPILER=yes` | without the Harbour compiler (GPL, no linking exception) — required for the commercial license; `.prg` scripts are then compiled by `harbour` next to CBro or in the PATH, `.hrb` scripts run as before |
 
@@ -110,6 +113,7 @@ Build switches (hbmk2 `-env:`):
    build.bat letodb             LetoDB client
    build.bat commercial         without the Harbour compiler (commercial license)
    build.bat commercial letodb
+   build.bat update             git pull of the XLSX class first (git clone when it is missing)
    ```
 
    `build.bat` calls `D:\tools\harbour-core\bin\win\mingw\hbmk2.exe cbro.hbp` with the switches;

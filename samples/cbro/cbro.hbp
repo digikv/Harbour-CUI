@@ -20,7 +20,11 @@ cbmemo.prg
 # the XLSX class of Srđan Dragojlović (github.com/digikv/xlsx)
 # in ../../../xlsx (next to the repository); another folder: build.bat with CBRO_XLSXDIR,
 # or: hbmk2 cbro.hbp -env:CBRO_XLSXOWN=yes <folder>/XLSXClass.prg
-{!CBRO_XLSXOWN}../../../xlsx/XLSXClass.prg
+# Without it (or with -env:CBRO_NOXLSX=yes) CBro is built without .xlsx: the Excel
+# commands say that the XLSX class was not there.
+{!CBRO_XLSXOWN&!CBRO_NOXLSX&hb_ispath='../../../xlsx/XLSXClass.prg'}../../../xlsx/XLSXClass.prg
+{!CBRO_XLSXOWN&!hb_ispath='../../../xlsx/XLSXClass.prg'}-prgflag=-DCBRO_NO_XLSX
+{CBRO_NOXLSX}-prgflag=-DCBRO_NO_XLSX
 
 hbziparc.hbc
 hbmzip.hbc
