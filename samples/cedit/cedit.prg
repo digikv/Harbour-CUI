@@ -70,6 +70,7 @@ PROCEDURE Main( ... )
 
     s_oEdit := HTCodeEdit():new( s_oMain )
     s_oEdit:onCursor := {|| ce_Status() }
+    s_oEdit:bCtrlKey := {| c | ce_CtrlKey( c ) }
     s_oEdit:lInsert := s_hSet[ "insert" ]
     s_oEdit:lTabSpaces := s_hSet[ "tabspaces" ]
     ce_SetEditorColors( s_hSet[ "colors" ] )
@@ -79,7 +80,8 @@ PROCEDURE Main( ... )
     ce_BuildMenu()
 
     FOR EACH cArg IN hb_AParams()
-        IF ! Left( cArg, 1 ) $ "/-"
+        /* options: -x (and /x on Windows; on Linux "/" starts a path) */
+        IF !( Left( cArg, 1 ) == "-" .OR. ( Left( cArg, 1 ) == "/" .AND. hb_ps() == "\" ) )
             ce_OpenFile( cArg )
         ENDIF
     NEXT
@@ -196,10 +198,10 @@ STATIC PROCEDURE ce_BuildMenu()
     ce_Item( oMenu, "&Insert / overwrite", "Ins", NIL, {|| s_oEdit:lInsert := ! s_oEdit:lInsert } )
 
     oMenu := s_oBar:addMenu( "&Search" )
-    ce_Item( oMenu, "&Find...", "F7", K_F7, {|| ce_CmdFind() } )
+    ce_Item( oMenu, "&Find...", "F7 / Ctrl-F", K_F7, {|| ce_CmdFind() } )
     ce_Item( oMenu, "Find &next", "Shift-F7", K_SH_F7, {|| ce_FindNext( .F. ) } )
     ce_Item( oMenu, "Find &previous", "Alt-F7", K_ALT_F7, {|| ce_FindNext( .T. ) } )
-    ce_Item( oMenu, "&Replace...", "Ctrl-F7", K_CTRL_F7, {|| ce_CmdReplace() } )
+    ce_Item( oMenu, "&Replace...", "Ctrl-F7/Ctrl-H", K_CTRL_F7, {|| ce_CmdReplace() } )
     oMenu:addSeparator()
     ce_Item( oMenu, "&Word at cursor", "Alt-8", K_ALT_8, {|| ce_FindWord( .F. ) } )
     ce_Item( oMenu, "Word, b&ackwards", "Alt-3", K_ALT_3, {|| ce_FindWord( .T. ) } )
@@ -234,7 +236,7 @@ RETURN
 STATIC PROCEDURE ce_Item( oMenu, cText, cKey, nKey, bAction )
 
     /* "&" is not shown: one more character for the column of the keys */
-    LOCAL oAct := oMenu:addAction( PadR( cText, IIF( "&" $ cText, 21, 20 ) ) + PadL( cKey, 10 ) )
+    LOCAL oAct := oMenu:addAction( PadR( cText, IIF( "&" $ cText, 21, 20 ) ) + PadL( cKey, 14 ) )
 
     IF nKey != NIL
         oAct:setShortcut( nKey )
@@ -242,6 +244,23 @@ STATIC PROCEDURE ce_Item( oMenu, cText, cKey, nKey, bAction )
     oAct:onTriggered := {|| Eval( bAction ), ce_After() }
 
 RETURN
+
+/* Ctrl-letters that are also cursor keys (Ctrl-F = End, Ctrl-H = Backspace):
+   the editor gives them here, they cannot be menu shortcuts */
+STATIC FUNCTION ce_CtrlKey( c )
+
+    SWITCH c
+    CASE "F"
+        ce_CmdFind()
+        ce_After()
+        RETURN .T.
+    CASE "H"
+        ce_CmdReplace()
+        ce_After()
+        RETURN .T.
+    ENDSWITCH
+
+RETURN .F.
 
 STATIC PROCEDURE ce_After()
     IF ! Empty( s_aBufs )
@@ -1217,7 +1236,7 @@ RETURN ce_Join( { ;
     "  Ctrl-V, Shift-Ins  paste (a vertical block goes in as a block)", ;
     "", ;
     "Search", ;
-    "  F7           find                  Ctrl-F7    replace", ;
+    "  F7, Ctrl-F   find                  Ctrl-F7, Ctrl-H   replace", ;
     "  Shift-F7     next                  Alt-F7     previous", ;
     "  Alt-8        the word at the cursor, Alt-3 backwards", ;
     "  Alt-F8       go to line[,column]   Ctrl-B     matching bracket", ;

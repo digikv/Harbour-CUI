@@ -28,7 +28,7 @@ command. F1 shows the keys in the editor.
 | Ctrl-Z, Alt-Backspace / Ctrl-R | undo / redo |
 | Ins | insert / overwrite |
 | Tab | spaces to the next tab stop; with several lines selected: indent |
-| F7 / Ctrl-F7 | find / replace (case, whole words; replace asks: Yes / No / All / Cancel) |
+| F7, Ctrl-F / Ctrl-F7, Ctrl-H | find / replace (case, whole words; replace asks: Yes / No / All / Cancel) |
 | Shift-F7 / Alt-F7 | next / previous |
 | Alt-8 / Alt-3 | the word at the cursor, forwards / backwards |
 | Alt-F8 | go to line[,column] |

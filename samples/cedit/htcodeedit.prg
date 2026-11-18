@@ -44,6 +44,8 @@ EXPORTED:
     DATA cColor      INIT ""          /* text color, "" = the theme's (HT_CLR_LINEEDIT_FOCUSED) */
     DATA cSelColor   INIT ""          /* selection, "" = the theme's */
     DATA aSyntaxColors                /* { base, keyword, string, comment, number, preproc }, NIL = for the theme */
+    DATA bCtrlKey                     /* {| cLetter | lDone }: a Ctrl-letter the editor does not use
+                                         (Ctrl-F = End, Ctrl-H = Backspace: no menu shortcut for them) */
 
     PROPERTY onCursor READWRITE      /* {|| ... } after a key / click: status line */
     PROPERTY onChange READWRITE      /* {|| ... } the text changed */
@@ -276,7 +278,12 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS HTCodeEdit
         CASE K_CTRL_PGDN
             EXIT
         OTHERWISE
-            RETURN                     /* other Ctrl-letters are the program's */
+            /* other Ctrl-letters are the program's: Ctrl-F (code of End),
+               Ctrl-H (code of Backspace) only reach it here */
+            IF HB_ISEVALITEM( ::bCtrlKey ) .AND. nKey >= 1 .AND. Eval( ::bCtrlKey, Chr( nKey + 64 ) )
+                keyEvent:accept()
+            ENDIF
+            RETURN
         ENDSWITCH
     ENDIF
 
