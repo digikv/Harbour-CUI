@@ -1,6 +1,6 @@
 # NEBULA RAID
 
-> **A retro fixed-screen shooter built in text mode using the [Harbour-CUI](https://github.com) library.**
+> **A retro fixed-screen shooter built in text mode using the [Harbour-CUI](https://github.com/digikv/Harbour-CUI) library.**
 
 ![NEBULA RAID Gameplay](nebula.png)
 
@@ -26,7 +26,7 @@ This sample demonstrates several low-level and visual capabilities of `Harbour-C
 * **Arcade-Grade Input (`ht_keyDown`):** Bypasses standard terminal key-repeat delays by reading real-time held key states, enabling smooth simultaneous movement and firing (with an `Inkey()` frame-counter fallback on unsupported platforms).
 * **Sub-Cell Projectile Precision:** Player shots and alien bombs move in half-row increments using dedicated upper/lower cell glyphs for smoother vertical motion.
 * **Arcade Sound Without Stalls:** Square-wave and noise effects (laser, explosions, comet, the formation's four-note heartbeat) are synthesized at start as 8-bit WAV images and played asynchronously (`PlaySound` from memory on Windows, `aplay` elsewhere) - `Tone()` would freeze the game for every beep.
-* **High Score Table:** The top five scores with three initials, entered the arcade way, are kept in `nebula.hi` next to the program.
+* **High Score Table:** The top five scores with three initials, entered the arcade way, are kept in `nebula.hi` next to the program (in a read-only folder: `%APPDATA%\nebula.hi` on Windows, `~/.nebula.hi` on Linux). A game left with Esc does not count.
 
 ## 👾 Gameplay
 
@@ -54,11 +54,26 @@ This sample demonstrates several low-level and visual capabilities of `Harbour-C
 
 ## 🚀 Building & Running
 
-Make sure you have [Harbour](https://github.io) installed and the `Harbour-CUI` library built. Navigate to `samples/game` and run:
+### Download
+
+Ready to play, no build needed: **[Nebula Raid 1.0 release](https://github.com/digikv/Harbour-CUI/releases/tag/nebula-raid-1.0)**
+
+| File | Platform |
+|---|---|
+| `nebula-raid-1.0-win32.zip` | Windows: `nebula.exe` + `nebula8.ttf` (keep them together) |
+| `nebula-raid-1.0-linux-x86_64.tar.gz` | Linux x86_64 (X11): `nebula` + the `x11/` fonts; needs `libx11-6`, sound needs `aplay` (alsa-utils) |
+
+### Build
+
+Make sure you have [Harbour](https://harbour.github.io) installed and the `Harbour-CUI` library built
+(`hbmk2 hbtui.hbp` in the repository root). Then, in `samples/game`:
 
 ```bash
-hbmk2 hbmk.hbm
+hbmk2 nebula.prg hbmk.hbm
 ```
+
+Keep `nebula8.ttf` (Windows) or the `x11/` folder (Linux) next to the program. On Linux the program
+links Xlib (`-lX11`, in `hbmk.hbm`; package `libx11-dev`).
 
 ### Customizing Graphics
 All sprites are defined in `nebula.glyphs` and compiled into `nebula8.ttf` and the `x11/` bitmap font directory using `ht_glyphsBuild()` (via `samples/fonteditor` or `tools/pixelfont`).

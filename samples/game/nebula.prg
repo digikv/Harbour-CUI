@@ -17,7 +17,8 @@
  * Sound: square waves and noise made at start as 8-bit WAV images, played
  * without waiting (Windows: PlaySound from memory; elsewhere aplay, when
  * installed) - Tone() would stop the game for every beep.
- * High scores: nebula.hi next to the program.
+ * High scores: nebula.hi next to the program (a read-only folder: in the
+ * user's folder - %APPDATA%\nebula.hi, ~/.nebula.hi).
  */
 
 #include "inkey.ch"
@@ -163,15 +164,12 @@ STATIC PROCEDURE SetupScreen()
     /* an 8-bit home computer palette: plain colors at 84%, bright at 100%
        (GT order: black blue green cyan red magenta yellow white, then bright) */
     hb_gtInfo( HB_GTI_PALETTE, { ;
-        Rgb(   0,   0,   0 ), Rgb(   0,   0, 215 ), Rgb(   0, 215,   0 ), Rgb(   0, 215, 215 ), ;
-        Rgb( 215,   0,   0 ), Rgb( 215,   0, 215 ), Rgb( 215, 215,   0 ), Rgb( 215, 215, 215 ), ;
-        Rgb(  40,  40,  40 ), Rgb(   0,   0, 255 ), Rgb(   0, 255,   0 ), Rgb(   0, 255, 255 ), ;
-        Rgb( 255,   0,   0 ), Rgb( 255,   0, 255 ), Rgb( 255, 255,   0 ), Rgb( 255, 255, 255 ) } )
+        ht_rgb(   0,   0,   0 ), ht_rgb(   0,   0, 215 ), ht_rgb(   0, 215,   0 ), ht_rgb(   0, 215, 215 ), ;
+        ht_rgb( 215,   0,   0 ), ht_rgb( 215,   0, 215 ), ht_rgb( 215, 215,   0 ), ht_rgb( 215, 215, 215 ), ;
+        ht_rgb(  40,  40,  40 ), ht_rgb(   0,   0, 255 ), ht_rgb(   0, 255,   0 ), ht_rgb(   0, 255, 255 ), ;
+        ht_rgb( 255,   0,   0 ), ht_rgb( 255,   0, 255 ), ht_rgb( 255, 255,   0 ), ht_rgb( 255, 255, 255 ) } )
 
 RETURN
-
-STATIC FUNCTION Rgb( nR, nG, nB )
-RETURN nR + nG * 256 + nB * 65536
 
 /* glyph nOffset (from U+E000), nCells wide */
 STATIC FUNCTION G( nOffset, nCells )
@@ -226,7 +224,8 @@ STATIC FUNCTION ReadKeys()
                  ht_keyDown( 0x20 ) .OR. ht_keyDown( 0x26 ), nLast }
     ENDIF
 
-    /* no key state (outside Windows): a pressed key counts for a few frames */
+    /* no key state (ht_keyStateAvailable() .F.: not gtwvt / gtxwc, or the
+       window has no focus API): a pressed key counts for a few frames */
 RETURN { s_nKeyLeft-- > 0, s_nKeyRight-- > 0, s_nKeyFire-- > 0, nLast }
 
 /* waits for the rest of the frame (Inkey() keeps the window responsive) */
@@ -302,7 +301,7 @@ RETURN .F.
 
 STATIC PROCEDURE PlayGame()
 
-    LOCAL nStart, aKeys, lPaused := .F.
+    LOCAL nStart, aKeys, lPaused := .F., lQuit := .F.
 
     s_nScore := 0
     s_nLives := 3
@@ -318,7 +317,8 @@ STATIC PROCEDURE PlayGame()
         nStart := hb_MilliSeconds()
         aKeys := ReadKeys()
 
-        IF aKeys[ 4 ] == K_ESC
+        IF aKeys[ 4 ] == K_ESC                 /* a game left with Esc does not count */
+            lQuit := .T.
             EXIT
         ELSEIF Upper( hb_keyChar( aKeys[ 4 ] ) ) == "P"
             lPaused := ! lPaused
@@ -341,7 +341,7 @@ STATIC PROCEDURE PlayGame()
         FrameWait( nStart )
     ENDDO
 
-    IF IsHiScore( s_nScore )
+    IF ! lQuit .AND. IsHiScore( s_nScore )
         s_nLastRank := AddHiScore( s_nScore, EnterInitials( s_nScore ) )
     ENDIF
 
@@ -475,9 +475,7 @@ STATIC FUNCTION Update( aKeys )
     ENDIF
     MoveDivers()
     DropBombs()
-    IF ! MoveBombs()
-        RETURN .F.
-    ENDIF
+    MoveBombs()
     MoveComet()
 
     IF s_nScore >= s_nNextLife
@@ -692,8 +690,9 @@ STATIC PROCEDURE DropBombs()
 
 RETURN
 
-/* .F. when the last life is gone (after the wreck has been shown) */
-STATIC FUNCTION MoveBombs()
+/* bombs fall; one that reaches the ship kills it (the game ends in Update()
+   when the wreck of the last life has been shown) */
+STATIC PROCEDURE MoveBombs()
 
     LOCAL i, nRow, nCol
 
@@ -712,7 +711,7 @@ STATIC FUNCTION MoveBombs()
         ENDIF
     NEXT
 
-RETURN .T.
+RETURN
 
 /* from wave 3 a manta now and then leaves the formation and dives at the
    player (Galaxian); one that misses comes back from the top to its place */
@@ -1007,8 +1006,25 @@ RETURN
 
 /*--------------------------------------------------------------- high scores */
 
-STATIC FUNCTION HiScoreFile()
-RETURN hb_DirBase() + "nebula.hi"
+/* nebula.hi next to the program; when that folder cannot be written
+   (Program Files, a read-only share) the user's own folder */
+STATIC FUNCTION HiScoreFile( lUser )
+
+    LOCAL cDir
+
+    IF ! hb_defaultValue( lUser, .F. )
+        RETURN hb_DirBase() + "nebula.hi"
+    ENDIF
+#ifdef __PLATFORM__WINDOWS
+    cDir := GetEnv( "APPDATA" )
+#else
+    cDir := GetEnv( "HOME" )
+#endif
+    IF Empty( cDir )
+        cDir := hb_DirTemp()
+    ENDIF
+
+RETURN hb_DirSepAdd( cDir ) + IIF( hb_ps() == "/", ".nebula.hi", "nebula.hi" )
 
 /* nebula.hi: a line per score, "12345 ABC" */
 STATIC PROCEDURE LoadHiScores()
@@ -1016,7 +1032,8 @@ STATIC PROCEDURE LoadHiScores()
     LOCAL cLine, aWords
 
     s_aHiScores := {}
-    FOR EACH cLine IN hb_ATokens( StrTran( hb_MemoRead( HiScoreFile() ), Chr( 13 ) ), Chr( 10 ) )
+    FOR EACH cLine IN hb_ATokens( StrTran( hb_MemoRead( IIF( hb_FileExists( HiScoreFile( .T. ) ), ;
+                                  HiScoreFile( .T. ), HiScoreFile() ) ), Chr( 13 ) ), Chr( 10 ) )
         aWords := hb_ATokens( AllTrim( cLine ), " " )
         IF Len( aWords ) == 2 .AND. Val( aWords[ 1 ] ) > 0
             AAdd( s_aHiScores, { Val( aWords[ 1 ] ), Initials( aWords[ 2 ] ) } )
@@ -1060,7 +1077,10 @@ STATIC FUNCTION AddHiScore( nScore, cInitials )
     FOR EACH aHi IN s_aHiScores
         cText += hb_ntos( aHi[ 1 ] ) + " " + aHi[ 2 ] + hb_eol()
     NEXT
-    hb_MemoWrit( HiScoreFile(), cText )
+    /* the user's file, once there is one, keeps the newer scores */
+    IF hb_FileExists( HiScoreFile( .T. ) ) .OR. ! hb_MemoWrit( HiScoreFile(), cText )
+        hb_MemoWrit( HiScoreFile( .T. ), cText )
+    ENDIF
 
 RETURN AScan( s_aHiScores, {| a | a == aEntry } )
 
