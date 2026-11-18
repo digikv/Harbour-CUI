@@ -139,8 +139,36 @@ static int ht_msg_to_key( UINT message )
       case WM_RBUTTONUP:     return K_RBUTTONUP;
       case WM_LBUTTONDBLCLK: return K_LDBLCLK;
       case WM_RBUTTONDBLCLK: return K_RDBLCLK;
+      case WM_MBUTTONDOWN:   return K_MBUTTONDOWN;
+      case WM_MBUTTONUP:     return K_MBUTTONUP;
    }
    return 0;
+}
+
+/* The mouse wheel. A wheel notch is WHEEL_DELTA (120); a touchpad (two-finger
+   scrolling) sends many small steps instead: they are summed, and every full
+   120 gives one K_MWFORWARD / K_MWBACKWARD - as Windows programs do. The rest
+   is dropped when the direction turns. */
+static int s_nWheel = 0;
+
+static void ht_store_wheel( WPARAM wParam )
+{
+   int nDelta = ( SHORT ) HIWORD( wParam ), nRow, nCol;
+
+   if( ( s_nWheel > 0 && nDelta < 0 ) || ( s_nWheel < 0 && nDelta > 0 ) )
+      s_nWheel = 0;
+   s_nWheel += nDelta;
+   hb_mouseGetPos( &nRow, &nCol );
+   while( s_nWheel >= WHEEL_DELTA )
+   {
+      ht_store_mouse( K_MWFORWARD, nRow, nCol );
+      s_nWheel -= WHEEL_DELTA;
+   }
+   while( s_nWheel <= -WHEEL_DELTA )
+   {
+      ht_store_mouse( K_MWBACKWARD, nRow, nCol );
+      s_nWheel += WHEEL_DELTA;
+   }
 }
 
 /* rows to repaint whole once WM_PAINT returned (see ht_WndProc) */
@@ -643,6 +671,9 @@ static LRESULT CALLBACK ht_WndProc( HWND hWnd, UINT message, WPARAM wParam, LPAR
 
    if( fIndicPaint )
       ht_indic_paint( hWnd, &rcPaint );
+
+   if( message == WM_MOUSEWHEEL )
+      ht_store_wheel( wParam );
 
    nKey = ht_msg_to_key( message );
    if( nKey != 0 )

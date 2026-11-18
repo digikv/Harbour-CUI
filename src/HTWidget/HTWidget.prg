@@ -979,6 +979,26 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTWidget
         ENDIF
         EXIT
 
+    CASE K_MWFORWARD
+    CASE K_MWBACKWARD
+
+        /* the mouse wheel (also two-finger scrolling on a touchpad): to the
+           child under the cursor, else to the focused child */
+        nContentRow := eventMouse:mouseRow - 1
+        nContentCol := eventMouse:mouseCol
+        oHitChild := NIL
+        IF nContentRow >= 0 .AND. nContentCol >= 0
+            oHitChild := ::childAt( nContentRow, nContentCol )
+        ENDIF
+        IF oHitChild != NIL
+            eventMouse:mouseRow := nContentRow - oHitChild:y
+            eventMouse:mouseCol := nContentCol - oHitChild:x
+            oHitChild:mouseEvent( eventMouse )
+        ELSEIF ::FfocusWidget != NIL
+            ::FfocusWidget:mouseEvent( eventMouse )
+        ENDIF
+        EXIT
+
     CASE K_RBUTTONDOWN
 
         /* right-click: show context menu on the child under cursor, or on self */

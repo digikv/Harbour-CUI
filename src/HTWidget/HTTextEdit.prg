@@ -573,7 +573,25 @@ RETURN
 METHOD PROCEDURE mouseEvent( eventMouse ) CLASS HTTextEdit
 
     LOCAL nClickRow, nClickCol, nLine
-    LOCAL parent
+    LOCAL parent, nTop
+
+    /* the mouse wheel (also two-finger scrolling): 3 lines; the cursor stays
+       on its screen row, so the painting does not scroll back to it */
+    IF eventMouse:nKey = K_MWFORWARD .OR. eventMouse:nKey = K_MWBACKWARD
+        nTop := ::FnTopRow + IIF( eventMouse:nKey = K_MWFORWARD, -3, 3 )
+        nTop := Max( 1, Min( nTop, Len( ::FaLines ) - Max( 1, ::Fheight ) + 1 ) )
+        IF nTop != ::FnTopRow .AND. Len( ::FaLines ) > 0
+            ::FnCurRow := Max( 1, Min( Len( ::FaLines ), ::FnCurRow + nTop - ::FnTopRow ) )
+            ::FnCurCol := Min( ::FnCurCol, Len( ::FaLines[ ::FnCurRow ] ) + 1 )
+            ::FnTopRow := nTop
+            parent := ::parent()
+            IF parent != NIL .AND. parent:isDerivedFrom( "HTWidget" )
+                parent:repaintChild( self )
+            ENDIF
+        ENDIF
+        eventMouse:accept()
+        RETURN
+    ENDIF
 
     IF eventMouse:nKey = K_LBUTTONDOWN
         nClickRow := eventMouse:mouseRow
