@@ -37,6 +37,7 @@ STATIC s_nBuf := 0
 STATIC s_aRecent := {}               /* { { cFile, nRow, nCol }, ... } the newest first */
 STATIC s_hSet                        /* settings (cedit.ini [OPTIONS]) */
 STATIC s_cIni := ""
+STATIC s_cLang := ""                  /* keyboard language / IME mode (ht_inputLanguage) */
 
 /* search */
 STATIC s_cFind := ""
@@ -53,6 +54,10 @@ PROCEDURE Main( ... )
     ce_LoadSettings()
 
     s_oApp := HTApplication():new()
+    /* the grid before the first window takes its size; a maximized window
+       instead of fullscreen: the taskbar (IME mode indicator) stays visible */
+    ht_fullScreen( .F. )
+    ht_cuiSetupDisplay( s_oApp:rows(), s_oApp:cols() )
     hb_gtInfo( HB_GTI_WINTITLE, "CEdit" )
     IF ! s_hSet[ "theme" ] == "Classic" .AND. HTTheme():hasTheme( s_hSet[ "theme" ] )
         HTTheme():loadTheme( s_hSet[ "theme" ] )
@@ -82,6 +87,10 @@ PROCEDURE Main( ... )
     ENDIF
 
     s_oEdit:setFocus()
+    s_cLang := ht_inputLanguage()
+    IF ! Empty( s_cLang )
+        HTEventLoop():scheduleRepeat( {|| ce_InputLang() }, 300 )
+    ENDIF
     ce_Status()
     s_oApp:exec()
 
@@ -261,9 +270,21 @@ STATIC PROCEDURE ce_Status()
               "  Col " + hb_ntos( s_oEdit:cursorCell() + 1 ) + "  " + ;
               IIF( Empty( oB:cSyntax ) .OR. ! oB:lHilite, "", oB:cSyntax + "  " ) + ;
               ce_CPName( oB:cCP ) + IIF( oB:cEol == Chr( 10 ), " LF", "" ) + "  " + ;
-              IIF( s_oEdit:lInsert, "Ins", "Ovr" ) + "  " + cMode + " "
-    s_oStat:setSection( 1, ht_cellPadR( cLeft, Max( 1, s_oMain:width - Len( cRight ) ) ) + cRight )
+              IIF( s_oEdit:lInsert, "Ins", "Ovr" ) + "  " + cMode + " " + ;
+              IIF( Empty( s_cLang ), "", " " + s_cLang + " " )
+    s_oStat:setSection( 1, ht_cellPadR( cLeft, Max( 1, s_oMain:width - ht_strWidth( cRight ) ) ) + cRight )
     s_oMain:repaintChild( s_oStat )
+
+RETURN
+
+STATIC PROCEDURE ce_InputLang()
+
+    LOCAL cLang := ht_inputLanguage()
+
+    IF ! cLang == s_cLang
+        s_cLang := cLang
+        ce_Status()
+    ENDIF
 
 RETURN
 

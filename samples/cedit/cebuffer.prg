@@ -137,7 +137,7 @@ METHOD load( cFile, cDefCP, lForce ) CLASS CEBuffer
         IF !( cDefCP == "UTF8" )
             cRaw := hb_StrToUTF8( cRaw, cDefCP )
         ENDIF
-    ELSEIF ! hb_StrIsUTF8( cRaw )
+    ELSEIF ! cRaw == "" .AND. ! hb_StrIsUTF8( cRaw )
         ::cCP := cDefCP
         cRaw := hb_StrToUTF8( cRaw, cDefCP )
     ENDIF
