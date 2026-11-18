@@ -61,7 +61,7 @@ Ready to play, no build needed: **[Nebula Raid 1.0 release](https://github.com/d
 | File | Platform |
 |---|---|
 | `nebula-raid-1.0-win32.zip` | Windows: `nebula.exe` + `nebula8.ttf` (keep them together) |
-| `nebula-raid-1.0-linux-x86_64.tar.gz` | Linux x86_64 (X11): `nebula` + the `x11/` fonts; needs `libx11-6`, sound needs `aplay` (alsa-utils) |
+| `nebula-raid-1.0-linux-x86_64.tar.gz` | Linux x86_64 (X11): `nebula` + the `x11/` fonts; needs `libx11-6` and `libgpm2`, sound needs `aplay` (alsa-utils) |
 
 ### Build
 
