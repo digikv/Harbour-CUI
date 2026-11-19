@@ -1114,24 +1114,34 @@ RETURN Len( aCh ) + 1
 FUNCTION ce_IsWordChar( c )
 RETURN c == "_" .OR. IsAlpha( c ) .OR. IsDigit( c ) .OR. hb_BLen( c ) > 1
 
-/* start of the previous word */
+/* start of the previous word. ce_Chars() once: SubStr() in the loop would
+   re-read a long UTF-8 line from the start on every character. */
 FUNCTION ce_WordLeft( cLine, nCol )
-    DO WHILE nCol > 1 .AND. ! ce_IsWordChar( SubStr( cLine, nCol - 1, 1 ) )
+
+    LOCAL aCh := ce_Chars( cLine ), nLen := Len( aCh )
+
+    /* a column past the end is not a word character */
+    DO WHILE nCol > 1 .AND. ( nCol - 1 > nLen .OR. ! ce_IsWordChar( aCh[ nCol - 1 ] ) )
         nCol--
     ENDDO
-    DO WHILE nCol > 1 .AND. ce_IsWordChar( SubStr( cLine, nCol - 1, 1 ) )
+    DO WHILE nCol > 1 .AND. ce_IsWordChar( aCh[ nCol - 1 ] )
         nCol--
     ENDDO
+
 RETURN nCol
 
 /* start of the next word */
 FUNCTION ce_WordRight( cLine, nCol )
-    DO WHILE nCol <= Len( cLine ) .AND. ce_IsWordChar( SubStr( cLine, nCol, 1 ) )
+
+    LOCAL aCh := ce_Chars( cLine ), nLen := Len( aCh )
+
+    DO WHILE nCol <= nLen .AND. ce_IsWordChar( aCh[ nCol ] )
         nCol++
     ENDDO
-    DO WHILE nCol <= Len( cLine ) .AND. ! ce_IsWordChar( SubStr( cLine, nCol, 1 ) )
+    DO WHILE nCol <= nLen .AND. ! ce_IsWordChar( aCh[ nCol ] )
         nCol++
     ENDDO
+
 RETURN nCol
 
 /* a key held down (Windows / X11); .F. where the state cannot be read */
