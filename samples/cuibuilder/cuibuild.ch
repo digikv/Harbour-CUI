@@ -7,7 +7,7 @@
 #ifndef CUIBUILD_CH_
 #define CUIBUILD_CH_
 
-#define CB_VERSION      "1.0"
+#define CB_VERSION      "1.0.1"
 
 /* the kinds of build messages: bOut( cText, nType, cFile, nLine ) */
 #define CB_MSG_INFO     0

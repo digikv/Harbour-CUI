@@ -365,8 +365,8 @@ STATIC PROCEDURE cb_ShowPart()
             EXIT
         CASE "G"
             o:clear()
-            o:addItem( "(default: " + IIF( Empty( s_hSet[ "guilib" ][ "gt" ] ), IIF( "windows" $ Lower( OS() ), "gtwin", "gttrm" ), ;
-                       s_hSet[ "guilib" ][ "gt" ] ) + ")" )
+            o:addItem( "(default: " + IIF( oP == NIL .OR. ! oP:lGuiLib .OR. Empty( s_hSet[ "guilib" ][ "gt" ] ), ;
+                       "the program's / Harbour's", s_hSet[ "guilib" ][ "gt" ] ) + ")" )
             FOR EACH n IN { "gtwvt", "gtwin", "gtcgi", "gtstd", "gtpca", "gtgui", "gttrm", "gtxwc" }
                 o:addItem( n )
             NEXT
@@ -1182,7 +1182,7 @@ RETURN
 /*----------------------------------------------------------- settings */
 
 PROCEDURE cb_SaveView()
-    s_hSet[ "view" ][ "theme" ] := HTTheme():currentName()
+    s_hSet[ "view" ][ "theme" ] := HTTheme():themeName()
     cb_SettingsSave( s_hSet )
 RETURN
 
@@ -1283,7 +1283,7 @@ STATIC PROCEDURE cb_Theme()
 
     LOCAL aNames := HTTheme():themeNames(), n
 
-    n := cb_List( "Theme", aNames, Max( 1, AScan( aNames, {| c | Lower( c ) == Lower( HTTheme():currentName() ) } ) ) )
+    n := cb_List( "Theme", aNames, Max( 1, AScan( aNames, {| c | Lower( c ) == Lower( HTTheme():themeName() ) } ) ) )
     IF n > 0
         HTTheme():loadTheme( aNames[ n ] )
         HTApplication():repaintAll()

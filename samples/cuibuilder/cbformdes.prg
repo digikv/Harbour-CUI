@@ -80,7 +80,7 @@ STATIC FUNCTION cbf_PropLabel( cProp )
 
 RETURN cProp
 
-/*----------------------------------------------------------- the form */
+/*-------------------------------------------------------- the form */
 
 /* an empty form */
 STATIC FUNCTION cbf_New( cName )

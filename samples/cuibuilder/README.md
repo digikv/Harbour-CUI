@@ -20,12 +20,17 @@ And **Git**: status, stage, diff, commit, log, pull and push of the project's fo
 
 ## Download
 
-Ready-to-run programs: **[CuiBuilder 1.0 release](https://github.com/digikv/Harbour-CUI/releases/tag/cuibuilder-1.0)**
+Ready-to-run programs: **[CuiBuilder 1.0.1 release](https://github.com/digikv/Harbour-CUI/releases/tag/cuibuilder-1.0.1)**
 
 | File | Platform |
 |---|---|
-| `cuibuilder-1.0-win32.zip` | Windows 7 and newer (32-bit, runs on 64-bit Windows too) |
-| `cuibuilder-1.0-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6` and `libgpm2` |
+| `cuibuilder-1.0.1-win32.zip` | Windows 7 and newer (32-bit, runs on 64-bit Windows too) |
+| `cuibuilder-1.0.1-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6` and `libgpm2` |
+
+New in 1.0.1: no error at the exit and in Options - Theme (1.0 stopped with "Message not
+found: HTTHEME:CURRENTNAME"); filters at the end of a word and with a value in .hbp / .hbc
+(`-lfoo{LETO='letodbf'}`, `libs=hbwin.hbc{allwin}`), as hbmk2 reads them; a project without a GT
+keeps the GT the program chooses itself (`REQUEST HB_GT_xxx_DEFAULT`), as with hbmk2.
 
 CuiBuilder builds with Harbour and a C compiler, so they must be on the computer (MinGW on
 Windows, gcc on Linux). For Harbour-CUI programs it also needs the Harbour-CUI library: a clone of

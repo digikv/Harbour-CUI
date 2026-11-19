@@ -849,7 +849,7 @@ RETURN
 /* the words of an .hbp/.hbm, with the paths relative to its folder */
 STATIC PROCEDURE cb_HbmFile( oPF, oP, cFile, hSet, nDepth )
 
-    LOCAL cLine, cDir := hb_FNameDir( cFile ), aWords, cW, n
+    LOCAL cLine, cDir := hb_FNameDir( cFile ), aWords, cW
 
     IF nDepth > 8
         RETURN
@@ -864,11 +864,8 @@ STATIC PROCEDURE cb_HbmFile( oPF, oP, cFile, hSet, nDepth )
             IF Left( cW, 1 ) == "#"
                 EXIT
             ENDIF
-            IF Left( cW, 1 ) == "{" .AND. ( n := At( "}", cW ) ) > 0
-                IF ! cb_Filter( SubStr( cW, 2, n - 2 ), hSet, oP:cComp, cDir )
-                    LOOP
-                ENDIF
-                cW := SubStr( cW, n + 1 )
+            IF ( cW := cb_WordFilter( cW, hSet, oP:cComp, cDir ) ) == NIL
+                LOOP
             ENDIF
             IF Empty( cW ) .OR. Left( cW, 1 ) == "$"     /* $hb_pkg_dynlib.hbm: hbmk2's own */
                 LOOP
@@ -1034,6 +1031,9 @@ STATIC PROCEDURE cb_HbcRead( oPF, oP, cFile, hSet, nDepth )
         cKey := Lower( AllTrim( Left( cLine, n - 1 ) ) )
         cVal := cb_Macros( AllTrim( SubStr( cLine, n + 1 ) ), hSet, oP:cComp, hb_FNameName( cFile ) )
         FOR EACH cW IN cb_Words( cVal )
+            IF ( cW := cb_WordFilter( cW, hSet, oP:cComp, cDir ) ) == NIL .OR. Empty( cW )
+                LOOP
+            ENDIF
             SWITCH cKey
             CASE "libs"
                 IF Lower( hb_FNameExt( cW ) ) == ".hbc"
@@ -1144,15 +1144,47 @@ STATIC FUNCTION cb_Filter( cExpr, hSet, cCompId, cDir )
 
 RETURN .F.
 
-/* one word of a filter: a platform / compiler, hb_ispath='file', an environment variable */
+/* a word with a filter in it ({win}x, x{win}, -lfoo{LETO='a'}): the word without
+   the filter, NIL when the filter is false */
+STATIC FUNCTION cb_WordFilter( cW, hSet, cCompId, cDir )
+
+    LOCAL n1, n2
+
+    DO WHILE ( n1 := At( "{", cW ) ) > 0 .AND. ( n2 := hb_At( "}", cW, n1 ) ) > 0
+        IF ! cb_Filter( SubStr( cW, n1 + 1, n2 - n1 - 1 ), hSet, cCompId, cDir )
+            RETURN NIL
+        ENDIF
+        cW := Left( cW, n1 - 1 ) + SubStr( cW, n2 + 1 )
+    ENDDO
+
+RETURN cW
+
+/* one word of a filter: a platform / compiler, hb_ispath='file', NAME='value'
+   (an environment variable, hb_comp, hb_plat), an environment variable that is set */
 STATIC FUNCTION cb_FilterTerm( c, aKnown, cDir )
 
-    LOCAL cPath
+    LOCAL cPath, n, cName, cVal, cIs
 
     IF Lower( Left( c, 10 ) ) == "hb_ispath="
         cPath := StrTran( StrTran( SubStr( c, 11 ), "'", "" ), '"', "" )
         cPath := cb_Abs( cPath, hb_defaultValue( cDir, hb_cwd() ) )
         RETURN hb_FileExists( cPath ) .OR. hb_DirExists( cPath )
+    ENDIF
+    IF ( n := At( "=", c ) ) > 1
+        cName := AllTrim( Left( c, n - 1 ) )
+        cVal := Lower( StrTran( StrTran( AllTrim( SubStr( c, n + 1 ) ), "'", "" ), '"', "" ) )
+        SWITCH Lower( cName )
+        CASE "hb_comp"
+            RETURN hb_AScan( aKnown, cVal,,, .T. ) > 0
+        CASE "hb_plat"
+#ifdef __PLATFORM__WINDOWS
+            cIs := "win"
+#else
+            cIs := "linux"
+#endif
+            RETURN cVal == cIs
+        ENDSWITCH
+        RETURN Lower( GetEnv( cName ) ) == cVal
     ENDIF
 
 RETURN hb_AScan( aKnown, Lower( c ),,, .T. ) > 0 .OR. ( ! Empty( GetEnv( c ) ) .AND. ! Lower( GetEnv( c ) ) $ "no|0" )
@@ -1403,10 +1435,8 @@ STATIC FUNCTION cb_BuildOne( oP, hSet, lClean, bOut, bStop )
     NEXT
 
     /* the GT and the main function of a program: a C stub, as hbmk2 makes */
-    cGt := oP:gt( hSet )
-    IF Empty( cGt )
-        cGt := IIF( "windows" $ Lower( OS() ), "gtwin", "gttrm" )      /* Harbour's default */
-    ENDIF
+    cGt := oP:gt( hSet )       /* none: as hbmk2, the program's own REQUEST HB_GT_xxx_DEFAULT
+                                  or Harbour's default (gtwin / gttrm) */
     IF ! oP:lLib .AND. ( ! Empty( cGt ) .OR. ! Empty( oP:cMain ) .OR. Len( oP:aRequest ) > 0 )
         cStub := cObjDir + "_cbstub.c"
         cC := cb_StubText( cGt, oP:cMain, oP:aRequest )
