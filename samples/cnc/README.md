@@ -35,14 +35,18 @@ C:\work\>
 
 ## Download
 
-Ready-to-run programs, no build needed: **[CNC 1.0 release](https://github.com/digikv/Harbour-CUI/releases/tag/cnc-1.0)**
+Ready-to-run programs, no build needed: **[CNC 1.0.1 release](https://github.com/digikv/Harbour-CUI/releases/tag/cnc-1.0.1)**
 
 | File | Platform |
 |---|---|
-| `cnc-1.0-win32.zip` | Windows 7 and newer (32-bit, runs on 64-bit Windows too) |
-| `cnc-1.0-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6` and `libgpm2` |
+| `cnc-1.0.1-win32.zip` | Windows 7 and newer (32-bit, runs on 64-bit Windows too) |
+| `cnc-1.0.1-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6` and `libgpm2` |
 
 Unpack and run `cnc` (or `cnc left-folder right-folder`).
+
+New in 1.0.1: what is typed goes straight to the command line, as in Norton Commander; = opens the
+calculator, Ctrl-D the directory hotlist, Alt-Down the folder history; the text cursor stays in the
+command line.
 
 ## Keys
 
