@@ -36,6 +36,8 @@ CLASS CNCPanel FROM HTWidget
     DATA lFull       INIT .T.             /* full: name, size, date, time; else brief */
     DATA lHidden     INIT .F.             /* hidden and system files */
     DATA cQuick                           /* quick search text, NIL = off */
+    DATA oNet                             /* CNCFtp: the panel shows an FTP server */
+    DATA cLocal      INIT ""              /* the local folder before the FTP connection */
     DATA bEnter                           /* {| oPanel, aFile | } Enter on a file */
     DATA bActivate                        /* {| oPanel | } the panel got the focus */
     DATA bChanged                         /* {| oPanel | } another folder */
@@ -56,6 +58,8 @@ CLASS CNCPanel FROM HTWidget
     METHOD isBrief()                      INLINE ! ::lFull .OR. ::Fwidth < 44
     METHOD rows()                         INLINE Max( 1, ::Fheight - 5 )
     METHOD title()
+    METHOD atRoot()                       INLINE IIF( ::oNet == NIL, cnc_IsRoot( ::cDir ), ::cDir == "/" )
+    METHOD isNet()                        INLINE ::oNet != NIL
     METHOD sortMark( nCol )
     METHOD ensureVisible()
     METHOD refresh()
@@ -78,11 +82,24 @@ RETURN self
    folder the marks stay and the cursor stays on its file. */
 METHOD read( cDir, cSelect ) CLASS CNCPanel
 
-    LOCAL aFiles := {}, hMarks := { => }, a, lSame, nOld := ::nCur
+    LOCAL aFiles := {}, hMarks := { => }, a, lSame, nOld := ::nCur, aDir
 
-    cDir := hb_DirSepAdd( hb_DirSepToOS( cDir ) )
-    IF ! hb_DirExists( cDir )
-        RETURN .F.
+    IF ::oNet != NIL                              /* FTP: "/pub/" */
+        cDir := cnc_FtpDir( cDir )
+        IF ( aDir := ::oNet:dir( cDir ) ) == NIL
+            RETURN .F.
+        ENDIF
+    ELSE
+        cDir := hb_DirSepAdd( hb_DirSepToOS( cDir ) )
+        IF ! hb_DirExists( cDir )
+            RETURN .F.
+        ENDIF
+        aDir := {}
+        FOR EACH a IN Directory( cDir + hb_osFileMask(), IIF( ::lHidden, "DHS", "D" ) )
+            IF !( a[ 1 ] == "." .OR. a[ 1 ] == ".." )
+                AAdd( aDir, { a[ 1 ], a[ 2 ], a[ 3 ], a[ 4 ], a[ 5 ], "D" $ a[ 5 ], .F. } )
+            ENDIF
+        NEXT
     ENDIF
     lSame := cnc_SamePath( cDir, ::cDir )
     IF lSame
@@ -91,13 +108,12 @@ METHOD read( cDir, cSelect ) CLASS CNCPanel
             cSelect := ::aFiles[ ::nCur ][ F_NAME ]
         ENDIF
     ENDIF
-    IF ! cnc_IsRoot( cDir )
+    IF !( IIF( ::oNet == NIL, cnc_IsRoot( cDir ), cDir == "/" ) )
         AAdd( aFiles, { "..", 0, CToD( "" ), "", "D", .T., .F. } )
     ENDIF
-    FOR EACH a IN Directory( cDir + hb_osFileMask(), IIF( ::lHidden, "DHS", "D" ) )
-        IF !( a[ 1 ] == "." .OR. a[ 1 ] == ".." )
-            AAdd( aFiles, { a[ 1 ], a[ 2 ], a[ 3 ], a[ 4 ], a[ 5 ], "D" $ a[ 5 ], hb_HHasKey( hMarks, a[ 1 ] ) } )
-        ENDIF
+    FOR EACH a IN aDir
+        a[ F_MARK ] := hb_HHasKey( hMarks, a[ F_NAME ] )
+        AAdd( aFiles, a )
     NEXT
     ::cDir := cDir
     ::aFiles := aFiles
@@ -236,8 +252,12 @@ METHOD goUp() CLASS CNCPanel
 
     LOCAL cOld
 
-    IF cnc_IsRoot( ::cDir )
+    IF ::atRoot()
         RETURN .F.
+    ENDIF
+    IF ::oNet != NIL
+        cOld := SubStr( ::cDir, RAt( "/", Left( ::cDir, Len( ::cDir ) - 1 ) ) + 1 )
+        RETURN ::read( cnc_FtpParent( ::cDir ), Left( cOld, Len( cOld ) - 1 ) )
     ENDIF
     cOld := hb_FNameNameExt( hb_DirSepDel( ::cDir ) )
 
@@ -255,7 +275,7 @@ METHOD enter() CLASS CNCPanel
         ::goUp()
     ELSEIF a[ F_DIR ]
         IF ! ::read( ::cDir + a[ F_NAME ] )
-            HTMessageBox():error( "CNC", "Cannot open the folder " + a[ F_NAME ] )
+            HTMessageBox():error( "CNC", IIF( ::oNet == NIL, "Cannot open the folder " + a[ F_NAME ], ::oNet:cErr ) )
         ENDIF
     ELSEIF HB_ISEVALITEM( ::bEnter )
         Eval( ::bEnter, self, a )
@@ -299,7 +319,7 @@ RETURN ""
 
 METHOD title() CLASS CNCPanel
 
-    LOCAL c := ::cDir, nMax := Max( 6, ::Fwidth - 6 )
+    LOCAL c := IIF( ::oNet == NIL, ::cDir, ::oNet:url( ::cDir ) ), nMax := Max( 6, ::Fwidth - 6 )
 
     IF Len( c ) > nMax
         c := "…" + Right( c, nMax - 1 )
@@ -681,6 +701,9 @@ RETURN
 /*----------------------------------------------------------- paths */
 
 FUNCTION cnc_IsRoot( cDir )
+    IF Left( cDir, 2 ) == "\\"                       /* \pc\share\ */
+        RETURN Len( hb_ATokens( hb_DirSepDel( SubStr( cDir, 3 ) ), "\" ) ) <= 2
+    ENDIF
 RETURN Len( cDir ) <= 3 .AND. ( SubStr( cDir, 2, 1 ) == ":" .OR. cDir == hb_ps() )
 
 /* "C:\a\b\" -> "C:\a\" */

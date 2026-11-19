@@ -61,6 +61,26 @@ of every command. F1 shows all the keys.
 
 Commands - Compare directories marks the files that are only in one panel or newer there.
 
+## Net (as in Total Commander)
+
+| Key | Command |
+|---|---|
+| Ctrl-F | FTP connect: the saved connections, or a new one |
+| Ctrl-N | FTP new connection: host (or `ftp://user@host:port/folder`), port, user, password, folder; "Save as" keeps it in `cnc.ini` (without the password) |
+| Ctrl-Shift-F | FTP disconnect: the panel goes back to its local folder |
+| Net - Map network drive | `net use X: \server\share` (Windows) |
+| Net - Disconnect network drive | `net use X: /delete` (Windows) |
+| Net - Network computers | `net view`: the computers, then their shares; a share opens in the panel as `\pc\share\` (Windows) |
+
+On an FTP panel Enter goes into folders, Enter / F3 view a file, F4 edits it (saved back to the
+server when changed), F5 / F6 copy / move to the local panel and from it (folders too), F7 makes
+a folder, F8 deletes (folders with everything in them), Shift-F6 renames. FTP is the client of
+Harbour's hbtip (passive mode).
+
+Commands typed in the command line run without a console window (Windows); their output is shown
+when they end (Ctrl-W shows it again). A program with its own window started there keeps CNC
+waiting until it is closed: `start notepad` does not.
+
 ## Settings
 
 `cnc.ini`: next to the program when it is there, else in `%APPDATA%\CNC` (Windows) or
@@ -78,4 +98,6 @@ build.bat          Windows
 ```
 
 Both build the Harbour-CUI library first when it is not built yet (`build all`: again). CNC needs the
-`cedit` folder next to it (`../cedit`). Usage: `cnc [left folder [right folder]]`.
+`cedit` folder next to it (`../cedit`) and the hbtip contrib of Harbour (FTP; on Linux also hbunix:
+`HB_BUILD_CONTRIBS="hbtip hbunix" make` when Harbour is built, or `hbmk2 hbtip.hbp` and
+`hbmk2 hbunix.hbp` in `contrib/hbtip` and `contrib/hbunix`). Usage: `cnc [left folder [right folder]]`.

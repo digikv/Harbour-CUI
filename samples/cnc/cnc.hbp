@@ -9,9 +9,12 @@
 
 ../../hbtui.hbc
 {win}hbwin.hbc
+hbtip.hbc
 
 cnc.prg
 cncpanel.prg
+cncnet.prg
+{win}cncwin.c
 ../cedit/htcodeedit.prg
 ../cedit/cebuffer.prg
 ../cedit/cesyntax.prg

@@ -429,6 +429,9 @@ samples/          Demo applications (human-facing, require a display)
                   quick search, sort), cnc.prg = menus, F-keys, copy/move/delete (recursive), command line
                   (hb_processRun, output Ctrl-W), "Norton" theme (VGA palette), cnc.ini. F3/F4 = CEdit's
                   HTCodeEdit + CEBuffer in a full-screen HTDialog (cnc.hbp links ../cedit/*.prg).
+                  cncnet.prg = Net menu: CNCFtp (hbtip TIPClientFTP) behind CNCPanel:oNet, net use /
+                  net view (Windows). cncwin.c CNC_RUNHIDDEN: commands with CREATE_NO_WINDOW (hb_processRun
+                  opened a black console window). Test FTP: WSL python3-pyftpdlib on port 2121.
 tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_basic      HTPoint, HTSize, all HTEvent subclasses
   test_eventloop  HTEventLoop schedule, scheduleRepeat, cancelTask, runPendingTasks

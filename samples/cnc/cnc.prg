@@ -19,6 +19,9 @@
  * next to the program if it is there, else in %APPDATA%\CNC (Windows) or
  * ~/.config/cnc (Linux).
  *
+ * Net menu (Total Commander): an FTP server in a panel (cncnet.prg, hbtip),
+ * network drives and the computers of the network (Windows).
+ *
  * Usage: cnc [left folder [right folder]]
  */
 
@@ -42,6 +45,7 @@ STATIC s_aHist := {}                    /* folders visited, the newest first */
 STATIC s_hMarks := { => }               /* bookmarks: "a" / "s" / "d" -> folder */
 STATIC s_cOutput := ""                  /* the output of the last command (Ctrl-W) */
 STATIC s_cOutCmd := ""
+STATIC s_hFtp := { => }                 /* the FTP connections (cnc.ini [FTP]) */
 
 PROCEDURE Main( ... )
 
@@ -155,7 +159,7 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS CNCMain
     CASE lPanel .AND. s_aPanel[ s_nAct ]:cQuick == NIL .AND. cnc_LetterKey( nKey )
         keyEvent:accept()
         RETURN
-    CASE lPanel .AND. ! Empty( c := cnc_AltLetter( nKey ) ) .AND. !( c $ "LFCOR" )
+    CASE lPanel .AND. ! Empty( c := cnc_AltLetter( nKey ) ) .AND. !( c $ "LFCNOR" )
         keyEvent:accept()                       /* Alt + letter: quick search (NC) */
         s_aPanel[ s_nAct ]:quickSearch( Lower( c ) )
         RETURN
@@ -228,6 +232,16 @@ STATIC FUNCTION cnc_CtrlKey( c )
     CASE "P"
         cnc_SetMode( s_nAct, ! s_aPanel[ s_nAct ]:lFull )
         EXIT
+    CASE "F"                                     /* Ctrl-F FTP connect, Ctrl-Shift-F disconnect */
+        IF hb_bitAnd( hb_gtInfo( HB_GTI_KBDSHIFTS ), HB_GTI_KBD_SHIFT ) != 0
+            cnc_FtpDisconnect()
+        ELSE
+            cnc_FtpConnect( .F. )
+        ENDIF
+        EXIT
+    CASE "N"
+        cnc_FtpConnect( .T. )
+        EXIT
     OTHERWISE
         RETURN .F.
     ENDSWITCH
@@ -275,7 +289,7 @@ RETURN
 
 STATIC FUNCTION cnc_PromptText()
 
-    LOCAL c := s_aPanel[ s_nAct ]:cDir, nMax := Max( 10, Int( s_oMain:width / 2 ) - 1 )
+    LOCAL o := s_aPanel[ s_nAct ], c := IIF( o:isNet(), o:oNet:url( o:cDir ), o:cDir ), nMax := Max( 10, Int( s_oMain:width / 2 ) - 1 )
 
     IF Len( c ) > nMax
         c := "…" + Right( c, nMax - 1 )
@@ -325,11 +339,20 @@ STATIC PROCEDURE cnc_BuildMenu()
             oMenu:addSeparator()
             cnc_Item( oMenu, "Swap panels", "Ctrl-U", NIL, {|| cnc_Swap() } )
             cnc_Item( oMenu, "Compare directories", "", NIL, {|| cnc_Compare() } )
-            cnc_Item( oMenu, "Equal panels", "", NIL, {|| s_aPanel[ 3 - s_nAct ]:read( s_aPanel[ s_nAct ]:cDir ), s_aPanel[ 3 - s_nAct ]:refresh() } )
+            cnc_Item( oMenu, "Equal panels", "", NIL, {|| cnc_Equal() } )
             oMenu:addSeparator()
             cnc_Item( oMenu, "Command line", "Ctrl-O", NIL, {|| cnc_Console() } )
             cnc_Item( oMenu, "Last output", "Ctrl-W", NIL, {|| cnc_ShowOutput() } )
             cnc_Item( oMenu, "Calculator", "=", NIL, {|| cnc_Calc( "" ) } )
+
+            oMenu := s_oBar:addMenu( "Net" )
+            cnc_Item( oMenu, "FTP connect...", "Ctrl-F", NIL, {|| cnc_FtpConnect( .F. ) } )
+            cnc_Item( oMenu, "FTP new connection...", "Ctrl-N", NIL, {|| cnc_FtpConnect( .T. ) } )
+            cnc_Item( oMenu, "FTP disconnect", "Ctrl-Shift-F", NIL, {|| cnc_FtpDisconnect() } )
+            oMenu:addSeparator()
+            cnc_Item( oMenu, "Map network drive...", "", NIL, {|| cnc_NetCmd( 1 ) } )
+            cnc_Item( oMenu, "Disconnect network drive...", "", NIL, {|| cnc_NetCmd( 2 ) } )
+            cnc_Item( oMenu, "Network computers...", "", NIL, {|| cnc_NetCmd( 3 ) } )
 
             oMenu := s_oBar:addMenu( "Options" )
             cnc_Item( oMenu, "Show hidden files", "", NIL, {|| cnc_Hidden() } )
@@ -412,13 +435,15 @@ STATIC PROCEDURE cnc_Changed( oPanel )
     LOCAL n
 
     IF oPanel == s_aPanel[ s_nAct ] .AND. ! Empty( oPanel:cDir )
-        hb_cwd( oPanel:cDir )
-        n := AScan( s_aHist, {| c | cnc_SamePath( c, oPanel:cDir ) } )
-        IF n > 0
-            hb_ADel( s_aHist, n, .T. )
+        IF ! oPanel:isNet()
+            hb_cwd( oPanel:cDir )
+            n := AScan( s_aHist, {| c | cnc_SamePath( c, oPanel:cDir ) } )
+            IF n > 0
+                hb_ADel( s_aHist, n, .T. )
+            ENDIF
+            hb_AIns( s_aHist, 1, oPanel:cDir, .T. )
+            ASize( s_aHist, Min( Len( s_aHist ), 30 ) )
         ENDIF
-        hb_AIns( s_aHist, 1, oPanel:cDir, .T. )
-        ASize( s_aHist, Min( Len( s_aHist ), 30 ) )
         IF s_oPrompt != NIL .AND. s_oMain != NIL .AND. s_oMain:width > 0
             s_oPrompt:setText( cnc_PromptText() )
             cnc_Arrange()
@@ -439,12 +464,32 @@ RETURN
 
 STATIC PROCEDURE cnc_Swap()
 
-    LOCAL cDir := s_aPanel[ 1 ]:cDir, cDir2 := s_aPanel[ 2 ]:cDir
+    LOCAL o1 := s_aPanel[ 1 ], o2 := s_aPanel[ 2 ], c, x
 
-    s_aPanel[ 1 ]:read( cDir2 )
-    s_aPanel[ 2 ]:read( cDir )
+    FOR EACH c IN { "oNet", "cLocal", "cDir", "aFiles", "nCur", "nTop", "nSort", "lDesc", "lFull" }
+        x := __objSendMsg( o1, c )
+        __objSendMsg( o1, "_" + c, __objSendMsg( o2, c ) )
+        __objSendMsg( o2, "_" + c, x )
+    NEXT
+    o1:ensureVisible()
+    o2:ensureVisible()
     AEval( s_aPanel, {| o | o:refresh() } )
     cnc_Changed( cnc_Act() )
+
+RETURN
+
+/* Commands - Equal panels: the other panel shows the folder of this one */
+STATIC PROCEDURE cnc_Equal()
+
+    LOCAL o := cnc_Act(), oOther := s_aPanel[ 3 - s_nAct ]
+
+    IF o:isNet()
+        HTToast():show( "Not for an FTP panel", 1500, HT_CLR_TOAST_INFO )
+        RETURN
+    ENDIF
+    cnc_FtpClose( 3 - s_nAct )
+    oOther:read( o:cDir )
+    oOther:refresh()
 
 RETURN
 
@@ -469,15 +514,25 @@ RETURN
 /* D, Ctrl-F1 / Ctrl-F2: type a folder */
 STATIC PROCEDURE cnc_ChDir( n )
 
-    LOCAL cDir := cnc_Input( "Change directory", "Directory:", s_aPanel[ n ]:cDir )
+    LOCAL o := s_aPanel[ n ], cDir := cnc_Input( "Change directory", IIF( o:isNet(), "FTP folder:", "Directory:" ), o:cDir )
 
-    IF ! Empty( cDir )
-        cnc_GoDir( n, cnc_FullPath( cDir ) )
+    IF Empty( cDir )
+        RETURN
     ENDIF
+    IF o:isNet()
+        IF ! o:read( IIF( Left( cDir, 1 ) == "/", cDir, o:cDir + cDir ) )
+            HTMessageBox():error( "FTP", o:oNet:cErr )
+        ENDIF
+        o:refresh()
+        RETURN
+    ENDIF
+    cnc_GoDir( n, cnc_FullPath( cDir ) )
 
 RETURN
 
+/* a local folder; an FTP panel is disconnected first */
 STATIC PROCEDURE cnc_GoDir( n, cDir )
+    cnc_FtpClose( n )
     IF s_aPanel[ n ]:read( cDir )
         s_aPanel[ n ]:refresh()
         IF n != s_nAct
@@ -630,6 +685,10 @@ STATIC PROCEDURE cnc_OpenFile( oPanel, a )
     LOCAL nAttr := 0
 #endif
 
+    IF oPanel:isNet()
+        cnc_View()
+        RETURN
+    ENDIF
 #ifdef __PLATFORM__WINDOWS
     IF cExt $ ".bat|.cmd"
         cnc_Run( '"' + cFile + '"' )
@@ -652,6 +711,10 @@ STATIC PROCEDURE cnc_View()
     LOCAL o := cnc_Act(), a := o:current(), aSize
 
     IF a == NIL .OR. a[ F_NAME ] == ".."
+        RETURN
+    ENDIF
+    IF o:isNet()
+        cnc_NetEdit( o, a, .T. )
         RETURN
     ENDIF
     IF a[ F_DIR ]
@@ -692,6 +755,17 @@ STATIC PROCEDURE cnc_Edit( lNew )
 
     LOCAL o := cnc_Act(), a := o:current(), cName
 
+    IF o:isNet()
+        IF lNew
+            cName := cnc_Input( "Edit new file", "File name:", "" )
+            IF ! Empty( cName )
+                cnc_NetEdit( o, { cName, 0, CToD( "" ), "", "", .F., .F. }, .F. )
+            ENDIF
+        ELSEIF a != NIL .AND. ! a[ F_DIR ]
+            cnc_NetEdit( o, a, .F. )
+        ENDIF
+        RETURN
+    ENDIF
     IF lNew
         cName := cnc_Input( "Edit new file", "File name:", "" )
         IF Empty( cName )
@@ -719,6 +793,10 @@ STATIC PROCEDURE cnc_CopyMove( lMove )
     LOCAL nMode := 0, nDone := 0, cDst, lToDir
 
     IF Empty( aList )
+        RETURN
+    ENDIF
+    IF oSrc:isNet() .OR. oDst:isNet()
+        cnc_NetCopy( oSrc, oDst, aList, lMove )
         RETURN
     ENDIF
     cWhat := IIF( Len( aList ) == 1, '"' + aList[ 1 ][ F_NAME ] + '"', hb_ntos( Len( aList ) ) + " files" )
@@ -829,6 +907,14 @@ STATIC PROCEDURE cnc_Rename()
     IF Empty( cNew ) .OR. cNew == a[ F_NAME ]
         RETURN
     ENDIF
+    IF o:isNet()
+        IF ! o:oNet:rename( o:cDir + a[ F_NAME ], o:cDir + cNew )
+            HTMessageBox():error( "FTP", o:oNet:cErr )
+        ENDIF
+        o:read( o:cDir, cNew )
+        o:refresh()
+        RETURN
+    ENDIF
     IF FRename( cnc_Path( o, a ), o:cDir + cNew ) != 0
         HTMessageBox():error( "CNC", "Cannot rename " + a[ F_NAME ] + " (error " + hb_ntos( FError() ) + ")" )
         RETURN
@@ -844,6 +930,14 @@ STATIC PROCEDURE cnc_Mkdir()
     LOCAL o := cnc_Act(), cName := cnc_Input( "Make directory", "Name:", "" )
 
     IF Empty( cName )
+        RETURN
+    ENDIF
+    IF o:isNet()
+        IF ! o:oNet:mkdir( o:cDir + cName )
+            HTMessageBox():error( "FTP", o:oNet:cErr )
+        ENDIF
+        o:read( o:cDir, cName )
+        o:refresh()
         RETURN
     ENDIF
     IF ! hb_DirBuild( hb_DirSepToOS( cnc_FullPath( cName ) ) )
@@ -869,7 +963,11 @@ STATIC PROCEDURE cnc_Delete()
     ENDIF
     FOR EACH a IN aList
         cnc_Progress( "Deleting " + a[ F_NAME ] )
-        IF ! cnc_DeleteItem( cnc_Path( o, a ), a[ F_DIR ], @nMode )
+        IF o:isNet()
+            IF ! cnc_NetDelete( o:oNet, o:cDir + a[ F_NAME ], a[ F_DIR ] )
+                EXIT
+            ENDIF
+        ELSEIF ! cnc_DeleteItem( cnc_Path( o, a ), a[ F_DIR ], @nMode )
             EXIT
         ENDIF
         nDone++
@@ -928,8 +1026,13 @@ RETURN .T.
 /* Ctrl-F7: files by a mask in the folder and its subfolders */
 STATIC PROCEDURE cnc_Find()
 
-    LOCAL cMask := cnc_Input( "Find file", "File mask:", "*.prg" ), aFound := {}, aItems := {}, n, o := cnc_Act()
+    LOCAL cMask, aFound := {}, aItems := {}, n, o := cnc_Act()
 
+    IF o:isNet()
+        HTToast():show( "Find file: not on an FTP server", 1500, HT_CLR_TOAST_INFO )
+        RETURN
+    ENDIF
+    cMask := cnc_Input( "Find file", "File mask:", "*.prg" )
     IF Empty( cMask )
         RETURN
     ENDIF
@@ -1014,6 +1117,7 @@ RETURN
 
 STATIC PROCEDURE cnc_Quit()
     IF HTMessageBox():choose( "CNC", "Do you want to quit CNC?", { "&Yes", "&No" }, HT_MSG_QUESTION ) == 1
+        AEval( s_aPanel, {| o | IIF( o:isNet(), o:oNet:close(), NIL ) } )
         s_oApp:quit()
     ENDIF
 RETURN
@@ -1040,6 +1144,8 @@ STATIC PROCEDURE cnc_RunLine()
         cnc_Activate( s_nAct )
     CASE Left( cLine, 1 ) == "="
         cnc_Calc( SubStr( cLine, 2 ) )
+    CASE cnc_Act():isNet()
+        HTToast():show( "The command line works in a local folder (Ctrl-Shift-F: disconnect)", 2500, HT_CLR_TOAST_INFO )
     CASE Lower( cLine ) == "cd" .OR. Lower( Left( cLine, 3 ) ) == "cd "
         cDir := AllTrim( SubStr( cLine, 3 ) )
         IF Empty( cDir )
@@ -1062,7 +1168,8 @@ STATIC PROCEDURE cnc_Run( cCmd )
     cnc_Progress( "Running: " + cCmd )
     hb_cwd( cnc_Act():cDir )
 #ifdef __PLATFORM__WINDOWS
-    nRes := hb_processRun( "cmd /c " + cCmd, , @cOut, @cErr )
+    HB_SYMBOL_UNUSED( cErr )
+    nRes := cnc_RunHidden( "cmd /c " + cCmd, @cOut )      /* no console window (cncwin.c) */
 #else
     nRes := hb_processRun( "sh -c " + cnc_ShQuote( cCmd ), , @cOut, @cErr )
 #endif
@@ -1114,10 +1221,333 @@ STATIC PROCEDURE cnc_Calc( cExpr )
 
 RETURN
 
+/*----------------------------------------------------------- Net */
+
+/* Ctrl-F: the saved connections (or a new one); Ctrl-N: a new one */
+STATIC PROCEDURE cnc_FtpConnect( lNew )
+
+    LOCAL aList := cnc_FtpList( s_hFtp ), aItems := {}, aConn, n, h, aNames := {}
+
+    IF ! lNew .AND. ! Empty( aList )
+        AEval( aList, {| x | AAdd( aItems, PadR( x[ 1 ], 16 ) + " " + x[ 4 ] + "@" + x[ 2 ] + x[ 5 ] ) } )
+        AAdd( aItems, "<New connection...>" )
+        AAdd( aItems, "<Delete a connection...>" )
+        n := cnc_List( "FTP connect", aItems, 1 )
+        IF n == 0
+            RETURN
+        ELSEIF n == Len( aItems )
+            AEval( aList, {| x | AAdd( aNames, x[ 1 ] ) } )
+            n := cnc_List( "Delete the connection", aNames, 1 )
+            IF n > 0
+                hb_HDel( s_hFtp, aNames[ n ] )
+            ENDIF
+            RETURN
+        ELSEIF n <= Len( aList )
+            aConn := aList[ n ]
+        ENDIF
+    ENDIF
+    h := cnc_FtpDialog( IIF( aConn == NIL, "FTP new connection", "FTP connect: " + aConn[ 1 ] ), aConn )
+    IF h == NIL
+        RETURN
+    ENDIF
+    IF ! Empty( h[ "name" ] )
+        s_hFtp[ h[ "name" ] ] := h[ "host" ] + "|" + hb_ntos( h[ "port" ] ) + "|" + h[ "user" ] + "|" + h[ "dir" ]
+    ENDIF
+    cnc_FtpOpen( s_nAct, h )
+
+RETURN
+
+STATIC PROCEDURE cnc_FtpOpen( n, h )
+
+    LOCAL oNet := CNCFtp():new(), o := s_aPanel[ n ]
+
+    cnc_Progress( "Connecting to " + h[ "host" ] + " ..." )
+    IF ! oNet:connect( h[ "host" ], h[ "port" ], h[ "user" ], h[ "pass" ] )
+        cnc_Progress( "" )
+        HTMessageBox():error( "FTP", oNet:cErr )
+        RETURN
+    ENDIF
+    cnc_Progress( "" )
+    cnc_FtpClose( n )
+    o:cLocal := o:cDir
+    o:oNet := oNet
+    IF ! o:read( h[ "dir" ] ) .AND. ! o:read( "/" )
+        HTMessageBox():error( "FTP", oNet:cErr )
+        cnc_FtpClose( n )
+        RETURN
+    ENDIF
+    o:refresh()
+    cnc_Changed( o )
+
+RETURN
+
+/* Ctrl-Shift-F: the FTP panel (the active one, else the other) back to its folder */
+STATIC PROCEDURE cnc_FtpDisconnect()
+    IF cnc_Act():isNet()
+        cnc_FtpClose( s_nAct )
+    ELSEIF s_aPanel[ 3 - s_nAct ]:isNet()
+        cnc_FtpClose( 3 - s_nAct )
+    ELSE
+        HTToast():show( "No FTP connection", 1500, HT_CLR_TOAST_INFO )
+    ENDIF
+RETURN
+
+STATIC PROCEDURE cnc_FtpClose( n )
+
+    LOCAL o := s_aPanel[ n ]
+
+    IF ! o:isNet()
+        RETURN
+    ENDIF
+    o:oNet:close()
+    o:oNet := NIL
+    o:cDir := ""
+    IF Empty( o:cLocal ) .OR. ! o:read( o:cLocal )
+        o:read( hb_DirBase() )
+    ENDIF
+    o:refresh()
+    cnc_Changed( o )
+
+RETURN
+
+/* F3 / F4 on an FTP panel: the file is downloaded, viewed or edited, and
+   uploaded again when it was changed */
+STATIC PROCEDURE cnc_NetEdit( o, a, lView )
+
+    LOCAL cRemote := o:cDir + a[ F_NAME ], cTmp := cnc_TempName( a[ F_NAME ] ), cBefore := NIL, lNew := a[ F_SIZE ] == 0 .AND. Empty( a[ F_ATTR ] )
+
+    IF a[ F_DIR ]
+        HTToast():show( "A folder on the FTP server", 1500, HT_CLR_TOAST_INFO )
+        RETURN
+    ENDIF
+    IF ! lNew
+        cnc_Progress( "Downloading " + a[ F_NAME ] )
+        IF ! o:oNet:get( cRemote, cTmp )
+            cnc_Progress( "" )
+            HTMessageBox():error( "FTP", o:oNet:cErr )
+            FErase( cTmp )
+            RETURN
+        ENDIF
+        cnc_Progress( "" )
+        cBefore := hb_MemoRead( cTmp )
+    ENDIF
+    cnc_EditFile( cTmp, lView, o:oNet:url( cRemote ) )
+    IF ! lView .AND. hb_FileExists( cTmp ) .AND. ( cBefore == NIL .OR. !( hb_MemoRead( cTmp ) == cBefore ) )
+        cnc_Progress( "Uploading " + a[ F_NAME ] )
+        IF o:oNet:put( cTmp, cRemote )
+            HTToast():show( "Uploaded: " + a[ F_NAME ], 1500, HT_CLR_TOAST_SUCCESS )
+        ELSE
+            HTMessageBox():error( "FTP", o:oNet:cErr )
+        ENDIF
+        cnc_Progress( "" )
+        o:read( o:cDir, a[ F_NAME ] )
+        o:refresh()
+    ENDIF
+    FErase( cTmp )
+
+RETURN
+
+STATIC FUNCTION cnc_TempName( cName )
+RETURN hb_DirSepAdd( hb_DirTemp() ) + "cnc" + hb_ntos( hb_RandomInt( 100000, 999999 ) ) + "_" + cName
+
+/* F5 / F6 between an FTP panel and a local one */
+STATIC PROCEDURE cnc_NetCopy( oSrc, oDst, aList, lMove )
+
+    LOCAL a, nMode := 0, nDone := 0, lOk, cWhat, nDel := 1
+
+    IF oSrc:isNet() .AND. oDst:isNet()
+        HTMessageBox():error( "FTP", "From one FTP panel to another: copy to a local folder first" )
+        RETURN
+    ENDIF
+    cWhat := IIF( Len( aList ) == 1, '"' + aList[ 1 ][ F_NAME ] + '"', hb_ntos( Len( aList ) ) + " files" )
+    IF HTMessageBox():choose( IIF( lMove, "Move", "Copy" ), IIF( lMove, "Move ", "Copy " ) + cWhat + " to" + Chr( 10 ) + ;
+                              IIF( oDst:isNet(), oDst:oNet:url( oDst:cDir ), oDst:cDir ) + " ?", ;
+                              { IIF( lMove, "&Move", "&Copy" ), "&Cancel" }, HT_MSG_QUESTION ) != 1
+        RETURN
+    ENDIF
+    FOR EACH a IN aList
+        IF oSrc:isNet()
+            lOk := cnc_NetGet( oSrc:oNet, oSrc:cDir + a[ F_NAME ], oDst:cDir + a[ F_NAME ], a[ F_DIR ], @nMode )
+        ELSE
+            lOk := .T.
+            IF AScan( oDst:aFiles, {| x | x[ F_NAME ] == a[ F_NAME ] } ) > 0 .AND. ! a[ F_DIR ]
+                lOk := cnc_AskOverwrite( a[ F_NAME ], @nMode )
+            ENDIF
+            IF lOk == NIL
+                EXIT
+            ENDIF
+            lOk := lOk .AND. cnc_NetPut( oDst:oNet, cnc_Path( oSrc, a ), oDst:cDir + a[ F_NAME ], a[ F_DIR ] )
+        ENDIF
+        IF lOk == NIL
+            EXIT
+        ENDIF
+        IF lOk
+            IF lMove
+                IF oSrc:isNet()
+                    cnc_NetDelete( oSrc:oNet, oSrc:cDir + a[ F_NAME ], a[ F_DIR ] )
+                ELSE
+                    cnc_DeleteItem( cnc_Path( oSrc, a ), a[ F_DIR ], @nDel )
+                ENDIF
+            ENDIF
+            a[ F_MARK ] := .F.
+            nDone++
+        ENDIF
+    NEXT
+    cnc_Progress( "" )
+    oSrc:reread()
+    oDst:reread()
+    AEval( s_aPanel, {| o | o:refresh() } )
+    IF nDone > 0
+        HTToast():show( hb_ntos( nDone ) + IIF( lMove, " moved", " copied" ), 1500, HT_CLR_TOAST_SUCCESS )
+    ENDIF
+
+RETURN
+
+/* a file exists: .T. overwrite, .F. skip, NIL cancel; nMode 1 / 2 = all */
+STATIC FUNCTION cnc_AskOverwrite( cName, nMode )
+
+    LOCAL n
+
+    IF nMode == 1
+        RETURN .T.
+    ELSEIF nMode == 2
+        RETURN .F.
+    ENDIF
+    n := HTMessageBox():choose( "CNC", cName + " already exists. Overwrite it?", ;
+                                { "&Overwrite", "&All", "&Skip", "Skip a&ll", "&Cancel" }, HT_MSG_WARNING )
+    DO CASE
+    CASE n == 1
+        RETURN .T.
+    CASE n == 2
+        nMode := 1
+        RETURN .T.
+    CASE n == 3
+        RETURN .F.
+    CASE n == 4
+        nMode := 2
+        RETURN .F.
+    ENDCASE
+
+RETURN NIL
+
+/* download a file or a folder: .T. done, .F. skipped, NIL cancelled */
+STATIC FUNCTION cnc_NetGet( oNet, cRemote, cLocal, lDir, nMode )
+
+    LOCAL aList, a, x
+
+    IF lDir
+        hb_DirBuild( cLocal )
+        IF ( aList := oNet:dir( cnc_FtpDir( cRemote ) ) ) == NIL
+            RETURN cnc_NetError( oNet )
+        ENDIF
+        FOR EACH a IN aList
+            x := cnc_NetGet( oNet, cnc_FtpDir( cRemote ) + a[ F_NAME ], hb_DirSepAdd( cLocal ) + a[ F_NAME ], a[ F_DIR ], @nMode )
+            IF x == NIL
+                RETURN NIL
+            ENDIF
+        NEXT
+        RETURN .T.
+    ENDIF
+    IF hb_FileExists( cLocal ) .AND. ( x := cnc_AskOverwrite( hb_FNameNameExt( cLocal ), @nMode ) ) != .T.
+        RETURN x
+    ENDIF
+    cnc_Progress( "Downloading " + cRemote )
+    IF ! oNet:get( cRemote, cLocal )
+        RETURN cnc_NetError( oNet )
+    ENDIF
+
+RETURN .T.
+
+/* upload a file or a folder: .T. done, .F. skipped, NIL cancelled */
+STATIC FUNCTION cnc_NetPut( oNet, cLocal, cRemote, lDir )
+
+    LOCAL a, x
+
+    IF lDir
+        oNet:mkdir( cnc_FtpDir( cRemote ) )          /* it may be there already */
+        FOR EACH a IN Directory( hb_DirSepAdd( cLocal ) + hb_osFileMask(), "DHS" )
+            IF !( a[ 1 ] == "." .OR. a[ 1 ] == ".." )
+                x := cnc_NetPut( oNet, hb_DirSepAdd( cLocal ) + a[ 1 ], cnc_FtpDir( cRemote ) + a[ 1 ], "D" $ a[ 5 ] )
+                IF x == NIL
+                    RETURN NIL
+                ENDIF
+            ENDIF
+        NEXT
+        RETURN .T.
+    ENDIF
+    cnc_Progress( "Uploading " + cLocal )
+    IF ! oNet:put( cLocal, cRemote )
+        RETURN cnc_NetError( oNet )
+    ENDIF
+
+RETURN .T.
+
+/* delete on the server, a folder with everything in it */
+STATIC FUNCTION cnc_NetDelete( oNet, cRemote, lDir )
+
+    LOCAL aList, a
+
+    IF lDir
+        IF ( aList := oNet:dir( cnc_FtpDir( cRemote ) ) ) == NIL
+            RETURN cnc_NetError( oNet ) == .T.
+        ENDIF
+        FOR EACH a IN aList
+            IF ! cnc_NetDelete( oNet, cnc_FtpDir( cRemote ) + a[ F_NAME ], a[ F_DIR ] )
+                RETURN .F.
+            ENDIF
+        NEXT
+        oNet:oFtp:Cwd( cnc_FtpParent( cnc_FtpDir( cRemote ) ) )
+        IF ! oNet:rmdir( cRemote )
+            RETURN cnc_NetError( oNet ) == .T.
+        ENDIF
+        RETURN .T.
+    ENDIF
+    IF ! oNet:del( cRemote )
+        RETURN cnc_NetError( oNet ) == .T.
+    ENDIF
+
+RETURN .T.
+
+/* an FTP error: .F. skip, NIL cancel */
+STATIC FUNCTION cnc_NetError( oNet )
+RETURN IIF( HTMessageBox():choose( "FTP", oNet:cErr, { "&Skip", "&Cancel" }, HT_MSG_WARNING ) == 1, .F., NIL )
+
+/* Net - Map / Disconnect network drive, Network computers (Windows) */
+STATIC PROCEDURE cnc_NetCmd( nCmd )
+
+#ifdef __PLATFORM__WINDOWS
+    LOCAL c
+
+    SWITCH nCmd
+    CASE 1
+        IF ! Empty( c := cnc_NetMap() )
+            cnc_GoDir( s_nAct, c )
+        ENDIF
+        EXIT
+    CASE 2
+        IF ! Empty( c := cnc_NetUnmap() )
+            AEval( s_aPanel, {| o, i | IIF( ! o:isNet() .AND. Upper( Left( o:cDir, 2 ) ) == Upper( c ), cnc_GoDir( i, hb_DirBase() ), NIL ) } )
+            HTToast():show( "Disconnected: " + c, 1500, HT_CLR_TOAST_SUCCESS )
+        ENDIF
+        EXIT
+    CASE 3
+        IF ! Empty( c := cnc_NetBrowse() )
+            cnc_GoDir( s_nAct, c )
+        ENDIF
+        EXIT
+    ENDSWITCH
+#else
+    HB_SYMBOL_UNUSED( nCmd )
+    HTMessageBox():information( "Network", "Network drives and computers: Windows only." + Chr( 10 ) + ;
+        "On Linux mount the share first (smb:// in the file manager," + Chr( 10 ) + "or mount -t cifs), then open its folder." )
+#endif
+
+RETURN
+
 /*----------------------------------------------------------- viewer / editor */
 
 /* F3 / F4: the editor of CEdit in a window over the panels */
-STATIC PROCEDURE cnc_EditFile( cFile, lView )
+STATIC PROCEDURE cnc_EditFile( cFile, lView, cTitle )
 
     LOCAL oB := CEBuffer():new(), dlg
 
@@ -1136,7 +1566,7 @@ STATIC PROCEDURE cnc_EditFile( cFile, lView )
     oB:cSyntax := ce_SyntaxFor( cFile )
     oB:lHilite := .T.
     oB:lReadOnly := lView
-    dlg := CNCEditDlg():create( oB, IIF( lView, "View: ", "Edit: " ) + cFile, lView )
+    dlg := CNCEditDlg():create( oB, IIF( lView, "View: ", "Edit: " ) + hb_defaultValue( cTitle, cFile ), lView )
     dlg:exec()
 
 RETURN
@@ -1347,7 +1777,7 @@ RETURN
 /*----------------------------------------------------------- dialogs */
 
 /* list of items, Enter / double click chooses; returns the number, 0 = Esc */
-STATIC FUNCTION cnc_List( cTitle, aItems, nCurrent )
+FUNCTION cnc_List( cTitle, aItems, nCurrent )
 
     LOCAL dlg, oList, nW, nH, nResult := 0, c
 
@@ -1372,7 +1802,7 @@ STATIC FUNCTION cnc_List( cTitle, aItems, nCurrent )
 RETURN nResult
 
 /* one line of input; returns the text, "" = cancelled */
-STATIC FUNCTION cnc_Input( cTitle, cLabel, cInit )
+FUNCTION cnc_Input( cTitle, cLabel, cInit )
 
     LOCAL dlg, oEdit, nW := Min( 72, ht_ScreenMaxCol() - 3 ), nH := 6, nL := Min( 30, Len( cLabel ) + 1 )
 
@@ -1495,6 +1925,15 @@ RETURN ce_Join( { ;
     "  cd <folder>  changes the folder of the active panel", ;
     "  =<expr>, =   a Harbour expression: =1024*16, =Date()", ;
     "", ;
+    "NET (as Total Commander)", ;
+    "  Ctrl-F       FTP connect: the saved connections, or a new one", ;
+    "  Ctrl-N       FTP new connection (host, or ftp://user@host:port/dir)", ;
+    "  Ctrl-Shift-F FTP disconnect: the panel goes back to its folder", ;
+    "  On an FTP panel: Enter / F3 view, F4 edit (saved back), F5 / F6", ;
+    "  copy / move to the other panel and back, F7 folder, F8 delete,", ;
+    "  Shift-F6 rename. Passwords are not saved.", ;
+    "  Net - Map / Disconnect network drive, Network computers (Windows)", ;
+    "", ;
     "VIEWER AND EDITOR (F3 / F4: the editor of CEdit)", ;
     "  F2 save, F7 / Ctrl-F find, Shift-F7 next, Esc close; the keys of", ;
     "  CEdit: F3 block, Ctrl-C / Ctrl-V, Ctrl-Z undo, Ctrl-Y delete line", ;
@@ -1559,6 +1998,7 @@ STATIC PROCEDURE cnc_LoadSettings()
             s_hMarks[ Lower( cKey ) ] := h[ cKey ]
         ENDIF
     NEXT
+    s_hFtp := hb_HGetDef( hIni, "FTP", { => } )
     h := hb_HGetDef( hIni, "HISTORY", { => } )
     FOR EACH cKey IN ASort( hb_HKeys( h ), , , {| x, y | Val( x ) < Val( y ) } )
         c := h[ cKey ]
@@ -1575,7 +2015,7 @@ STATIC PROCEDURE cnc_SaveSettings()
 
     h[ "theme" ]  := s_hSet[ "theme" ]
     FOR i := 1 TO 2
-        h[ "dir" + hb_ntos( i ) ]  := s_aPanel[ i ]:cDir
+        h[ "dir" + hb_ntos( i ) ]  := IIF( s_aPanel[ i ]:isNet(), s_aPanel[ i ]:cLocal, s_aPanel[ i ]:cDir )
         h[ "sort" + hb_ntos( i ) ] := hb_ntos( s_aPanel[ i ]:nSort )
         h[ "full" + hb_ntos( i ) ] := IIF( s_aPanel[ i ]:lFull, "1", "0" )
         h[ "desc" + hb_ntos( i ) ] := IIF( s_aPanel[ i ]:lDesc, "1", "0" )
@@ -1593,6 +2033,7 @@ STATIC PROCEDURE cnc_SaveSettings()
         h[ hb_ntos( c:__enumIndex() ) ] := c
     NEXT
     hIni[ "HISTORY" ] := h
+    hIni[ "FTP" ] := s_hFtp
     hb_DirBuild( hb_FNameDir( s_cIni ) )
     hb_iniWrite( s_cIni, hIni, "# CNC settings", NIL, .F. )
 
