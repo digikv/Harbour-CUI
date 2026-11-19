@@ -36,6 +36,7 @@ under the fullscreen window.
   (GlobalSet > Data Codepage, `/C:CP852`)
 - LetoDB / LetoDBf servers (`leto://host:port/path/file.dbf`, Ctrl-L lists the server's files)
 - SQL: SQLite files and ODBC data sources (Ctrl-Q); SELECT opens a window, other statements run
+- SQLite to DBF (Database menu): the tables of a SQLite database become DBF tables
 - Excel: open a sheet as a table, Copy To / Export writes `.xlsx`, Append From reads a sheet
   (through the XLSX class, https://github.com/digikv/xlsx)
 - Scripts: `.prg` compiled in memory or `.hrb` (Alt-K, Script Editor, `/P:script.prg`)
@@ -44,7 +45,8 @@ under the fullscreen window.
 - Memos holding JSON, arrays (nested, edited as Harbour literals), dates, numbers, logicals
 - BroPlus colors: the original BroPlus color set and DOS palette is the default theme
 - Indexes, scopes, filters, relations (master-detail), color conditions, views (`.cbv`),
-  structure editor, Copy To / Append From / Replace / Count / Sum / Pack / Zap / Reindex,
+  structure editor (also the newer field types: integer, autoincrement, double, currency,
+  date-time, modification time, row version, varchar, blob), Copy To / Append From / Replace / Count / Sum / Pack / Zap / Reindex,
   Label and Report Form, List to file / printer, calculator, expression evaluator, help
 
 ## Build

@@ -423,6 +423,7 @@ STATIC PROCEDURE BuildMenu()
     Item( oMenu, "&Database Selection Screen  <Alt-F2>", K_ALT_F2, {|| SelectDatabase() }, .F. )
     Item( oMenu, "Open from &LetoDB Server   <Ctrl-L> ", K_CTRL_L, {|| LetoDialog() }, .F. )
     Item( oMenu, "S&QL Query                 <Ctrl-Q> ", K_CTRL_Q, {|| SqlDialog() }, .F. )
+    Item( oMenu, "SQLite to D&BF...                   ", NIL, {|| SqliteToDbf() }, .F. )
     Item( oMenu, "Open E&xcel Sheet (.xlsx)           ", NIL, {|| SelectXlsx() }, .F. )
     oMenu:addSeparator()
     Item( oMenu, "&Next Database              <Alt-N> ", K_ALT_N, {|| NextArea( 1 ) } )
@@ -546,6 +547,7 @@ STATIC PROCEDURE BuildMenu()
     Item( oMenu, "R&un Script     <Alt-K>", K_ALT_K, {|| RunScript() }, .F. )
     Item( oMenu, "Script &Editor         ", NIL, {|| ScriptEditor() }, .F. )
     Item( oMenu, "SQL &Query     <Ctrl-Q>", NIL, {|| SqlDialog() }, .F. )
+    Item( oMenu, "SQLite to D&BF...      ", NIL, {|| SqliteToDbf() }, .F. )
 
     oMenu := s_oBar:addMenu( "Exit" )
     Item( oMenu, "e&Xit  <Alt-F9>", K_ALT_F9, {|| Quit() }, .F. )
@@ -1038,11 +1040,261 @@ STATIC PROCEDURE SqlRun( cType, cConn, cSql )
             Warn( "Statement failed: " + IIF( Empty( cErr ), "", cErr + hb_eol() ) + SqlError( nConn ) )
             RETURN
         ENDIF
-        Try( {|| nAffected := rddInfo( RDDI_AFFECTEDROWS, NIL, "SQLMIX", nConn ) } )
+        IF ! ( Left( cHead, 6 ) $ "INSERT|UPDATE|DELETE|REPLAC" .OR. Left( cHead, 5 ) == "MERGE" )
+            nAffected := NIL                    /* CREATE, DROP ...: no rows */
+        ELSEIF cType == "SQLITE3"
+            nAffected := SqlChanges( nConn )
+        ELSE
+            Try( {|| nAffected := rddInfo( RDDI_AFFECTEDROWS, NIL, "SQLMIX", nConn ) } )
+        ENDIF
         Info( "Done" + IIF( HB_ISNUMERIC( nAffected ), " - " + hb_ntos( nAffected ) + " rows affected", "" ) )
     ENDIF
 
 RETURN
+
+/* the rows changed by the last INSERT / UPDATE / DELETE on a SQLite
+   connection: Harbour's SQLite driver gives RDDI_AFFECTEDROWS the rows the
+   statement returned (0), so SQLite is asked: SELECT changes() */
+STATIC FUNCTION SqlChanges( nConn )
+
+    LOCAL cAlias := NewAlias( "SQLCHG", .T. ), nRows := NIL
+
+    Try( {|| dbUseArea( .T., "SQLMIX", "SELECT changes() AS n", cAlias, NIL, NIL, NIL, nConn ) } )
+    IF Select( cAlias ) > 0
+        nRows := ( cAlias )->( FieldGet( 1 ) )
+        ( cAlias )->( dbCloseArea() )
+        IF HB_ISSTRING( nRows )
+            nRows := Val( nRows )
+        ENDIF
+    ENDIF
+
+RETURN IIF( HB_ISNUMERIC( nRows ), nRows, NIL )
+
+/* Database > SQLite to DBF: the tables of a SQLite database become DBF
+   tables in a folder. The structure comes from the data: text in a C field
+   as long as its longest value (bytes in UTF-8, longer than 254: memo),
+   a column of "YYYY-MM-DD" values a date, whole numbers N; the field names
+   cut to 10 characters. The text is written in the Data Codepage. */
+STATIC PROCEDURE SqliteToDbf()
+
+    LOCAL cDb, nConn, aTables := {}, cAlias, dlg, oList, oDir, nW := 70, nH, cDir, n, nTables := 0, nRecs := 0
+    LOCAL cErr, nDone, lAll := .F., cDbf, aNames := {}
+
+    cDb := FileDialog( "SQLite database", "*.*" )
+    IF Empty( cDb )
+        RETURN
+    ENDIF
+    cDb := FullPath( cDb )
+    IF ! hb_FileExists( cDb )
+        Warn( "Not found: " + cDb )
+        RETURN
+    ENDIF
+    IF ( nConn := SqlConnect( "SQLITE3", cDb ) ) == 0
+        RETURN
+    ENDIF
+    cAlias := NewAlias( "SQLTABLES", .T. )
+    cErr := Try( {|| dbUseArea( .T., "SQLMIX", "SELECT name FROM sqlite_master WHERE type = 'table' " + ;
+                     "AND name NOT LIKE 'sqlite_%' ORDER BY name", cAlias, NIL, NIL, NIL, nConn ) } )
+    IF Select( cAlias ) == 0
+        Warn( "Not a SQLite database: " + cDb + hb_eol() + cErr + SqlError( nConn ) )
+        RETURN
+    ENDIF
+    DO WHILE ! ( cAlias )->( Eof() )
+        AAdd( aTables, AllTrim( ( cAlias )->( FieldGet( 1 ) ) ) )
+        ( cAlias )->( dbSkip() )
+    ENDDO
+    ( cAlias )->( dbCloseArea() )
+    IF Empty( aTables )
+        Warn( hb_FNameNameExt( cDb ) + " has no tables" )
+        RETURN
+    ENDIF
+
+    nH := Min( Len( aTables ), ht_ScreenMaxRow() - 14 ) + 9
+    dlg := HTDialog():new( NIL, "SQLite to DBF - " + hb_FNameNameExt( cDb ) )
+    dlg:resize( nW, nH )
+    HTLabel():new( "Tables (Space toggles):", dlg ):move( 2, 1 )
+    oList := HTCheckList():new( dlg )
+    oList:setGeometry( 2, 2, nW - 6, nH - 8 )
+    AEval( aTables, {| c | oList:addItem( c, .T. ) } )
+    HTLabel():new( "DBF folder:", dlg ):move( 2, nH - 5 )
+    oDir := HTLineEdit():new( dlg )
+    oDir:setGeometry( 15, nH - 5, nW - 19, 1 )
+    oDir:text := hb_FNameDir( cDb )
+    dlg:addButtonBar( "Convert", "Cancel" )
+    IF dlg:exec() != HT_DIALOG_ACCEPTED
+        RETURN
+    ENDIF
+    cDir := hb_DirSepAdd( FullPath( AllTrim( oDir:text ) ) )
+    IF ! hb_DirExists( cDir ) .AND. ! hb_DirBuild( cDir )
+        Warn( "Cannot make the folder " + cDir )
+        RETURN
+    ENDIF
+
+    FOR n := 1 TO Len( aTables )
+        IF ! oList:isChecked( n )
+            LOOP
+        ENDIF
+        cDbf := cDir + SqlDbfName( aTables[ n ], aNames ) + ".dbf"
+        IF AScan( s_aAreas, {| a | Upper( a[ AR_FILE ] ) == Upper( cDbf ) } ) > 0
+            Warn( hb_FNameNameExt( cDbf ) + " is open - " + aTables[ n ] + " is skipped" )
+            LOOP
+        ENDIF
+        IF hb_FileExists( cDbf ) .AND. ! lAll
+            SWITCH Choose( hb_FNameNameExt( cDbf ) + " exists", { "Overwrite", "Overwrite all", "Skip", "Cancel" }, 1 )
+            CASE 2
+                lAll := .T.
+            CASE 1
+                EXIT
+            CASE 3
+                LOOP
+            OTHERWISE
+                n := Len( aTables ) + 1
+                LOOP
+            ENDSWITCH
+        ENDIF
+        nDone := 0
+        Toast( "Converting " + aTables[ n ] + " ..." )
+        cErr := Try( {|| nDone := SqlTableToDbf( nConn, aTables[ n ], cDbf ) } )
+        IF ! Empty( cErr )
+            Warn( aTables[ n ] + ": " + cErr )
+            LOOP
+        ENDIF
+        nTables++
+        nRecs += nDone
+    NEXT
+    IF nTables > 0
+        Info( hb_ntos( nTables ) + " table" + IIF( nTables == 1, "", "s" ) + ", " + hb_ntos( nRecs ) + ;
+              " records written to" + hb_eol() + cDir )
+    ENDIF
+
+RETURN
+
+/* a DBF file name for a table: letters, digits and _, not used yet */
+STATIC FUNCTION SqlDbfName( cTable, aNames )
+
+    LOCAL cName := "", c, cTry, n := 1
+
+    FOR EACH c IN Lower( SqlLatin( cTable ) )
+        cName += IIF( ( c >= "a" .AND. c <= "z" ) .OR. IsDigit( c ) .OR. c == "_", c, "_" )
+    NEXT
+    IF Empty( cName )
+        cName := "table"
+    ENDIF
+    cTry := cName
+    DO WHILE AScan( aNames, cTry ) > 0
+        cTry := cName + "_" + hb_ntos( ++n )
+    ENDDO
+    AAdd( aNames, cTry )
+
+RETURN cTry
+
+/* one SQLite table -> cDbf; returns the number of records */
+STATIC FUNCTION SqlTableToDbf( nConn, cTable, cDbf )
+
+    LOCAL cAlias := NewAlias( "SQLCONV", .T. ), aStruct, aNew := {}, aInfo := {}, a, x, n, i, cName, aUsed := {}
+    LOCAL nCount := 0, lUtf := Empty( s_cCodepage ), cOut := "CB_SQL2DBF"
+
+    dbUseArea( .T., "SQLMIX", 'SELECT * FROM "' + StrTran( cTable, '"', '""' ) + '"', cAlias, NIL, NIL, NIL, nConn )
+    aStruct := ( cAlias )->( dbStruct() )
+
+    /* per column: { nMaxLen, lAllDates, nMaxInt, nDec } from the data */
+    AEval( aStruct, {| f | AAdd( aInfo, { 0, f[ 2 ] == "C", 1, f[ 4 ] } ) } )
+    ( cAlias )->( dbGoTop() )
+    DO WHILE ! ( cAlias )->( Eof() )
+        FOR i := 1 TO Len( aStruct )
+            x := ( cAlias )->( FieldGet( i ) )
+            DO CASE
+            CASE HB_ISSTRING( x )
+                x := RTrim( x )
+                aInfo[ i ][ 1 ] := Max( aInfo[ i ][ 1 ], IIF( lUtf, hb_BLen( x ), Len( x ) ) )
+                IF ! Empty( x ) .AND. !( Len( x ) == 10 .AND. SubStr( x, 5, 1 ) == "-" .AND. SubStr( x, 8, 1 ) == "-" .AND. ;
+                                        ! Empty( hb_SToD( StrTran( x, "-", "" ) ) ) )
+                    aInfo[ i ][ 2 ] := .F.
+                ENDIF
+            CASE HB_ISNUMERIC( x )
+                aInfo[ i ][ 3 ] := Max( aInfo[ i ][ 3 ], Len( hb_ntos( Int( x ) ) ) )
+            ENDCASE
+        NEXT
+        ( cAlias )->( dbSkip() )
+    ENDDO
+
+    FOR EACH a IN aStruct
+        i := a:__enumIndex()
+        cName := SqlFieldName( a[ 1 ], aUsed )
+        DO CASE
+        CASE a[ 2 ] == "C" .AND. aInfo[ i ][ 2 ] .AND. aInfo[ i ][ 1 ] > 0
+            AAdd( aNew, { cName, "D", 8, 0 } )
+        CASE a[ 2 ] == "C" .AND. aInfo[ i ][ 1 ] > 254
+            AAdd( aNew, { cName, "M", 10, 0 } )
+        CASE a[ 2 ] == "C"
+            AAdd( aNew, { cName, "C", Max( 1, aInfo[ i ][ 1 ] ), 0 } )
+        CASE a[ 2 ] $ "NIBFY"
+            n := aInfo[ i ][ 4 ]
+            AAdd( aNew, { cName, "N", Min( 20, aInfo[ i ][ 3 ] + 1 + IIF( n > 0, n + 1, 0 ) ), n } )
+        CASE a[ 2 ] $ "DLM"
+            AAdd( aNew, { cName, a[ 2 ], a[ 3 ], 0 } )
+        OTHERWISE
+            AAdd( aNew, { cName, "M", 10, 0 } )
+        ENDCASE
+    NEXT
+
+    dbCreate( cDbf, aNew, "DBFCDX" )
+    dbUseArea( .T., "DBFCDX", cDbf, cOut, .F., .F., IIF( Empty( s_cCodepage ), NIL, s_cCodepage ) )
+    ( cAlias )->( dbGoTop() )
+    DO WHILE ! ( cAlias )->( Eof() )
+        ( cOut )->( dbAppend() )
+        FOR i := 1 TO Len( aNew )
+            x := ( cAlias )->( FieldGet( i ) )
+            IF x == NIL
+                LOOP
+            ENDIF
+            SWITCH aNew[ i ][ 2 ]
+            CASE "D"
+                x := IIF( HB_ISSTRING( x ), hb_SToD( StrTran( Left( AllTrim( x ), 10 ), "-", "" ) ), x )
+                EXIT
+            CASE "C"
+            CASE "M"
+                x := IIF( HB_ISSTRING( x ), RTrim( x ), hb_CStr( x ) )
+                EXIT
+            CASE "N"
+                x := IIF( HB_ISNUMERIC( x ), x, Val( hb_CStr( x ) ) )
+                EXIT
+            ENDSWITCH
+            ( cOut )->( FieldPut( i, x ) )
+        NEXT
+        nCount++
+        ( cAlias )->( dbSkip() )
+    ENDDO
+    ( cOut )->( dbCloseArea() )
+    ( cAlias )->( dbCloseArea() )
+
+RETURN nCount
+
+/* č ć -> c, š -> s, ž -> z, đ -> dj: names of files and fields in ASCII */
+STATIC FUNCTION SqlLatin( c )
+RETURN hb_StrReplace( c, { "č", "ć", "š", "ž", "đ", "Č", "Ć", "Š", "Ž", "Đ" }, ;
+                         { "c", "c", "s", "z", "dj", "C", "C", "S", "Z", "DJ" } )
+
+/* a DBF field name: 10 characters, letters, digits and _, unique */
+STATIC FUNCTION SqlFieldName( cName, aUsed )
+
+    LOCAL c, cOut := "", cTry, n := 1
+
+    FOR EACH c IN Upper( SqlLatin( cName ) )
+        cOut += IIF( ( c >= "A" .AND. c <= "Z" ) .OR. IsDigit( c ) .OR. c == "_", c, "_" )
+    NEXT
+    IF Empty( cOut ) .OR. IsDigit( Left( cOut, 1 ) )
+        cOut := "F" + cOut
+    ENDIF
+    cOut := Left( cOut, 10 )
+    cTry := cOut
+    DO WHILE AScan( aUsed, cTry ) > 0
+        n++
+        cTry := Left( cOut, 10 - Len( hb_ntos( n ) ) ) + hb_ntos( n )
+    ENDDO
+    AAdd( aUsed, cTry )
+
+RETURN cTry
 
 STATIC FUNCTION SqlErrorNo( nConn )
 
@@ -2935,8 +3187,12 @@ STATIC FUNCTION StructEditor( cFile, aStru )
     btn:setGeometry( nBtn, 7, 14, 1 )
     btn:onClicked := {|| IIF( Len( aStru ) > 1, ( hb_ADel( aStru, aRec[ 1 ], .T. ), ;
         aRec[ 1 ] := Min( aRec[ 1 ], Len( aStru ) ), brw:refreshAll() ), NIL ) }
-    HTLabel():new( "Types: C N D L M", dlg ):move( nBtn, 9 )
-    HTLabel():new( "Enter edits a cell", dlg ):move( nBtn, 10 )
+    btn := HTPushButton():new( "Types...", dlg )
+    btn:setGeometry( nBtn, 9, 14, 1 )
+    btn:onClicked := {|| StructPickType( aStru, aRec ), brw:refreshAll() }
+    HTLabel():new( "C N D L M I + B Y", dlg ):move( nBtn, 11 )
+    HTLabel():new( "F @ = ^ Q W", dlg ):move( nBtn, 12 )
+    HTLabel():new( "Enter edits a cell", dlg ):move( nBtn, 13 )
 
     btn := HTPushButton():new( "Save", dlg )
     btn:setGeometry( nBtn, nH - 6, 14, 1 )
@@ -2950,6 +3206,43 @@ STATIC FUNCTION StructEditor( cFile, aStru )
     ENDIF
 
 RETURN NIL
+
+/* the field types of DBFCDX: { cType, cText, nLen, nDec } (nLen 0 = as typed) */
+STATIC FUNCTION StructTypes()
+RETURN { { "C", "Character  text, 1..254", 0, 0 }, ;
+         { "N", "Numeric    number with decimals", 0, 0 }, ;
+         { "D", "Date", 8, 0 }, ;
+         { "L", "Logical    .T. / .F.", 1, 0 }, ;
+         { "M", "Memo       text of any length", 10, 0 }, ;
+         { "I", "Integer    4 bytes (8: big numbers)", 4, 0 }, ;
+         { "+", "AutoInc    numbered by the table", 4, 0 }, ;
+         { "B", "Double     floating point", 8, 2 }, ;
+         { "Y", "Currency   4 decimals", 8, 4 }, ;
+         { "F", "Float      as Numeric", 0, 0 }, ;
+         { "@", "DateTime   date and time (timestamp)", 8, 0 }, ;
+         { "=", "ModTime    time of the last change", 8, 0 }, ;
+         { "^", "RowVer     changed with every write", 8, 0 }, ;
+         { "Q", "VarChar    text without trailing spaces", 0, 0 }, ;
+         { "W", "Blob       binary data of any length", 10, 0 } }
+
+/* Types...: a type for the current field, with its length */
+STATIC PROCEDURE StructPickType( aStru, aRec )
+
+    LOCAL aTypes := StructTypes(), aItems := {}, n, aField := aStru[ aRec[ 1 ] ]
+
+    AEval( aTypes, {| a | AAdd( aItems, a[ 1 ] + "  " + a[ 2 ] ) } )
+    n := Choose( "Field type", aItems, Max( 1, AScan( aTypes, {| a | a[ 1 ] == Upper( AllTrim( aField[ 2 ] ) ) } ) ) )
+    IF n > 0
+        aField[ 2 ] := aTypes[ n ][ 1 ]
+        IF aTypes[ n ][ 3 ] > 0
+            aField[ 3 ] := aTypes[ n ][ 3 ]
+            aField[ 4 ] := aTypes[ n ][ 4 ]
+        ELSEIF aTypes[ n ][ 1 ] $ "CQ"
+            aField[ 4 ] := 0
+        ENDIF
+    ENDIF
+
+RETURN
 
 STATIC FUNCTION StruBlock( aStru, aRec, nCol )
 RETURN {| x | IIF( x == NIL, aStru[ aRec[ 1 ] ][ nCol ], aStru[ aRec[ 1 ] ][ nCol ] := x ) }
@@ -2992,13 +3285,37 @@ STATIC FUNCTION ValidStruct( aStru )
             nDec := 0
         CASE cType == "C"
             nDec := 0
-        CASE cType == "N"
+        CASE cType $ "NF"
             IF nDec > 0 .AND. nDec > nLen - 2
                 Warn( cName + ": too many decimals for the length" )
                 RETURN NIL
             ENDIF
+        CASE cType == "I"                        /* 1, 2, 3, 4 or 8 bytes */
+            nLen := IIF( AScan( { 1, 2, 3, 4, 8 }, nLen ) > 0, nLen, 4 )
+        CASE cType == "+"
+            nLen := IIF( nLen == 8, 8, 4 )
+            nDec := 0
+        CASE cType == "B"
+            nLen := 8
+            nDec := Min( nDec, 15 )
+        CASE cType == "Y"
+            nLen := 8
+            nDec := 4
+        CASE cType $ "@T=^"
+            cType := IIF( cType == "T", "@", cType )
+            nLen := 8
+            nDec := 0
+        CASE cType == "Q"
+            nLen := Min( nLen, 255 )
+            nDec := 0
+        CASE cType == "W"
+            nLen := 10
+            nDec := 0
         CASE Empty( cType )
             Warn( cName + ": field type missing" )
+            RETURN NIL
+        OTHERWISE
+            Warn( cName + ": unknown field type " + cType + " (C N D L M I + B Y F @ = ^ Q W; Types... lists them)" )
             RETURN NIL
         ENDCASE
         IF nLen < 1
