@@ -15,6 +15,7 @@
 #if defined( HB_OS_WIN )
 
 #include <windows.h>
+#include <shellapi.h>
 
 /* CB_RUNHIDDEN( cCommandLine, @cOutput ) -> nExitCode, -1 = not started.
    The command line is UTF-8; stdout and stderr come together, as written. */
@@ -120,6 +121,24 @@ HB_FUNC( CB_STARTPROGRAM )
       hb_xfree( wCmd );
       if( wDir )
          hb_xfree( wDir );
+   }
+   hb_retl( fOk );
+}
+
+/* CB_OPENDOC( cFile ) -> .T. when Windows opened the document in its program */
+HB_FUNC( CB_OPENDOC )
+{
+   const char * szFile = hb_parc( 1 );
+   HB_BOOL fOk = HB_FALSE;
+
+   if( szFile )
+   {
+      int nW = MultiByteToWideChar( CP_UTF8, 0, szFile, -1, NULL, 0 );
+      LPWSTR wFile = ( LPWSTR ) hb_xgrab( ( nW + 1 ) * sizeof( WCHAR ) );
+
+      MultiByteToWideChar( CP_UTF8, 0, szFile, -1, wFile, nW );
+      fOk = ( INT_PTR ) ShellExecuteW( NULL, L"open", wFile, NULL, NULL, SW_SHOWNORMAL ) > 32;
+      hb_xfree( wFile );
    }
    hb_retl( fOk );
 }

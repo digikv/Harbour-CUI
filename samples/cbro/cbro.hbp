@@ -16,7 +16,7 @@ cbro.prg
 cbhelp.prg
 cbcalc.prg
 cbxlsx.prg
-cbreport.prg
+../shared/cbreport.prg
 cbmemo.prg
 # the XLSX class of Srđan Dragojlović (github.com/digikv/xlsx)
 # in ../../../xlsx (next to the repository); another folder: build.bat with CBRO_XLSXDIR,

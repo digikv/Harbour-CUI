@@ -10,6 +10,10 @@ command templates of the compiler family in `cuibuild.ini`, and builds only the 
 changed. It reads and writes HwBuilder's `.hwprj` projects and reads hbmk2's `.hbp` projects.
 Written from scratch on Harbour-CUI: no HwBuilder source code is used.
 
+It also has a **report designer**: reports for Word (`.docx`) and Excel (`.xlsx`), saved as
+Clipper `.frm` files, from which it generates the Harbour code of the report for your program
+(see [Reports](#reports-word-and-excel)).
+
 Two programs:
 
 | Program | What it is |
@@ -103,11 +107,14 @@ util.c
 | `prgflags`, `cflags`, `lflags` | Harbour, C compiler and linker flags |
 | `def_cflags`, `def_lflags`, `def_libflags` | instead of the defaults of the compiler |
 | `sub.hwprj`, `sub.hbp` | another project, built first |
+| `name.hbc` | the libraries, paths and flags of an `.hbc` (`hbziparc.hbc`, `hbct.hbc` ...; searched next to the project, then in Harbour's `contrib` / `addons`) |
+| `report.frm` | a report: Enter opens it in the report designer, the build skips it |
 | `@files.txt` | the files listed in a text file |
 | `:project name` | a new part: several programs / libraries in one file, built in order |
 
 A line may start with a filter: `{win}`, `{unix}`, `{linux}`, `{mingw}`, `{msvc}`, `{!win}`,
-`{win&mingw}`, `{win|linux}`, or the name of an environment variable that is set. `${NAME}` /
+`{win&mingw}`, `{win|linux}`, `{hb_ispath='../x/y.prg'}` (the file or folder exists), or the
+name of an environment variable that is set. `${NAME}` /
 `$(NAME)` is an environment variable; `${hb_plat}`, `${hb_comp}`, `${hb_root}` are known too.
 Filters, `@lists` and macros stay as they are when the screen saves the project.
 
@@ -219,6 +226,46 @@ default GT, then the project's libraries, the Harbour-CUI library, the Harbour l
 What is "changed": an object is older than its source or than a local header that the source
 includes (`#include "x.ch"`, in its folder or `incpath`); a program is linked again when an
 object or a library is newer than it.
+
+## Reports: Word and Excel
+
+`Reports - New report` (or Enter on a `.frm` in the list of files) opens the designer. A report
+is what Clipper's REPORT FORM knows: up to 4 title lines, a group and a subgroup (an expression
+and a heading; subtotals), up to 24 columns (an expression, a heading - `;` starts a new line -,
+the width, the decimals, a total), "Summary" (only the totals). It is saved as a Clipper `.frm`,
+so REPORT FORM, RL and CBro (Report Form to Word / Excel) read it too.
+
+| Key | Command |
+|---|---|
+| Ins / Enter / Del | add / change / delete a column |
+| Ctrl-Up / Ctrl-Down | move a column |
+| F5 | columns from the fields of the table (Space marks several) |
+| F6 / F7 | try the report on the table: a `.docx` / `.xlsx` made and opened at once |
+| F2 | save the `.frm` |
+| F9 | generate the code |
+| Esc | close |
+
+`Table` is a `.dbf` to try the report on (and to check the expressions); `Codepage` the one it is
+written in (`SL852`, `UTF8` ...).
+
+F9 writes `rpt_<name>.prg` next to the `.frm` and adds to the project what it needs: the generated
+file, the shared report module `samples/shared/cbreport.prg`, the DOCX and XLSX classes of
+github.com/digikv/docx and /xlsx (`DOCXClass.prg`, `XLSXClass.prg`, next to the Harbour-CUI
+folder; `cuibuild.ini [REPORTS]` says where they are) and `hbziparc.hbc`. In the program:
+
+```
+USE KUPCI
+IF ! Rpt_Kupci( "kupci.docx",,, @cErr )          // or "kupci.xlsx"
+   Alert( cErr )
+ENDIF
+```
+
+`Rpt_<Name>( cFile, [bFor], [cTitle], [@cErr], [cCdp] )` writes the report of the current work
+area: `bFor` the records to take, `cTitle` instead of the first title line, `cCdp` the codepage of
+text that is not UTF-8. The generated code builds the report with `CBR_New()`, `CBR_Title()`,
+`CBR_Group()`, `CBR_Column()` and `CBR_Make()` of `cbreport.prg` - no `.frm` is needed at run
+time. Word gets a table with the heading row repeated on every page (landscape for wide reports),
+Excel a sheet with numbers as numbers.
 
 ## `cuibc`
 

@@ -362,7 +362,7 @@ STATIC PROCEDURE cb_ShowPart()
             NEXT
             n := 0
             IF ! Empty( x )
-                n := AScan( { "gtwvt", "gtwin", "gtcgi", "gtstd", "gtpca", "gtgui", "gttrm", "gtxwc" }, Lower( x ) )
+                n := hb_AScan( { "gtwvt", "gtwin", "gtcgi", "gtstd", "gtpca", "gtgui", "gttrm", "gtxwc" }, Lower( x ),,, .T. )
                 IF n == 0
                     o:addItem( Lower( x ) )
                     n := o:count() - 1
@@ -616,9 +616,9 @@ STATIC PROCEDURE cb_AddFiles()
         RETURN
     ENDIF
     cBase := IIF( Empty( oP:cSrcPath ), oP:cDir, cb_Abs( oP:cSrcPath, oP:cDir ) )
-    a := cb_FileDlg( "Add files (Space / Ins marks)", cBase, "*.prg;*.c;*.cpp;*.rc;*.hwprj;*.hbp;*.o;*.obj;*.a;*.lib", .T., .F. )
+    a := cb_FileDlg( "Add files (Space / Ins marks)", cBase, "*.prg;*.c;*.cpp;*.rc;*.frm;*.hbc;*.hwprj;*.hbp;*.o;*.obj;*.a;*.lib", .T., .F. )
     FOR EACH cF IN a
-        IF Lower( hb_FNameExt( cF ) ) $ ".hwprj|.hbp"
+        IF cb_ExtIn( Lower( hb_FNameExt( cF ) ), { ".hwprj", ".hbp" } )
             cRel := cb_Rel( cF, oP:cDir )
             IF AScan( oP:aSubFiles, {| c | hb_FileMatch( c, cRel ) } ) == 0
                 AAdd( oP:aSubFiles, cRel )
@@ -693,6 +693,8 @@ STATIC PROCEDURE cb_EditCurrent()
     ENDIF
     IF x < 0
         cb_EditFile( cb_Abs( oP:aSubFiles[ -x ], oP:cDir ), 0 )
+    ELSEIF Lower( hb_FNameExt( oP:aFiles[ x ] ) ) == ".frm"
+        cb_ReportDesigner( oP:srcFile( oP:aFiles[ x ] ), s_hSet, {| a | cb_AddToProject( a ) } )
     ELSE
         cb_EditFile( oP:srcFile( oP:aFiles[ x ] ), 0 )
     ENDIF
@@ -737,6 +739,57 @@ STATIC PROCEDURE cb_DelPart()
     s_nPart := Max( 1, s_nPart - 1 )
     cb_SetChanged( .T. )
     cb_ShowProject()
+
+RETURN
+
+/*----------------------------------------------------------- reports */
+
+/* a report (.frm) in the designer (cbrepdes.prg); a new one goes into the project */
+STATIC PROCEDURE cb_Report( lNew )
+
+    LOCAL a, cFrm, oP := cb_Part()
+
+    a := cb_FileDlg( IIF( lNew, "New report: the name of the .frm", "Open report" ), ;
+                     IIF( oP == NIL, hb_cwd(), oP:cDir ), "*.frm", .F., lNew )
+    IF Len( a ) == 0
+        RETURN
+    ENDIF
+    cFrm := a[ 1 ]
+    IF Empty( hb_FNameExt( cFrm ) )
+        cFrm += ".frm"
+    ENDIF
+    IF lNew .AND. oP != NIL .AND. s_oPF:cType == "hwprj"
+        cb_AddToProject( { cFrm } )
+    ENDIF
+    cb_ReportDesigner( cFrm, s_hSet, {| x | cb_AddToProject( x ) } )
+    cb_SaveView()
+
+RETURN
+
+/* files into the shown part of the project (what a generated report needs) */
+STATIC PROCEDURE cb_AddToProject( aFiles )
+
+    LOCAL oP := cb_Part(), cF, cRel, n := 0, c := ""
+
+    IF oP == NIL
+        RETURN
+    ENDIF
+    IF s_oPF:cType == "hbp"
+        AEval( aFiles, {| x | c += "   " + x + Chr( 10 ) } )
+        HTMessageBox():information( "CuiBuilder", "Add to " + hb_FNameNameExt( s_oPF:cFile ) + ":" + Chr( 10 ) + c )
+        RETURN
+    ENDIF
+    FOR EACH cF IN aFiles
+        cRel := IIF( Lower( hb_FNameExt( cF ) ) == ".hbc" .AND. ! hb_ps() $ cF .AND. ! "/" $ cF, cF, cb_Rel( cb_Abs( cF, hb_cwd() ), oP:cDir ) )
+        IF AScan( oP:aFiles, {| x | hb_FileMatch( x, cRel ) } ) == 0
+            AAdd( oP:aFiles, cRel )
+            n++
+        ENDIF
+    NEXT
+    IF n > 0
+        cb_SetChanged( .T. )
+        cb_FillFiles()
+    ENDIF
 
 RETURN
 
@@ -863,7 +916,7 @@ STATIC PROCEDURE cb_MsgOpen( n )
         RETURN
     ENDIF
     a := s_aMsg[ n ]
-    IF ! Empty( a[ 3 ] ) .AND. hb_FileExists( cb_Abs( a[ 3 ], hb_cwd() ) ) .AND. ! Lower( hb_FNameExt( a[ 3 ] ) ) $ ".exe|.a|.lib|.o|.obj"
+    IF ! Empty( a[ 3 ] ) .AND. hb_FileExists( cb_Abs( a[ 3 ], hb_cwd() ) ) .AND. ! cb_ExtIn( Lower( hb_FNameExt( a[ 3 ] ) ), { ".exe", ".a", ".lib", ".o", ".obj" } )
         cb_EditFile( cb_Abs( a[ 3 ], hb_cwd() ), a[ 4 ] )
     ELSEIF ht_strWidth( a[ 1 ] ) > s_oMsg:width - 2
         HTMessageBox():information( "Message", cb_Wrap( a[ 1 ], Min( 100, ht_ScreenMaxCol() - 10 ) ) )
@@ -943,6 +996,10 @@ STATIC PROCEDURE cb_BuildMenu()
     cb_Item( oMenu, "Previous error", "Shift-F8", NIL, {|| cb_NextError( .F. ) } )
     cb_Item( oMenu, "Show command lines", "", NIL, {|| cb_ToggleCmd() }, {|| s_lShowCmd } )
 
+    oMenu := s_oBar:addMenu( "&Reports" )
+    cb_Item( oMenu, "New report ...", "", NIL, {|| cb_Report( .T. ) } )
+    cb_Item( oMenu, "Open report ...", "", NIL, {|| cb_Report( .F. ) } )
+
     oMenu := s_oBar:addMenu( "&Options" )
     cb_Item( oMenu, "Compilers and paths ...", "", NIL, {|| cb_SettingsDlg() } )
     cb_Item( oMenu, "Default compiler ...", "", NIL, {|| cb_DefCompiler() } )
@@ -988,7 +1045,7 @@ RETURN
 
 /*----------------------------------------------------------- settings */
 
-STATIC PROCEDURE cb_SaveView()
+PROCEDURE cb_SaveView()
     s_hSet[ "view" ][ "theme" ] := HTTheme():currentName()
     cb_SettingsSave( s_hSet )
 RETURN
@@ -1251,7 +1308,7 @@ RETURN
 /*----------------------------------------------------------- dialogs */
 
 /* a list, Enter / double click chooses; the number, 0 = Esc */
-STATIC FUNCTION cb_List( cTitle, aItems, nCurrent )
+FUNCTION cb_List( cTitle, aItems, nCurrent )
 
     LOCAL dlg, oList, nW, nH, nResult := 0, c
 
@@ -1295,7 +1352,7 @@ RETURN IIF( dlg:exec() == HT_DIALOG_ACCEPTED, AllTrim( oEdit:text ), "" )
 /* chooses files: folders (Enter goes in), the files of the masks ("*.prg;*.c");
    lMulti: Space / Ins marks several; lNew: a name that does not exist yet
    may be typed. The full names, {} = cancelled */
-STATIC FUNCTION cb_FileDlg( cTitle, cDir, cMasks, lMulti, lNew )
+FUNCTION cb_FileDlg( cTitle, cDir, cMasks, lMulti, lNew )
 
     LOCAL dlg, oList, oName, oPath, nW, nH, aResult := {}, lDone := .F.
 

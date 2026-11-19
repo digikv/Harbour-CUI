@@ -348,6 +348,9 @@ Four coordinate spaces used in the event system:
 - The compiler folds `Len()`, `Chr()`, `PadR()` … of **literals** at compile time, in bytes:
   `Len( "王小明" )` is 9 even under UTF8EX and `Chr( 9474 )` is `Chr( 2 )`. Measure strings at
   runtime (variables) and build symbols with `hb_UChar()` / `ht_glyph()`.
+- `AScan( aArray, xValue )` compares with `=`: with SET EXACT OFF `".ch" = ".c"` and `"no" = ""` are
+  .T. Compare exactly with `hb_AScan( aArray, xValue,,, .T. )`. Likewise `".c" $ ".frm|.ch"` is .T.
+  (a substring): test a value against a list with an array, not with `$`.
 - Binary strings (SaveScreen buffers, file data) under UTF8EX: use `hb_BLen()/hb_BSubStr()/
   hb_BCode()` — `Len()/SubStr()` count UTF-8 characters.
 
@@ -443,6 +446,14 @@ samples/          Demo applications (human-facing, require a display)
                   cuibuilder.prg = screen (files, options, messages, CEdit editor at the error line),
                   cuibc.prg = command line (gtcgi). cbwin.c CB_RUNHIDDEN / CB_STARTPROGRAM. Focus a child
                   with setFocusChild() (setFocus() does not move it). cuibuilder.hwprj builds itself.
+                  cbrepdes.prg = report designer: Clipper .frm (CBR_Load / CBR_Save), columns from a
+                  DBF (F5), try in Word / Excel (F6/F7, CB_OPENDOC / xdg-open), F9 generates
+                  rpt_<name>.prg (Rpt_<Name>( cFile, bFor, cTitle, @cErr, cCdp )) and adds it, the shared
+                  module, DOCXClass / XLSXClass ([REPORTS] of cuibuild.ini) and hbziparc.hbc to the project.
+  shared/         cbreport.prg: Report Form to Word (.docx) / Excel (.xlsx), used by CBro and CuiBuilder:
+                  CBR_Load / CBR_Save (writes the 1990-byte .frm) / CBR_Rows / CBR_Docx / CBR_Xlsx, a report
+                  in code: CBR_New / CBR_Title / CBR_Group / CBR_Column / CBR_Make (.docx or .xlsx by the
+                  extension). -DCBR_NO_DOCX / -DCBR_NO_XLSX (CBro: CBRO_NO_*); the classes need hbziparc.hbc.
 tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_basic      HTPoint, HTSize, all HTEvent subclasses
   test_eventloop  HTEventLoop schedule, scheduleRepeat, cancelTask, runPendingTasks

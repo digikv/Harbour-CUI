@@ -7,6 +7,13 @@ incpath=../cedit
 prgflags=-w3 -es2
 cuibuilder.prg
 cbengine.prg
+cbrepdes.prg
+../shared/cbreport.prg
+hbziparc.hbc
+{hb_ispath='../../../docx/DOCXClass.prg'}../../../docx/DOCXClass.prg
+{!hb_ispath='../../../docx/DOCXClass.prg'}prgflags=-DCBR_NO_DOCX
+{hb_ispath='../../../xlsx/XLSXClass.prg'}../../../xlsx/XLSXClass.prg
+{!hb_ispath='../../../xlsx/XLSXClass.prg'}prgflags=-DCBR_NO_XLSX
 ../cedit/htcodeedit.prg
 ../cedit/cebuffer.prg
 ../cedit/cesyntax.prg

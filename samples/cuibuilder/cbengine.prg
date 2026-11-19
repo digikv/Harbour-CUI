@@ -64,7 +64,7 @@ FUNCTION cb_CompNew( cId, cFamily )
 
     hb_HCaseMatch( h, .F. )
     cFamily := Lower( hb_defaultValue( cFamily, cId ) )
-    IF AScan( { "mingw", "gcc", "clang", "msvc", "bcc" }, cFamily ) == 0
+    IF hb_AScan( { "mingw", "gcc", "clang", "msvc", "bcc" }, cFamily,,, .T. ) == 0
         cFamily := cb_DefFamily()
     ENDIF
     h[ "id" ]         := cId
@@ -206,6 +206,8 @@ FUNCTION cb_SettingsLoad( cIni )
                 ENDIF
             CASE cSec == "VIEW"
                 hSet[ "view" ][ cKey ] := cVal
+            CASE cSec == "REPORTS"
+                hSet[ "reports" ][ cKey ] := cVal
             CASE cSec == "RECENT"
                 AAdd( hSet[ "recent" ], cVal )
             ENDCASE
@@ -213,7 +215,7 @@ FUNCTION cb_SettingsLoad( cIni )
         /* a family that was not given: from the id (hwbuild.ini has only id=) */
         FOR EACH hComp IN hSet[ "comps" ]
             IF Empty( hComp[ "family" ] )
-                hComp[ "family" ] := IIF( AScan( { "mingw", "gcc", "clang", "msvc", "bcc" }, Lower( hComp[ "id" ] ) ) > 0, ;
+                hComp[ "family" ] := IIF( hb_AScan( { "mingw", "gcc", "clang", "msvc", "bcc" }, Lower( hComp[ "id" ] ),,, .T. ) > 0, ;
                                           Lower( hComp[ "id" ] ), cb_DefFamily() )
             ENDIF
             IF Empty( hComp[ "id" ] )
@@ -237,6 +239,7 @@ STATIC FUNCTION cb_SettingsEmpty()
                                          "libs" => "hbtui", "gt" => "" }, .F. )
     hSet[ "comps" ] := {}
     hSet[ "view" ] := cb_H( { "theme" => "", "compiler" => "" }, .F. )
+    hSet[ "reports" ] := cb_H( { "cbreport" => "", "docx" => "", "xlsx" => "", "zip_hbc" => "hbziparc.hbc" }, .F. )
     hSet[ "recent" ] := {}
 
 RETURN hSet
@@ -334,6 +337,14 @@ STATIC PROCEDURE cb_SettingsDetect( hSet )
                                   IIF( cPlat == "win", hSet[ "comps" ][ 1 ][ "family" ], "gcc" )
         ENDIF
     ENDIF
+    /* the report runtime: samples/shared/cbreport.prg of Harbour-CUI, the DOCX and
+       XLSX classes in ../docx and ../xlsx next to Harbour-CUI (github.com/digikv) */
+    IF ! Empty( hGui[ "path" ] )
+        cDir := cb_DirSep( hGui[ "path" ] )
+        cb_SetIfFile( hSet[ "reports" ], "cbreport", cDir + "samples" + hb_ps() + "shared" + hb_ps() + "cbreport.prg" )
+        cb_SetIfFile( hSet[ "reports" ], "docx", cb_PathNormal( cDir + ".." + hb_ps() + "docx" + hb_ps() + "DOCXClass.prg" ) )
+        cb_SetIfFile( hSet[ "reports" ], "xlsx", cb_PathNormal( cDir + ".." + hb_ps() + "xlsx" + hb_ps() + "XLSXClass.prg" ) )
+    ENDIF
     IF Empty( hGui[ "gt" ] ) .AND. Lower( hGui[ "id" ] ) == "hbtui"
 #ifdef __PLATFORM__WINDOWS
         hGui[ "gt" ] := "gtwvt"
@@ -342,6 +353,12 @@ STATIC PROCEDURE cb_SettingsDetect( hSet )
 #endif
     ENDIF
 
+RETURN
+
+STATIC PROCEDURE cb_SetIfFile( h, cKey, cFile )
+    IF Empty( h[ cKey ] ) .AND. hb_FileExists( cFile )
+        h[ cKey ] := cFile
+    ENDIF
 RETURN
 
 /* the folder of harbour(.exe) in the PATH -> the Harbour root (bin/<plat>/<comp> or bin) */
@@ -399,6 +416,10 @@ FUNCTION cb_SettingsSave( hSet )
         FOR EACH cKey IN aKeys
             cOut += "env_" + cKey + "=" + hComp[ "env" ][ cKey ] + cEol
         NEXT
+    NEXT
+    cOut += cEol + "[REPORTS]" + cEol
+    FOR EACH cKey IN { "cbreport", "docx", "xlsx", "zip_hbc" }
+        cOut += cKey + "=" + hSet[ "reports" ][ cKey ] + cEol
     NEXT
     cOut += cEol + "[VIEW]" + cEol
     FOR EACH cKey IN hb_HKeys( hSet[ "view" ] )
@@ -588,11 +609,11 @@ METHOD isGui( hSet ) CLASS CBProject
     IF cb_IsYes( ::cGui )
         RETURN .T.
     ENDIF
-    IF AScan( { "no", "off", "0", "false", ".f." }, Lower( AllTrim( ::cGui ) ) ) > 0
+    IF hb_AScan( { "no", "off", "0", "false", ".f." }, Lower( AllTrim( ::cGui ) ),,, .T. ) > 0
         RETURN .F.
     ENDIF
 
-RETURN AScan( { "gtwvt", "gtgui", "gtwvg", "gtwvw", "gthwg", "gtxwc" }, ::gt( hSet ) ) > 0
+RETURN hb_AScan( { "gtwvt", "gtgui", "gtwvg", "gtwvw", "gthwg", "gtxwc" }, ::gt( hSet ),,, .T. ) > 0
 
 /* a project file: .hwprj (one or more projects, :project) or .hbp */
 CREATE CLASS CBProjFile
@@ -618,7 +639,7 @@ FUNCTION cb_ProjOpen( cFile, hSet, lEdit )
         oPF:cError := "Project not found: " + oPF:cFile
         RETURN oPF
     ENDIF
-    IF Lower( hb_FNameExt( oPF:cFile ) ) $ ".hbp|.hbm"
+    IF cb_ExtIn( Lower( hb_FNameExt( oPF:cFile ) ), { ".hbp", ".hbm" } )
         oPF:cType := "hbp"
         cb_HbpRead( oPF, hSet )
     ELSE
@@ -666,7 +687,7 @@ STATIC PROCEDURE cb_HwprjRead( oPF, hSet, lEdit )
                 AAdd( oP:aKeep, cLine )       /* written back as it was */
                 LOOP
             ENDIF
-            IF ! cb_Filter( SubStr( cLine, 2, n - 2 ), hSet, oP:cComp )
+            IF ! cb_Filter( SubStr( cLine, 2, n - 2 ), hSet, oP:cComp, cDir )
                 LOOP
             ENDIF
             cLine := AllTrim( SubStr( cLine, n + 1 ) )
@@ -728,8 +749,15 @@ STATIC PROCEDURE cb_HwprjRead( oPF, hSet, lEdit )
             ENDSWITCH
             LOOP
         ENDIF
-        IF Lower( hb_FNameExt( cLine ) ) $ ".hwprj|.hbp"
+        IF cb_ExtIn( Lower( hb_FNameExt( cLine ) ), { ".hwprj", ".hbp" } )
             AAdd( oP:aSubFiles, cLine )
+        ELSEIF Lower( hb_FNameExt( cLine ) ) == ".hbc" .AND. ! lEdit
+            cF := cb_HbcFind( cLine, cDir, hSet )         /* hbmzip.hbc: its libraries, paths ... */
+            IF Empty( cF )
+                AAdd( oPF:aWarn, "Not found: " + cLine )
+            ELSE
+                cb_HbcRead( oPF, oP, cF, hSet, 1 )
+            ENDIF
         ELSE
             AAdd( oP:aFiles, cLine )
         ENDIF
@@ -837,7 +865,7 @@ STATIC PROCEDURE cb_HbmFile( oPF, oP, cFile, hSet, nDepth )
                 EXIT
             ENDIF
             IF Left( cW, 1 ) == "{" .AND. ( n := At( "}", cW ) ) > 0
-                IF ! cb_Filter( SubStr( cW, 2, n - 2 ), hSet, oP:cComp )
+                IF ! cb_Filter( SubStr( cW, 2, n - 2 ), hSet, oP:cComp, cDir )
                     LOOP
                 ENDIF
                 cW := SubStr( cW, n + 1 )
@@ -877,12 +905,12 @@ STATIC PROCEDURE cb_HbpWord( oPF, oP, cW, cDir, hSet, nDepth )
             oP:cGui := "yes"
         CASE cL == "-std" .OR. cL == "-cui"
             oP:cGui := "no"
-        CASE AScan( { "-mt", "-st", "-shared", "-static", "-fullstatic", "-strip", "-strip-", "-trace", "-trace-", ;
+        CASE hb_AScan( { "-mt", "-st", "-shared", "-static", "-fullstatic", "-strip", "-strip-", "-trace", "-trace-", ;
                       "-quiet", "-quiet-", "-info", "-head=off", "-head=full", "-head=native", "-head=dep", "-cpp", ;
                       "-cpp-", "-debug", "-debug-", "-nulrdd", "-nulrdd-", "-run", "-run-", "-ignore", "-hbcmp", ;
                       "-hbcc", "-clean", "-optim", "-optim-", "-map", "-map-", "-warn=yes", "-warn=no", "-warn=max", ;
                       "-warn=low", "-warn=def", "-nohblib", "-xhb", "-hb10", "-hb20", "-hb30", "-hb32", "-pause", ;
-                      "-beep", "-ldflag", "-hbx-" }, cL ) > 0 .OR. Left( cL, 5 ) == "-hbx=" .OR. Left( cL, 7 ) == "-instfi"
+                      "-beep", "-ldflag", "-hbx-" }, cL,,, .T. ) > 0 .OR. Left( cL, 5 ) == "-hbx=" .OR. Left( cL, 7 ) == "-instfi"
             /* nothing to do, or the default anyway */
         CASE Left( cL, 3 ) == "-gt"
             oP:cGt := SubStr( cL, 2 )
@@ -907,8 +935,8 @@ STATIC PROCEDURE cb_HbpWord( oPF, oP, cW, cDir, hSet, nDepth )
         CASE Left( cL, 9 ) == "-request="
             AAdd( oP:aRequest, Upper( SubStr( cW, 10 ) ) )
         CASE cL == "-b" .OR. cL == "-l-" .OR. ;
-             AScan( { "-w", "-n", "-d", "-u", "-a", "-v", "-z", "-m", "-q", "-k", "-j", "-p", "-r" }, Left( cL, 2 ) ) > 0 .OR. ;
-             AScan( { "-es", "-gc", "-gh" }, Left( cL, 3 ) ) > 0
+             hb_AScan( { "-w", "-n", "-d", "-u", "-a", "-v", "-z", "-m", "-q", "-k", "-j", "-p", "-r" }, Left( cL, 2 ),,, .T. ) > 0 .OR. ;
+             hb_AScan( { "-es", "-gc", "-gh" }, Left( cL, 3 ),,, .T. ) > 0
             oP:cFlagsPrg := cb_Join( oP:cFlagsPrg, cW )
         OTHERWISE
             AAdd( oPF:aWarn, "Option not supported, skipped: " + cW )
@@ -995,7 +1023,7 @@ STATIC PROCEDURE cb_HbcRead( oPF, oP, cFile, hSet, nDepth )
             LOOP
         ENDIF
         IF Left( cLine, 1 ) == "{" .AND. ( n := At( "}", cLine ) ) > 0
-            IF ! cb_Filter( SubStr( cLine, 2, n - 2 ), hSet, oP:cComp )
+            IF ! cb_Filter( SubStr( cLine, 2, n - 2 ), hSet, oP:cComp, cDir )
                 LOOP
             ENDIF
             cLine := AllTrim( SubStr( cLine, n + 1 ) )
@@ -1079,7 +1107,7 @@ STATIC FUNCTION cb_Words( cLine )
 RETURN aW
 
 /* {win}, {unix}, {mingw}, {!linux}, {win&mingw}, {HBTUI_DEBUG} (an environment variable) */
-STATIC FUNCTION cb_Filter( cExpr, hSet, cCompId )
+STATIC FUNCTION cb_Filter( cExpr, hSet, cCompId, cDir )
 
     LOCAL cOr, cAnd, lAnd, lNot, c, hComp := cb_Compiler( hSet, cCompId ), aKnown
 
@@ -1104,7 +1132,7 @@ STATIC FUNCTION cb_Filter( cExpr, hSet, cCompId )
             IF lNot
                 c := SubStr( c, 2 )
             ENDIF
-            IF ( AScan( aKnown, Lower( c ) ) > 0 .OR. ( ! Empty( GetEnv( c ) ) .AND. ! Lower( GetEnv( c ) ) $ "no|0" ) ) == lNot
+            IF cb_FilterTerm( c, aKnown, cDir ) == lNot
                 lAnd := .F.
                 EXIT
             ENDIF
@@ -1115,6 +1143,19 @@ STATIC FUNCTION cb_Filter( cExpr, hSet, cCompId )
     NEXT
 
 RETURN .F.
+
+/* one word of a filter: a platform / compiler, hb_ispath='file', an environment variable */
+STATIC FUNCTION cb_FilterTerm( c, aKnown, cDir )
+
+    LOCAL cPath
+
+    IF Lower( Left( c, 10 ) ) == "hb_ispath="
+        cPath := StrTran( StrTran( SubStr( c, 11 ), "'", "" ), '"', "" )
+        cPath := cb_Abs( cPath, hb_defaultValue( cDir, hb_cwd() ) )
+        RETURN hb_FileExists( cPath ) .OR. hb_DirExists( cPath )
+    ENDIF
+
+RETURN hb_AScan( aKnown, Lower( c ),,, .T. ) > 0 .OR. ( ! Empty( GetEnv( c ) ) .AND. ! Lower( GetEnv( c ) ) $ "no|0" )
 
 /* ${hb_plat} ${hb_comp} ${hb_root} ${ENV}, $(ENV) */
 STATIC FUNCTION cb_Macros( cLine, hSet, cCompId, cName0 )
@@ -1213,7 +1254,7 @@ FUNCTION cb_Clean( oPF, hSet, bOut )
     FOR EACH oP IN oPF:aProjects
         cDir := oP:objDir( hSet )
         FOR EACH aF IN Directory( cDir + "*.*" )
-            IF Lower( hb_FNameExt( aF[ 1 ] ) ) $ ".c|.o|.obj|.res|.ppo"
+            IF cb_ExtIn( Lower( hb_FNameExt( aF[ 1 ] ) ), { ".c", ".o", ".obj", ".res", ".ppo" } )
                 IF FErase( cDir + aF[ 1 ] ) == 0
                     n++
                 ENDIF
@@ -1294,15 +1335,17 @@ STATIC FUNCTION cb_BuildOne( oP, hSet, lClean, bOut, bStop )
         cExt := Lower( hb_FNameExt( cSrc ) )
         cName := hb_FNameName( cSrc )
         DO CASE
-        CASE cExt $ ".o|.obj"
+        CASE cb_ExtIn( cExt, { ".o", ".obj" } )
             AAdd( aObjs, cSrc )
             LOOP
-        CASE cExt $ ".a|.lib"
+        CASE cb_ExtIn( cExt, { ".a", ".lib" } )
             AAdd( aLibFiles, cSrc )
             LOOP
         CASE cExt == ".res"
             AAdd( aRes, cSrc )
             LOOP
+        CASE cb_ExtIn( cExt, { ".frm", ".ch", ".h", ".hbc", ".txt", ".md" } )
+            LOOP                                /* reports, headers: nothing to build */
         ENDCASE
         IF ! hb_FileExists( cSrc )
             Eval( bOut, "File not found: " + cSrc, CB_MSG_ERROR, cSrc, 0 )
@@ -1327,7 +1370,7 @@ STATIC FUNCTION cb_BuildOne( oP, hSet, lClean, bOut, bStop )
             AAdd( aRes, cRes )
             LOOP
         ENDIF
-        IF ! cExt $ ".prg|.c|.cpp|.cc|.cxx"
+        IF ! cb_ExtIn( cExt, { ".prg", ".c", ".cpp", ".cc", ".cxx" } )
             Eval( bOut, "Wrong source file extension: " + cSrc, CB_MSG_ERROR, cSrc, 0 )
             RETURN .F.
         ENDIF
@@ -1479,7 +1522,7 @@ STATIC FUNCTION cb_ObjName( aHw, cName, cExt )
     IF cExt == ".rc"
         RETURN cName
     ENDIF
-    DO WHILE AScan( aHw, cN ) > 0
+    DO WHILE hb_AScan( aHw, cN,,, .T. ) > 0
         cN := Lower( cName ) + "_" + hb_ntos( ++n )
     ENDDO
     AAdd( aHw, cN )
@@ -1489,7 +1532,7 @@ RETURN IIF( n == 1, cName, cName + "_" + hb_ntos( n ) )
 /* -lname / name.lib; a library given as a file stays a file */
 STATIC FUNCTION cb_LibArg( cFam, cLib, cDir )
 
-    IF Lower( hb_FNameExt( cLib ) ) $ ".a|.lib|.o|.obj" .OR. hb_ps() $ cLib .OR. "/" $ cLib
+    IF cb_ExtIn( Lower( hb_FNameExt( cLib ) ), { ".a", ".lib", ".o", ".obj" } ) .OR. hb_ps() $ cLib .OR. "/" $ cLib
         RETURN cb_Quote( cb_Abs( cLib, cDir ) )
     ENDIF
     IF cFam $ "mingw|gcc|clang" .AND. Left( cLib, 3 ) == "lib" .AND. hb_FileExists( cb_Abs( cLib + ".a", cDir ) )
@@ -1845,6 +1888,10 @@ STATIC FUNCTION cb_H( h, lCase )
     hb_HCaseMatch( h, lCase )
 
 RETURN h
+
+/* an extension that is one of the list (not a part of one: ".c" is not ".ch") */
+FUNCTION cb_ExtIn( cExt, aList )
+RETURN AScan( aList, {| x | x == cExt } ) > 0
 
 STATIC FUNCTION cb_IsYes( c )
 RETURN Lower( AllTrim( c ) ) $ "yes|on|1|true|.t." .AND. ! Empty( c )

@@ -12,9 +12,19 @@
 
 cuibuilder.prg
 cbengine.prg
+cbrepdes.prg
+../shared/cbreport.prg
 {win}cbwin.c
 ../cedit/htcodeedit.prg
 ../cedit/cebuffer.prg
 ../cedit/cesyntax.prg
+
+# the report designer: the DOCX / XLSX classes (github.com/digikv/docx, /xlsx)
+# next to the Harbour-CUI folder; without them it cannot try a report in Word / Excel
+{hb_ispath='../../../docx/DOCXClass.prg'}../../../docx/DOCXClass.prg
+{!hb_ispath='../../../docx/DOCXClass.prg'}-prgflag=-DCBR_NO_DOCX
+{hb_ispath='../../../xlsx/XLSXClass.prg'}../../../xlsx/XLSXClass.prg
+{!hb_ispath='../../../xlsx/XLSXClass.prg'}-prgflag=-DCBR_NO_XLSX
+hbziparc.hbc
 
 {unix}-lX11
