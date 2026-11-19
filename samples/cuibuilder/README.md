@@ -18,6 +18,22 @@ Clipper `.frm` files, from which it generates the Harbour code of the report for
 And **Git**: status, stage, diff, commit, log, pull and push of the project's folder (see
 [Git](#git)).
 
+## Download
+
+Ready-to-run programs: **[CuiBuilder 1.0 release](https://github.com/digikv/Harbour-CUI/releases/tag/cuibuilder-1.0)**
+
+| File | Platform |
+|---|---|
+| `cuibuilder-1.0-win32.zip` | Windows 7 and newer (32-bit, runs on 64-bit Windows too) |
+| `cuibuilder-1.0-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6` and `libgpm2` |
+
+CuiBuilder builds with Harbour and a C compiler, so they must be on the computer (MinGW on
+Windows, gcc on Linux). For Harbour-CUI programs it also needs the Harbour-CUI library: a clone of
+this repository with the library built (`hbmk2 hbtui.hbp`); its folder goes into `Options -
+Compilers and paths` (found by itself when CuiBuilder runs from `samples/cuibuilder`). The report
+designer uses `samples/shared/cbreport.prg` and the DOCX / XLSX classes (github.com/digikv/docx,
+/xlsx), the Git menu uses git.
+
 Two programs:
 
 | Program | What it is |

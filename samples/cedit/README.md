@@ -9,15 +9,19 @@ feel at home — but written from scratch on Harbour-CUI: no HbEdit source code 
 
 ## Download
 
-Ready-to-run programs, no build needed: **[CEdit 1.0.2 release](https://github.com/digikv/Harbour-CUI/releases/tag/cedit-1.0.2)**
+Ready-to-run programs, no build needed: **[CEdit 1.0.3 release](https://github.com/digikv/Harbour-CUI/releases/tag/cedit-1.0.3)**
 
 | File | Platform |
 |---|---|
-| `cedit-1.0.2-win32.zip` | Windows 7 and newer (32-bit, runs on 64-bit Windows too) |
-| `cedit-1.0.2-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6` and `libgpm2` |
+| `cedit-1.0.3-win32.zip` | Windows 7 and newer (32-bit, runs on 64-bit Windows too) |
+| `cedit-1.0.3-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6` and `libgpm2` |
 
 Unpack and run `cedit` or `cedit file.txt`. To build CEdit yourself, see
 [Building CEdit, step by step](#building-cedit-step-by-step).
+
+New in 1.0.3: Chinese files in Big5 (Traditional) and GBK (Simplified); the codepage AUTO
+(the default): Big5 / GBK on a Chinese Windows, else CP852; all the codepages of Harbour's
+character tables (Latin 1/2/9, Cyrillic, Greek, Turkish, Baltic, Hebrew ...), YUSCII last.
 
 New in 1.0.2: the program icon; no Harbour debugger inside (Alt-D opened it); the text cursor
 is hidden in lists.
