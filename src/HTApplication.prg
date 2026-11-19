@@ -4,6 +4,7 @@
  * @extends HTObject
  */
 
+#include "setcurs.ch"
 #include "hbtui.ch"
 #include "inkey.ch"
 #include "hbgtinfo.ch"
@@ -286,8 +287,11 @@ METHOD FUNCTION exec() CLASS HTApplication
 RETURN result
 
 /** Places the hardware cursor on the text cursor of the focused widget in the
- * active window (HTGet, HTLineEdit, HTTextEdit). No-op when the focused
- * widget has no cursor or that cell is covered by another window.
+ * active window (HTGet, HTLineEdit, HTTextEdit). When the focused widget has
+ * no text cursor (a list, a browse, a file panel) the cursor is hidden - it
+ * stayed blinking where the last input field had left it - and it comes back
+ * with the next widget that has one (its own shape, e.g. for overwrite mode,
+ * is kept). No-op when that cell is covered by another window.
  */
 METHOD PROCEDURE syncCursor() CLASS HTApplication
 
@@ -299,13 +303,15 @@ METHOD PROCEDURE syncCursor() CLASS HTApplication
     ENDIF
 
     oFocus := window:focusWidget()
-    IF oFocus == NIL
+    aCur := IIF( oFocus == NIL, NIL, oFocus:cursorPos() )
+    IF aCur == NIL
+        IF SetCursor() != SC_NONE
+            SetCursor( SC_NONE )
+        ENDIF
         RETURN
     ENDIF
-
-    aCur := oFocus:cursorPos()
-    IF aCur == NIL
-        RETURN
+    IF SetCursor() == SC_NONE
+        SetCursor( SC_NORMAL )
     ENDIF
 
     aOff := oFocus:windowOffset()
