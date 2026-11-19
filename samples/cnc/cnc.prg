@@ -356,6 +356,7 @@ STATIC PROCEDURE cnc_BuildMenu()
 
             oMenu := s_oBar:addMenu( "Options" )
             cnc_Item( oMenu, "Show hidden files", "", NIL, {|| cnc_Hidden() } )
+            cnc_Item( oMenu, "Show command output", "", NIL, {|| cnc_OutputOpt() } )
             cnc_Item( oMenu, "Theme...", "", NIL, {|| cnc_Theme() } )
             cnc_Item( oMenu, "About", "", NIL, {|| cnc_About() } )
         ENDIF
@@ -503,6 +504,14 @@ STATIC PROCEDURE cnc_SetMode( n, lFull )
     s_aPanel[ n ]:lFull := lFull
     s_aPanel[ n ]:ensureVisible()
     s_aPanel[ n ]:refresh()
+RETURN
+
+/* Options - Show command output: the output screen after a command, or only
+   a short message (Ctrl-W shows the output) */
+STATIC PROCEDURE cnc_OutputOpt()
+    s_hSet[ "output" ] := ! s_hSet[ "output" ]
+    HTToast():show( IIF( s_hSet[ "output" ], "The output is shown after a command", ;
+                         "After a command only its exit code; Ctrl-W shows the output" ), 2500, HT_CLR_TOAST_INFO )
 RETURN
 
 STATIC PROCEDURE cnc_Hidden()
@@ -1178,7 +1187,12 @@ STATIC PROCEDURE cnc_Run( cCmd )
     s_cOutCmd := cCmd
     s_cOutput := cnc_Act():cDir + "> " + cCmd + hb_eol() + cOut + hb_eol() + "[exit code " + hb_ntos( nRes ) + "]"
     cnc_Reread()
-    cnc_ShowOutput()
+    IF s_hSet[ "output" ]
+        cnc_ShowOutput()
+    ELSE
+        HTToast():show( "Exit code " + hb_ntos( nRes ) + " - Ctrl-W: the output", 2000, ;
+                        IIF( nRes == 0, HT_CLR_TOAST_SUCCESS, HT_CLR_TOAST_INFO ) )
+    ENDIF
 
 RETURN
 
@@ -1921,7 +1935,8 @@ RETURN ce_Join( { ;
     "  Ctrl-O       the command line; Enter runs the command in the folder", ;
     "               of the active panel, Esc goes back to the panel", ;
     "  Ctrl-Enter   the current name to the command line", ;
-    "  Ctrl-W       the output of the last command", ;
+    "  Ctrl-W       the output of the last command (Options - Show command", ;
+    "               output: off = only the exit code after a command)", ;
     "  cd <folder>  changes the folder of the active panel", ;
     "  =<expr>, =   a Harbour expression: =1024*16, =Date()", ;
     "", ;
@@ -1969,7 +1984,7 @@ STATIC PROCEDURE cnc_LoadSettings()
 
     s_hSet := { "theme" => "Norton", "dir1" => "", "dir2" => "", "active" => 1, ;
                 "sort1" => CNC_SORT_NAME, "sort2" => CNC_SORT_NAME, "full1" => .T., "full2" => .T., "hidden" => .F., ;
-                "desc1" => .F., "desc2" => .F. }
+                "desc1" => .F., "desc2" => .F., "output" => .T. }
     s_cIni := cnc_IniPath()
     IF ! hb_FileExists( s_cIni )
         RETURN
@@ -1991,6 +2006,7 @@ STATIC PROCEDURE cnc_LoadSettings()
     s_hSet[ "desc1" ]  := hb_HGetDef( h, "desc1", "0" ) == "1"
     s_hSet[ "desc2" ]  := hb_HGetDef( h, "desc2", "0" ) == "1"
     s_hSet[ "hidden" ] := hb_HGetDef( h, "hidden", "0" ) == "1"
+    s_hSet[ "output" ] := !( hb_HGetDef( h, "output", "1" ) == "0" )
 
     h := hb_HGetDef( hIni, "BOOKMARKS", { => } )
     FOR EACH cKey IN hb_HKeys( h )
@@ -2022,6 +2038,7 @@ STATIC PROCEDURE cnc_SaveSettings()
     NEXT
     h[ "active" ] := hb_ntos( s_nAct )
     h[ "hidden" ] := IIF( s_hSet[ "hidden" ], "1", "0" )
+    h[ "output" ] := IIF( s_hSet[ "output" ], "1", "0" )
     hIni[ "OPTIONS" ] := h
     h := { => }
     FOR EACH c IN hb_HKeys( s_hMarks )

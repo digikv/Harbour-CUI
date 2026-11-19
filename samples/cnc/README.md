@@ -87,7 +87,7 @@ a folder, F8 deletes (folders with everything in them), Shift-F6 renames. FTP is
 Harbour's hbtip (passive mode).
 
 Commands typed in the command line run without a console window (Windows); their output is shown
-when they end (Ctrl-W shows it again). A program with its own window started there keeps CNC
+when they end (Ctrl-W shows it again; Options - Show command output off: only the exit code). A program with its own window started there keeps CNC
 waiting until it is closed: `start notepad` does not.
 
 ## Settings
