@@ -48,6 +48,7 @@ STATIC s_oTitle, s_oPartLbl, s_oPart, s_oFrmFiles, s_oFrmOpt, s_oFrmMsg, s_oFile
 STATIC s_aFld := {}
 STATIC s_aMsg := {}                     /* { cText, nType, cFile, nLine } */
 STATIC s_aCheck := {}                   /* menu entries with a check */
+STATIC s_aHot := {}                     /* the hot letters taken: { oMenu, cLetters } */
 
 PROCEDURE Main( ... )
 
@@ -1116,7 +1117,10 @@ RETURN
 
 STATIC PROCEDURE cb_Item( oMenu, cText, cKey, nKey, bAction, bOn )
 
-    LOCAL oAct := oMenu:addAction( cb_ItemText( cText, cKey, bOn ) )
+    LOCAL oAct
+
+    cText := cb_Hot( oMenu, cText )
+    oAct := oMenu:addAction( cb_ItemText( cText, cKey, bOn ) )
 
     IF nKey != NIL
         oAct:setShortcut( nKey )
@@ -1129,7 +1133,35 @@ STATIC PROCEDURE cb_Item( oMenu, cText, cKey, nKey, bAction, bOn )
 RETURN
 
 STATIC FUNCTION cb_ItemText( cText, cKey, bOn )
-RETURN IIF( bOn != NIL .AND. Eval( bOn ), ht_glyph( 0x221A, "*" ), " " ) + " &" + PadR( cText, 25 ) + PadL( cKey, 10 )
+RETURN IIF( bOn != NIL .AND. Eval( bOn ), ht_glyph( 0x221A, "*" ), " " ) + " " + ;
+       PadR( cText, IIF( "&" $ cText, 26, 25 ) ) + PadL( cKey, 10 )      /* "&" is not shown */
+
+/* a hot letter for a menu entry that is not taken in its menu yet: the first
+   letter of a word, else any letter ("Copy" -> "&Copy", then "Change dir" ->
+   "C&hange dir"); HTMenu runs an entry by the letter after its "&" */
+STATIC FUNCTION cb_Hot( oMenu, cText )
+
+    LOCAL n, i, c, nPass
+
+    IF "&" $ cText
+        RETURN cText
+    ENDIF
+    IF ( n := AScan( s_aHot, {| a | a[ 1 ] == oMenu } ) ) == 0
+        AAdd( s_aHot, { oMenu, "" } )
+        n := Len( s_aHot )
+    ENDIF
+    FOR nPass := 1 TO 2
+        FOR i := 1 TO Len( cText )
+            c := Upper( SubStr( cText, i, 1 ) )
+            IF ( ( c >= "A" .AND. c <= "Z" ) .OR. IsDigit( c ) ) .AND. ! c $ s_aHot[ n ][ 2 ] .AND. ;
+               ( nPass == 2 .OR. i == 1 .OR. SubStr( cText, i - 1, 1 ) == " " )
+                s_aHot[ n ][ 2 ] += c
+                RETURN Left( cText, i - 1 ) + "&" + SubStr( cText, i )
+            ENDIF
+        NEXT
+    NEXT
+
+RETURN cText
 
 STATIC PROCEDURE cb_Checks()
 
