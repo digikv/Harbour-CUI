@@ -15,6 +15,9 @@ Harbour code (see [Dialogs](#dialogs-of-harbour-cui)) - and a **report designer*
 Clipper `.frm` files, from which it generates the Harbour code of the report for your program
 (see [Reports](#reports-word-and-excel)).
 
+And **Git**: status, stage, diff, commit, log, pull and push of the project's folder (see
+[Git](#git)).
+
 Two programs:
 
 | Program | What it is |
@@ -265,6 +268,21 @@ ENDIF
 ```
 
 The program creates `HTApplication():new()` first, as every Harbour-CUI program does.
+
+## Git
+
+The `Git` menu works in the folder of the project (git from the `PATH`, or `cuibuild.ini [VIEW]
+git=`; no console window, and git does not wait for a password in a terminal).
+
+| Command | What it does |
+|---|---|
+| Status, commit (F11) | the changed files: `√` = staged. Space / Ins stage or unstage one, F3 all, Shift-F3 none, Enter its diff, F2 commit (a summary line, more lines, "Push after the commit"; nothing staged: all changes, when you say so), F6 push, F7 pull, F5 refresh |
+| Diff | all the changes, staged and not |
+| Log | the last 200 commits; Enter shows one (`git show --stat -p`) |
+| Pull / Push | `git pull --ff-only` / `git push`; the output goes into the messages |
+| Init repository | `git init -b main` and a `.gitignore` (obj/, the programs the project makes, the tries of reports) |
+
+Diffs are shown in color (added lines green, removed red); Left / Right scroll long lines.
 
 ## Screen size
 

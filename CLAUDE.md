@@ -455,6 +455,9 @@ samples/          Demo applications (human-facing, require a display)
                   (cbf_Build), F9 = dlg_<name>.prg with Dlg_<Name>( hValues ) -> hValues / NIL built of
                   HTDialog/HTGet/HTLineEdit/... (cbf_Code; keep both in step). Screen size: [VIEW] rows/cols,
                   -size=RxC, Options - Screen size (ht_cuiSetupDisplay + screenResized at run time).
+                  cbgit.prg = Git menu: cb_Git( cDir, hSet, cArgs, @cOut ) = git -C <dir> through cb_Run
+                  (GIT_TERMINAL_PROMPT=0), status dialog (porcelain -b; Space add -A / reset), commit
+                  (-F temp file), log (git show), diff viewer CBDiffList (colors by + - @@), pull/push, init.
   shared/         cbreport.prg: Report Form to Word (.docx) / Excel (.xlsx), used by CBro and CuiBuilder:
                   CBR_Load / CBR_Save (writes the 1990-byte .frm) / CBR_Rows / CBR_Docx / CBR_Xlsx, a report
                   in code: CBR_New / CBR_Title / CBR_Group / CBR_Column / CBR_Make (.docx or .xlsx by the

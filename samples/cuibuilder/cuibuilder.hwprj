@@ -9,6 +9,7 @@ cuibuilder.prg
 cbengine.prg
 cbrepdes.prg
 cbformdes.prg
+cbgit.prg
 ../shared/cbreport.prg
 hbziparc.hbc
 {hb_ispath='../../../docx/DOCXClass.prg'}../../../docx/DOCXClass.prg

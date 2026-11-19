@@ -14,6 +14,7 @@ cuibuilder.prg
 cbengine.prg
 cbrepdes.prg
 cbformdes.prg
+cbgit.prg
 ../shared/cbreport.prg
 {win}cbwin.c
 ../cedit/htcodeedit.prg

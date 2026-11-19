@@ -147,6 +147,7 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS CBMain
     CASE K_F8       ; cb_NextError( .T. ) ; EXIT
     CASE K_SH_F8    ; cb_NextError( .F. ) ; EXIT
     CASE K_F10      ; s_oBar:popup( 1 ) ; EXIT
+    CASE K_F11      ; cb_GitStatus( cb_GitDir(), s_hSet, cb_MsgBlock() ) ; EXIT
     CASE K_ALT_X    ; cb_Quit() ; EXIT
     OTHERWISE
         lDone := .F.
@@ -776,6 +777,28 @@ STATIC PROCEDURE cb_Report( lNew )
 
 RETURN
 
+/* the folder of git: the project's, else the current one */
+STATIC FUNCTION cb_GitDir()
+RETURN IIF( s_oPF == NIL, hb_cwd(), hb_FNameDir( s_oPF:cFile ) )
+
+/* what the project makes, relative to its folder (for .gitignore) */
+STATIC FUNCTION cb_Outputs()
+
+    LOCAL a := {}, oP, oB
+
+    IF s_oPF != NIL
+        oB := cb_ProjOpen( s_oPF:cFile, s_hSet )
+        FOR EACH oP IN oB:aProjects
+            AAdd( a, cb_Rel( oP:outFile( s_hSet ), hb_FNameDir( s_oPF:cFile ) ) )
+        NEXT
+    ENDIF
+
+RETURN a
+
+/* git's output into the messages */
+STATIC FUNCTION cb_MsgBlock()
+RETURN {| c, t | cb_AddMsg( c, t ) }
+
 /* a dialog (.cuiform) in the dialog designer (cbformdes.prg); a new one goes into the project */
 STATIC PROCEDURE cb_Form( lNew )
 
@@ -953,7 +976,7 @@ STATIC PROCEDURE cb_Status( cText )
 RETURN
 
 STATIC FUNCTION cb_KeysText()
-RETURN " F2 Save  F3 Open  F4 Edit  Ins Add  F9 Build  Ctrl-F9 Run  Shift-F9 Rebuild  Alt-F9 Clean  F8 Error  F10 Menu  Alt-X Exit"
+RETURN " F2 Save  F3 Open  F4 Edit  Ins Add  F9 Build  Ctrl-F9 Run  Shift-F9 Rebuild  Alt-F9 Clean  F8 Error  F10 Menu  F11 Git  Alt-X Exit"
 
 STATIC PROCEDURE cb_ClearMsg()
     s_aMsg := {}
@@ -1069,6 +1092,16 @@ STATIC PROCEDURE cb_BuildMenu()
     oMenu:addSeparator()
     cb_Item( oMenu, "New report ...", "", NIL, {|| cb_Report( .T. ) } )
     cb_Item( oMenu, "Open report ...", "", NIL, {|| cb_Report( .F. ) } )
+
+    oMenu := s_oBar:addMenu( "&Git" )
+    cb_Item( oMenu, "Status, commit ...", "F11", NIL, {|| cb_GitStatus( cb_GitDir(), s_hSet, cb_MsgBlock() ) } )
+    cb_Item( oMenu, "Diff", "", NIL, {|| cb_GitDiff( cb_GitDir(), s_hSet ) } )
+    cb_Item( oMenu, "Log ...", "", NIL, {|| cb_GitLog( cb_GitDir(), s_hSet ) } )
+    oMenu:addSeparator()
+    cb_Item( oMenu, "Pull", "", NIL, {|| cb_GitPull( cb_GitDir(), s_hSet, cb_MsgBlock() ) } )
+    cb_Item( oMenu, "Push", "", NIL, {|| cb_GitPush( cb_GitDir(), s_hSet, cb_MsgBlock() ) } )
+    oMenu:addSeparator()
+    cb_Item( oMenu, "Init repository", "", NIL, {|| cb_GitInit( cb_GitDir(), s_hSet, cb_MsgBlock(), cb_Outputs() ) } )
 
     oMenu := s_oBar:addMenu( "&Options" )
     cb_Item( oMenu, "Compilers and paths ...", "", NIL, {|| cb_SettingsDlg() } )
