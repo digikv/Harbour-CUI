@@ -33,6 +33,17 @@ C:\work\>
 1Help 2Menu 3View 4Edit 5Copy 6RenMov 7Mkdir 8Delete 9PullDn 10Quit
 ```
 
+## Download
+
+Ready-to-run programs, no build needed: **[CNC 1.0 release](https://github.com/digikv/Harbour-CUI/releases/tag/cnc-1.0)**
+
+| File | Platform |
+|---|---|
+| `cnc-1.0-win32.zip` | Windows 7 and newer (32-bit, runs on 64-bit Windows too) |
+| `cnc-1.0-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6` and `libgpm2` |
+
+Unpack and run `cnc` (or `cnc left-folder right-folder`).
+
 ## Keys
 
 F9 opens the menu (Left, Files, Commands, Options, Right; also the mouse); the menu shows the key
