@@ -412,7 +412,7 @@ samples/          Demo applications (human-facing, require a display)
                   F10/Esc close, F12 files), written from scratch (own cedit.hbp + build.bat; dual
                   license like cbro). htcodeedit.prg = HTCodeEdit widget (tabs, wide cells, stream +
                   vertical block selection, clipboard, mouse drag), cebuffer.prg = CEBuffer (lines,
-                  cursor, grouped undo/redo, UTF-8 / CP852, CRLF/LF, BOM). Ctrl-Z vs Ctrl-Left (both
+                  cursor, grouped undo/redo, UTF-8 / CP852 / 35 codepages, Big5 + GBK auto on a Chinese system, CRLF/LF, BOM). Ctrl-Z vs Ctrl-Left (both
                   Inkey 26): ht_keyDown( 'Z' ). 1.0: search / replace (F7 ...), go to, Ctrl-B, Alt-B,
                   cesyntax.prg = highlighting (8 languages, states cached per line in CEBuffer,
                   colors picked against the theme's palette; more languages from cedit.lang in the

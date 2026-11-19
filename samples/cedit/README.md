@@ -72,7 +72,10 @@ visible. View - Tabs hides / shows them (kept in `cedit.ini`).
 ## Files
 
 - Text is edited in UTF-8. A file that is not valid UTF-8 is read and written in CP852 (DOS /
-  Harbour DBF Latin; Options: another codepage); the status line shows the codepage.
+  Harbour DBF Latin), on a Chinese system (Windows ANSI codepage 950 / 936) in Big5 / GBK;
+  Options: another one - Latin 1 / 2 / 9, Cyrillic (CP1251, CP866, KOI8-R/U, ...), Greek, Turkish,
+  Baltic, Hebrew, Big5, GBK, YUSCII. Shift-F8 reads a file again in another codepage. The status
+  line shows the codepage.
 - Line ends (CRLF or LF), the final line end and a UTF-8 BOM are kept as they were.
 - Tabs are kept and shown up to the next tab stop; wide (CJK) characters take two cells.
 - A file given on the command line that does not exist is made by the first save.

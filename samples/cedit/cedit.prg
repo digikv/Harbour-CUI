@@ -29,7 +29,37 @@ REQUEST HB_CODEPAGE_SL852
 REQUEST HB_CODEPAGE_SLWIN
 REQUEST HB_CODEPAGE_SLISO
 REQUEST HB_CODEPAGE_SRWIN
+REQUEST HB_CODEPAGE_RU866
+REQUEST HB_CODEPAGE_RUKOI8
+REQUEST HB_CODEPAGE_UAKOI8
+REQUEST HB_CODEPAGE_UA1125
+REQUEST HB_CODEPAGE_RUISO
+REQUEST HB_CODEPAGE_BGMIK
+REQUEST HB_CODEPAGE_EN
+REQUEST HB_CODEPAGE_DE850
+REQUEST HB_CODEPAGE_DE858
+REQUEST HB_CODEPAGE_DEWIN
+REQUEST HB_CODEPAGE_DEISO
+REQUEST HB_CODEPAGE_SVISO
+REQUEST HB_CODEPAGE_PT860
+REQUEST HB_CODEPAGE_IS861
+REQUEST HB_CODEPAGE_DK865
+REQUEST HB_CODEPAGE_EL737
+REQUEST HB_CODEPAGE_ELWIN
+REQUEST HB_CODEPAGE_ELISO
+REQUEST HB_CODEPAGE_TR857
+REQUEST HB_CODEPAGE_TRWIN
+REQUEST HB_CODEPAGE_TRISO
+REQUEST HB_CODEPAGE_EE775
+REQUEST HB_CODEPAGE_LTWIN
+REQUEST HB_CODEPAGE_HE862
+REQUEST HB_CODEPAGE_HEWIN
+REQUEST HB_CODEPAGE_CSKAMC
+REQUEST HB_CODEPAGE_PLMAZ
+REQUEST HB_CODEPAGE_CP950
+REQUEST HB_CODEPAGE_GBK
 REQUEST HB_CODEPAGE_SR646
+REQUEST HB_CODEPAGE_SR646C
 
 STATIC s_oApp, s_oMain, s_oBar, s_oEdit, s_oStat
 STATIC s_aBufs := {}
@@ -348,13 +378,70 @@ STATIC FUNCTION ce_CPName( cCP )
     LOCAL n := AScan( ce_CPList(), {| a | a[ 1 ] == cCP } )
 RETURN IIF( n > 0, ce_CPList()[ n ][ 2 ], cCP )
 
+/* the codepages of files: { Harbour codepage, name in the status line, name in the lists };
+   one per character table (the language of a Harbour codepage does not change the text) */
 STATIC FUNCTION ce_CPList()
-RETURN { { "UTF8",  "UTF-8",      "UTF-8 (Unicode)" }, ;
-         { "SL852", "CP852",      "CP852 - DOS Latin 2 (Harbour DBF)" }, ;
-         { "SLWIN", "CP1250",     "CP1250 - Windows Latin 2" }, ;
-         { "SLISO", "ISO-8859-2", "ISO-8859-2 - Latin 2" }, ;
-         { "SRWIN", "CP1251",     "CP1251 - Windows Cyrillic" }, ;
-         { "SR646", "YUSCII",     "YUSCII - ISO-646 (7 bit)" } }
+RETURN { { "UTF8",   "UTF-8",       "UTF-8 (Unicode)" }, ;
+         { "SL852",  "CP852",       "CP852 - DOS Latin 2 (Harbour DBF)" }, ;
+         { "SLWIN",  "CP1250",      "CP1250 - Windows Latin 2" }, ;
+         { "SLISO",  "ISO-8859-2",  "ISO-8859-2 - Latin 2" }, ;
+         { "SRWIN",  "CP1251",      "CP1251 - Windows Cyrillic" }, ;
+         { "RU866",  "CP866",       "CP866 - DOS Cyrillic" }, ;
+         { "RUKOI8", "KOI8-R",      "KOI8-R - Russian" }, ;
+         { "UAKOI8", "KOI8-U",      "KOI8-U - Ukrainian" }, ;
+         { "UA1125", "CP1125",      "CP1125 - DOS Ukrainian" }, ;
+         { "RUISO",  "ISO-8859-5",  "ISO-8859-5 - Cyrillic" }, ;
+         { "BGMIK",  "MIK",         "MIK - DOS Bulgarian" }, ;
+         { "EN",     "CP437",       "CP437 - DOS US" }, ;
+         { "DE850",  "CP850",       "CP850 - DOS Latin 1" }, ;
+         { "DE858",  "CP858",       "CP858 - DOS Latin 1 + euro" }, ;
+         { "DEWIN",  "CP1252",      "CP1252 - Windows Latin 1" }, ;
+         { "DEISO",  "ISO-8859-1",  "ISO-8859-1 - Latin 1" }, ;
+         { "SVISO",  "ISO-8859-15", "ISO-8859-15 - Latin 9 (euro)" }, ;
+         { "PT860",  "CP860",       "CP860 - DOS Portuguese" }, ;
+         { "IS861",  "CP861",       "CP861 - DOS Icelandic" }, ;
+         { "DK865",  "CP865",       "CP865 - DOS Nordic" }, ;
+         { "EL737",  "CP737",       "CP737 - DOS Greek" }, ;
+         { "ELWIN",  "CP1253",      "CP1253 - Windows Greek" }, ;
+         { "ELISO",  "ISO-8859-7",  "ISO-8859-7 - Greek" }, ;
+         { "TR857",  "CP857",       "CP857 - DOS Turkish" }, ;
+         { "TRWIN",  "CP1254",      "CP1254 - Windows Turkish" }, ;
+         { "TRISO",  "ISO-8859-9",  "ISO-8859-9 - Turkish" }, ;
+         { "EE775",  "CP775",       "CP775 - DOS Baltic" }, ;
+         { "LTWIN",  "CP1257",      "CP1257 - Windows Baltic" }, ;
+         { "HE862",  "CP862",       "CP862 - DOS Hebrew" }, ;
+         { "HEWIN",  "CP1255",      "CP1255 - Windows Hebrew" }, ;
+         { "CSKAMC", "Kamenicky",   "Kamenicky - DOS Czech / Slovak" }, ;
+         { "PLMAZ",  "Mazovia",     "Mazovia - DOS Polish" }, ;
+         { "CP950",  "Big5",        "CP950 / Big5 - Traditional Chinese" }, ;
+         { "GBK",    "GBK",         "CP936 / GBK - Simplified Chinese" }, ;
+         { "SR646",  "YUSCII",      "YUSCII - ISO-646 (7 bit)" }, ;
+         { "SR646C", "YUSCII-C",    "YUSCII - ISO-646 Cyrillic (7 bit)" } }
+
+/* the codepage of files that are not UTF-8: the setting, or "AUTO" */
+STATIC FUNCTION ce_DefCP()
+RETURN IIF( s_hSet[ "codepage" ] == "AUTO", ce_AutoCP(), s_hSet[ "codepage" ] )
+
+/* "AUTO": the Chinese codepage of the system (Windows ANSI codepage 950 / 936,
+   Linux LANG zh_TW.Big5 / zh_CN.GBK), else CP852 (DOS / Clipper DBF) */
+STATIC FUNCTION ce_AutoCP()
+
+    STATIC s_cAuto
+    LOCAL cOS
+
+    IF s_cAuto == NIL
+        cOS := hb_cdpOS()
+        DO CASE
+        CASE HB_ISSTRING( cOS ) .AND. ( Upper( cOS ) == "CP950" .OR. Upper( cOS ) == "BIG5" )
+            s_cAuto := "CP950"
+        CASE HB_ISSTRING( cOS ) .AND. Upper( cOS ) == "GBK"
+            s_cAuto := "GBK"
+        OTHERWISE
+            s_cAuto := "SL852"
+        ENDCASE
+    ENDIF
+
+RETURN s_cAuto
 
 /*----------------------------------------------------------- buffers */
 
@@ -396,7 +483,7 @@ STATIC FUNCTION ce_OpenFile( cFile )
         RETURN .T.
     ENDIF
     oB := ce_Buffer()
-    IF ! oB:load( cFile, s_hSet[ "codepage" ] )
+    IF ! oB:load( cFile, ce_DefCP() )
         HTMessageBox():error( "CEdit", oB:cError )
         RETURN .F.
     ENDIF
@@ -1112,7 +1199,7 @@ RETURN
 /* tab size, Tab with spaces, highlighting, codepage of non-UTF-8 files */
 STATIC PROCEDURE ce_CmdOptions()
 
-    LOCAL dlg, oTab, oSpaces, oHilite, oCP, aCP := ce_CPList(), a, nW := 60, nH := 11, oB
+    LOCAL dlg, oTab, oSpaces, oHilite, oCP, aCP := ce_CPList(), a, nW := 64, nH := 11, oB
 
     dlg := HTDialog():new()
     dlg:setWindowTitle( "Options" )
@@ -1131,13 +1218,14 @@ STATIC PROCEDURE ce_CmdOptions()
     oHilite:checked := s_hSet[ "hilite" ]
     HTLabel():new( "Files not in UTF-8:", dlg ):setGeometry( 1, 5, 24, 1 )
     oCP := HTComboBox():new( dlg )
-    oCP:setGeometry( 26, 5, 30, 1 )
+    oCP:setGeometry( 26, 5, 36, 1 )
+    oCP:addItem( "Automatic (" + ce_CPName( ce_AutoCP() ) + ")", "AUTO" )
     FOR EACH a IN aCP
         IF !( a[ 1 ] == "UTF8" )
             oCP:addItem( a[ 3 ], a[ 1 ] )
         ENDIF
     NEXT
-    oCP:setCurrentIndex( Max( 1, AScan( aCP, {| x | x[ 1 ] == s_hSet[ "codepage" ] } ) - 1 ) )
+    oCP:setCurrentIndex( IIF( s_hSet[ "codepage" ] == "AUTO", 1, Max( 1, AScan( aCP, {| x | x[ 1 ] == s_hSet[ "codepage" ] } ) ) ) )
     dlg:addButtonBar( "OK", "Cancel" )
 
     IF dlg:exec() == HT_DIALOG_ACCEPTED
@@ -1181,7 +1269,7 @@ STATIC PROCEDURE ce_LoadSettings()
     LOCAL hIni, h, cKey, a
 
     s_hSet := { "theme" => "Classic", "colors" => "", "tab" => 4, "tabspaces" => .T., ;
-                "codepage" => "SL852", "hilite" => .T., "insert" => .T., "tabs" => .T. }
+                "codepage" => "AUTO", "hilite" => .T., "insert" => .T., "tabs" => .T. }
     s_cIni := ce_IniPath()
     IF ! hb_FileExists( s_cIni )
         RETURN
@@ -1196,12 +1284,15 @@ STATIC PROCEDURE ce_LoadSettings()
     s_hSet[ "colors" ]    := hb_HGetDef( h, "colors", "" )
     s_hSet[ "tab" ]       := Max( 1, Min( 16, Val( hb_HGetDef( h, "tab", "4" ) ) ) )
     s_hSet[ "tabspaces" ] := !( hb_HGetDef( h, "tabspaces", "1" ) == "0" )
-    s_hSet[ "codepage" ]  := hb_HGetDef( h, "codepage", "SL852" )
+    s_hSet[ "codepage" ]  := hb_HGetDef( h, "codepage", "AUTO" )
     s_hSet[ "hilite" ]    := !( hb_HGetDef( h, "hilite", "1" ) == "0" )
     s_hSet[ "insert" ]    := !( hb_HGetDef( h, "insert", "1" ) == "0" )
     s_hSet[ "tabs" ]      := !( hb_HGetDef( h, "tabs", "1" ) == "0" )
-    IF AScan( ce_CPList(), {| x | x[ 1 ] == s_hSet[ "codepage" ] } ) < 2
-        s_hSet[ "codepage" ] := "SL852"
+    /* CP852 was the fixed default before "AUTO": on a Chinese system it was
+       never chosen, so it becomes "AUTO" (Big5 / GBK) */
+    IF AScan( ce_CPList(), {| x | x[ 1 ] == s_hSet[ "codepage" ] } ) < 2 .OR. ;
+       ( s_hSet[ "codepage" ] == "SL852" .AND. !( ce_AutoCP() == "SL852" ) )
+        s_hSet[ "codepage" ] := "AUTO"
     ENDIF
 
     h := hb_HGetDef( hIni, "RECENT", { => } )
@@ -1337,8 +1428,9 @@ RETURN ce_Join( { ;
     "FILES AND CODEPAGES", ;
     "  Text is edited in UTF-8 (all languages, also Chinese, Hindi ...).", ;
     "  A file that is not valid UTF-8 is read and saved in CP852 (DOS / Clipper", ;
-    "  DBF Latin 2); View - Options chooses another one (CP1250, CP1251, ...).", ;
-    [  The status line shows it: "UTF-8", "CP852"; "LF" = Linux line ends.], ;
+    "  DBF Latin 2), on a Chinese Windows in Big5 (CP950) or GBK (CP936);", ;
+    "  View - Options chooses another one (CP1250, CP1251, Big5, ...).", ;
+    [  The status line shows it: "UTF-8", "CP852", "Big5"; "LF" = Linux line ends.], ;
     "  Line ends (CRLF Windows / LF Linux), the last line end and a UTF-8 BOM", ;
     "  stay as they were.", ;
     "", ;
