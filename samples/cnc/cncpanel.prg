@@ -4,7 +4,7 @@
  * Copyright (c) 2026 Srđan Dragojlović - dual licensed, see LICENSE
  *
  *   ╔════════ C:\work\ ════════╗   the path; the active panel's is marked
- *   ║   Name    │ Size │Date│Time║   full mode (brief: two columns of names)
+ *   ║  Name  │Ext│ Size │  Date  ║   full mode, as Total Commander (brief: two columns of names)
  *   ║ ..        │►UP--DIR◄│ ...  ║
  *   ║ src       │►SUB-DIR◄│ ...  ║   folders first, then the files
  *   ║ main.prg  │   1234│ ...   ║
@@ -12,7 +12,7 @@
  *   ║ main.prg   1234 18.11.26 ║   the current file
  *   ╚═ 12,345 bytes in 3 files ═╝   the marked files
  *
- * A click on a column title (Name, Size, Date, Time) sorts by it, a second
+ * A click on a column title (Name, Ext, Size, Date) sorts by it, a second
  * click turns the order round; the title shows it with an arrow.
  *
  * The panel moves the cursor, marks files (Ins, right click), goes into
@@ -53,7 +53,7 @@ CLASS CNCPanel FROM HTWidget
     METHOD invertMarks()
     METHOD sortFiles()
     METHOD sortBy( nSort )
-    METHOD isBrief()                      INLINE ! ::lFull .OR. ::Fwidth < 40
+    METHOD isBrief()                      INLINE ! ::lFull .OR. ::Fwidth < 44
     METHOD rows()                         INLINE Max( 1, ::Fheight - 5 )
     METHOD title()
     METHOD sortMark( nCol )
@@ -292,7 +292,7 @@ RETURN NIL
 /* the arrow after the title of the column the panel is sorted by: up in the
    usual order (A..Z, the newest, the biggest first), down turned round */
 METHOD sortMark( nCol ) CLASS CNCPanel
-    IF ::nSort == nCol .OR. ( nCol == CNC_SORT_NAME .AND. ::nSort == CNC_SORT_EXT )
+    IF ::nSort == nCol .OR. ( nCol == CNC_SORT_NAME .AND. ::nSort == CNC_SORT_EXT .AND. ::isBrief() )
         RETURN IIF( ::lDesc, ht_glyph( 0x2193, "v" ), ht_glyph( 0x2191, "^" ) )
     ENDIF
 RETURN ""
@@ -360,7 +360,7 @@ RETURN
 METHOD PROCEDURE paintEvent( event ) CLASS CNCPanel
 
     LOCAL nW := ::Fwidth, nH := ::Fheight, nRows := ::rows(), lBrief := ::isBrief()
-    LOCAL lFocus := ::hasFocus(), nNameW, nCol2, r, i, a, c, aInfo, cTitle
+    LOCAL lFocus := ::hasFocus(), nNameW, nCol2, r, i, a, c, aInfo, cTitle, aNE
     LOCAL cH := ht_glyph( 0x2550, "=" ), cV := ht_glyph( 0x2551, "|" ), cS := ht_glyph( 0x2502, "|" )
 
     HB_SYMBOL_UNUSED( event )
@@ -399,28 +399,31 @@ METHOD PROCEDURE paintEvent( event ) CLASS CNCPanel
         DispOutAt( nH - 3, 0, ht_glyph( 0x255F, "|" ) + Replicate( ht_glyph( 0x2500, "-" ), nCol2 - 1 ) + ;
                    ht_glyph( 0x2534, "-" ) + Replicate( ht_glyph( 0x2500, "-" ), nW - 2 - nCol2 ) + ht_glyph( 0x2562, "|" ), CNC_CLR_PANEL )
     ELSE
-        nNameW := nW - 2 - 26                         /* │ size 10 │ date 8 │ time 5 */
-        DispOutAt( 1, 1, cnc_Center( IIF( ::nSort == CNC_SORT_EXT, "Name.Ext", "Name" ) + ::sortMark( CNC_SORT_NAME ), nNameW ) + cS + ;
+        /* Name │ Ext │ Size │ Date (as Total Commander): 5 + 10 + 14 cells and 3 lines */
+        nNameW := nW - 2 - 32
+        DispOutAt( 1, 1, cnc_Center( "Name" + ::sortMark( CNC_SORT_NAME ), nNameW ) + cS + ;
+                   cnc_Center( "Ext" + ::sortMark( CNC_SORT_EXT ), 5 ) + cS + ;
                    cnc_Center( "Size" + ::sortMark( CNC_SORT_SIZE ), 10 ) + cS + ;
-                   cnc_Center( "Date" + ::sortMark( CNC_SORT_TIME ), 8 ) + cS + cnc_Center( "Time", 5 ), CNC_CLR_HEAD )
-        AEval( { nNameW + 1, nNameW + 12, nNameW + 21 }, {| x | DispOutAt( 1, x, cS, CNC_CLR_PANEL ) } )
+                   cnc_Center( "Date" + ::sortMark( CNC_SORT_TIME ), 14 ), CNC_CLR_HEAD )
+        AEval( { nNameW + 1, nNameW + 7, nNameW + 18 }, {| x | DispOutAt( 1, x, cS, CNC_CLR_PANEL ) } )
         FOR r := 1 TO nRows
             i := ::nTop + r - 1
             IF i <= Len( ::aFiles )
                 a := ::aFiles[ i ]
                 c := cnc_RowColor( a, i == ::nCur .AND. lFocus )
-                DispOutAt( r + 1, 1, cnc_Fit( a[ F_NAME ], nNameW ) + cS + cnc_SizeText( a, 10 ) + cS + ;
-                           cnc_DateText( a[ F_DATE ] ) + cS + PadR( Left( a[ F_TIME ], 5 ), 5 ), c )
+                aNE := cnc_NameExt( a )
+                DispOutAt( r + 1, 1, cnc_Fit( aNE[ 1 ], nNameW ) + cS + cnc_Fit( aNE[ 2 ], 5 ) + cS + cnc_SizeText( a, 10 ) + cS + ;
+                           cnc_DateText( a[ F_DATE ] ) + " " + PadR( Left( a[ F_TIME ], 5 ), 5 ), c )
                 IF !( i == ::nCur .AND. lFocus )
-                    AEval( { nNameW + 1, nNameW + 12, nNameW + 21 }, {| x | DispOutAt( r + 1, x, cS, CNC_CLR_PANEL ) } )
+                    AEval( { nNameW + 1, nNameW + 7, nNameW + 18 }, {| x | DispOutAt( r + 1, x, cS, CNC_CLR_PANEL ) } )
                 ENDIF
             ELSE
-                DispOutAt( r + 1, 1, Space( nNameW ) + cS + Space( 10 ) + cS + Space( 8 ) + cS + Space( 5 ), CNC_CLR_PANEL )
+                DispOutAt( r + 1, 1, Space( nNameW ) + cS + Space( 5 ) + cS + Space( 10 ) + cS + Space( 14 ), CNC_CLR_PANEL )
             ENDIF
         NEXT
         c := ht_glyph( 0x2500, "-" )
-        DispOutAt( nH - 3, 0, ht_glyph( 0x255F, "|" ) + Replicate( c, nNameW ) + ht_glyph( 0x2534, "-" ) + Replicate( c, 10 ) + ;
-                   ht_glyph( 0x2534, "-" ) + Replicate( c, 8 ) + ht_glyph( 0x2534, "-" ) + Replicate( c, 5 ) + ht_glyph( 0x2562, "|" ), CNC_CLR_PANEL )
+        DispOutAt( nH - 3, 0, ht_glyph( 0x255F, "|" ) + Replicate( c, nNameW ) + ht_glyph( 0x2534, "-" ) + Replicate( c, 5 ) + ;
+                   ht_glyph( 0x2534, "-" ) + Replicate( c, 10 ) + ht_glyph( 0x2534, "-" ) + Replicate( c, 14 ) + ht_glyph( 0x2562, "|" ), CNC_CLR_PANEL )
     ENDIF
 
     /* the current file */
@@ -445,6 +448,22 @@ METHOD PROCEDURE paintEvent( event ) CLASS CNCPanel
     ENDIF
 
 RETURN
+
+/* { name, extension } of a file for the Name and Ext columns; a folder, "..",
+   ".gitignore" (a name that only starts with a dot) stay whole */
+STATIC FUNCTION cnc_NameExt( a )
+
+    LOCAL cName := a[ F_NAME ], n
+
+    IF a[ F_DIR ]
+        RETURN { cName, "" }
+    ENDIF
+    n := RAt( ".", cName )
+    IF n <= 1 .OR. n == Len( cName )
+        RETURN { cName, "" }
+    ENDIF
+
+RETURN { Left( cName, n - 1 ), SubStr( cName, n + 1 ) }
 
 STATIC FUNCTION cnc_RowColor( a, lCursor )
     IF lCursor
@@ -613,13 +632,17 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS CNCPanel
     SWITCH eventMouse:nKey
     CASE K_LBUTTONDOWN
         IF nR == 1 .AND. nC >= 1 .AND. nC < ::Fwidth - 1      /* the column titles */
-            IF ::isBrief() .OR. nC <= ::Fwidth - 28
-                ::sortBy( IIF( ::nSort == CNC_SORT_EXT, CNC_SORT_EXT, CNC_SORT_NAME ) )
-            ELSEIF nC <= ::Fwidth - 17
+            /* Name │ Ext │ Size │ Date: the lines at width - 33, - 27, - 16 */
+            DO CASE
+            CASE ::isBrief() .OR. nC <= ::Fwidth - 34
+                ::sortBy( CNC_SORT_NAME )
+            CASE nC <= ::Fwidth - 28
+                ::sortBy( CNC_SORT_EXT )
+            CASE nC <= ::Fwidth - 17
                 ::sortBy( CNC_SORT_SIZE )
-            ELSE
+            OTHERWISE
                 ::sortBy( CNC_SORT_TIME )
-            ENDIF
+            ENDCASE
             EXIT
         ENDIF
         IF i > 0

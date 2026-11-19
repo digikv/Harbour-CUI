@@ -11,14 +11,15 @@ It is written from scratch on Harbour-CUI: no HbEdit code is used. F3 and F4 ope
 highlighting.
 
 ```
-╔══════ C:\work\ ═══════╗╔══════ D:\backup\ ══════╗
-║   Name   │  Size  │Date║║   Name   │  Size  │Date║
-║ ..       │►UP--DIR◄│   ║║ ..       │►UP--DIR◄│   ║
-║ src      │►SUB-DIR◄│   ║║ old      │►SUB-DIR◄│   ║
-║ main.prg │    1234│...║║ main.prg │    1100│...║
-╟──────────┴────────┴───╢╟──────────┴────────┴───╢
-║ main.prg   1234 19.11.26║║ ..        ►UP--DIR◄   ║
-╚═ 1,234 bytes in 1 file ═╝╚═══════════════════════╝
+╔═════════════════ C:\work\ ═════════════════╗
+║    Name↑    │ Ext │   Size   │     Date     ║
+║..           │     │►UP--DIR◄│              ║
+║src          │     │►SUB-DIR◄│19.11.26 05:24║
+║main         │prg  │      1234│19.11.26 05:24║
+║readme       │md   │       512│18.11.26 22:10║
+╟─────────────┴─────┴──────────┴──────────────╢
+║main.prg            1234 19.11.26 05:24      ║
+╚═════════ 1,234 bytes in 1 selected file ════╝
 C:\work\>
 1Help 2Menu 3View 4Edit 5Copy 6RenMov 7Mkdir 8Delete 9PullDn 10Quit
 ```
@@ -44,8 +45,8 @@ of every command. F1 shows all the keys.
 | F7 / F8 | make a folder / delete |
 | F10 | quit |
 | Ctrl-U | swap the panels |
-| Ctrl-P | brief (two columns of names) / full (name, size, date, time) |
-| Ctrl-F3 .. Ctrl-F6, a click on Name / Size / Date | sort by name, extension, time, size; the same again turns the order round (the arrow in the title shows it) |
+| Ctrl-P | brief (two columns of names) / full (Name, Ext, Size, Date - as Total Commander) |
+| Ctrl-F3 .. Ctrl-F6, a click on Name / Ext / Size / Date | sort by name, extension, time, size; the same again turns the order round (the arrow in the title shows it) |
 | Ctrl-R | read the folders again |
 | Ctrl-F7 | find files by a mask in the folder and below |
 | Ctrl-Ins | the full name of the current file to the clipboard |
