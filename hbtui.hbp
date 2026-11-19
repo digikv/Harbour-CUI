@@ -2,7 +2,10 @@
 #
 #
 
--b
+# debug info (the Harbour debugger, Alt-D) only on request:
+#   hbmk2 hbtui.hbp -env:HBTUI_DEBUG=yes  - else every program carried the
+#   debugger and Alt-D opened it
+{HBTUI_DEBUG}-b
 -w3 -es2 -gc3
 -hblib
 -inc
