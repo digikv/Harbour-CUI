@@ -4,7 +4,9 @@
  * Copyright (c) 2026 Srđan Dragojlović - dual licensed, see LICENSE
  *
  *   ╔════════ C:\work\ ════════╗   the path; the active panel's is marked
- *   ║  Name  │Ext│ Size │  Date  ║   full mode, as Total Commander (brief: two columns of names)
+ *   ║  Name  │Ext│ Size │  Date  ║   full mode, as Total Commander (brief: two columns of
+ *                                     names as NC, or brief TC: as many columns as the
+ *                                     longest name lets, folders in [ ], scrolled by columns)
  *   ║ ..        │►UP--DIR◄│ ...  ║
  *   ║ src       │►SUB-DIR◄│ ...  ║   folders first, then the files
  *   ║ main.prg  │   1234│ ...   ║
@@ -33,7 +35,8 @@ CLASS CNCPanel FROM HTWidget
     DATA nTop        INIT 1
     DATA nSort       INIT CNC_SORT_NAME
     DATA lDesc       INIT .F.             /* the sort order turned round */
-    DATA lFull       INIT .T.             /* full: name, size, date, time; else brief */
+    DATA nView       INIT CNC_VIEW_FULL   /* full: name, size, date, time; brief (NC); brief TC */
+    DATA nLongest    INIT 0               /* the widest name in cells (folders with [ ]) */
     DATA lHidden     INIT .F.             /* hidden and system files */
     DATA cQuick                           /* quick search text, NIL = off */
     DATA oNet                             /* CNCFtp: the panel shows an FTP server */
@@ -56,7 +59,11 @@ CLASS CNCPanel FROM HTWidget
     METHOD invertMarks()
     METHOD sortFiles()
     METHOD sortBy( nSort )
-    METHOD isBrief()                      INLINE ! ::lFull .OR. ::Fwidth < 44
+    METHOD isBrief()                      INLINE ::nView != CNC_VIEW_FULL .OR. ::Fwidth < 44
+    METHOD isColumns()                    INLINE ::nView == CNC_VIEW_TC
+    METHOD columns()
+    METHOD pageSize()                     INLINE ::rows() * IIF( ::isBrief(), Len( ::columns() ), 1 )
+    METHOD briefName( a )
     METHOD rows()                         INLINE Max( 1, ::Fheight - 5 )
     METHOD title()
     METHOD atRoot()                       INLINE IIF( ::oNet == NIL, cnc_IsRoot( ::cDir ), ::cDir == "/" )
@@ -119,6 +126,10 @@ METHOD read( cDir, cSelect ) CLASS CNCPanel
     NEXT
     ::cDir := cDir
     ::aFiles := aFiles
+    ::nLongest := 0
+    FOR EACH a IN aFiles
+        ::nLongest := Max( ::nLongest, ht_strWidth( a[ F_NAME ] ) + IIF( a[ F_DIR ], 2, 0 ) )
+    NEXT
     ::sortFiles()
     ::nCur := 1
     ::nTop := 1
@@ -329,11 +340,46 @@ METHOD title() CLASS CNCPanel
 
 RETURN c
 
+/* the columns of names in the brief views: { { nCol, nWidth }, ... } between
+   the frame lines, a │ after each but the last; full view: one */
+METHOD columns() CLASS CNCPanel
+
+    LOCAL nIn := ::Fwidth - 2, nCols := 2, nW, nX := 1, aCol := {}, i
+
+    IF ! ::isBrief()
+        RETURN { { 1, nIn } }
+    ENDIF
+    IF ::isColumns()                     /* Total Commander: the longest name decides */
+        nW := Max( 8, Min( ::nLongest, 40 ) )
+        nCols := Max( 1, Int( ( nIn + 1 ) / ( nW + 1 ) ) )
+    ENDIF
+    nW := Int( ( nIn - ( nCols - 1 ) ) / nCols )
+    FOR i := 1 TO nCols
+        AAdd( aCol, { nX, IIF( i == nCols, nIn - nX + 1, nW ) } )
+        nX += nW + 1
+    NEXT
+
+RETURN aCol
+
+/* the name in a brief view; Total Commander puts folders in [ ] */
+METHOD briefName( a ) CLASS CNCPanel
+RETURN IIF( ::isColumns() .AND. a[ F_DIR ], "[" + a[ F_NAME ] + "]", a[ F_NAME ] )
+
 METHOD ensureVisible() CLASS CNCPanel
 
-    LOCAL nPage := ::rows() * IIF( ::isBrief(), 2, 1 )
+    LOCAL nPage := ::pageSize(), nRows := ::rows(), nColTop
 
     ::nCur := Max( 1, Min( ::nCur, Len( ::aFiles ) ) )
+    IF ::isBrief() .AND. ::isColumns()   /* scrolled by whole columns */
+        nColTop := Int( ( ::nCur - 1 ) / nRows ) * nRows + 1
+        IF ::nCur < ::nTop
+            ::nTop := nColTop
+        ELSEIF ::nCur >= ::nTop + nPage
+            ::nTop := nColTop - nPage + nRows
+        ENDIF
+        ::nTop := Int( ( Max( 1, ::nTop ) - 1 ) / nRows ) * nRows + 1
+        RETURN NIL
+    ENDIF
     IF ::nCur < ::nTop
         ::nTop := ::nCur
     ELSEIF ::nCur >= ::nTop + nPage
@@ -382,7 +428,7 @@ RETURN
 METHOD PROCEDURE paintEvent( event ) CLASS CNCPanel
 
     LOCAL nW := ::Fwidth, nH := ::Fheight, nRows := ::rows(), lBrief := ::isBrief()
-    LOCAL lFocus := ::hasFocus(), nNameW, nCol2, r, i, a, c, aInfo, cTitle, aNE
+    LOCAL lFocus := ::hasFocus(), nNameW, aCol, k, r, i, a, c, aInfo, cTitle, aNE
     LOCAL cH := ht_glyph( 0x2550, "=" ), cV := ht_glyph( 0x2551, "|" ), cS := ht_glyph( 0x2502, "|" )
 
     HB_SYMBOL_UNUSED( event )
@@ -401,25 +447,30 @@ METHOD PROCEDURE paintEvent( event ) CLASS CNCPanel
     DispOutAt( nH - 1, 0, ht_glyph( 0x255A, "+" ) + Replicate( cH, nW - 2 ) + ht_glyph( 0x255D, "+" ), CNC_CLR_PANEL )
 
     IF lBrief
-        nCol2 := 1 + Int( ( nW - 3 ) / 2 )           /* the separator of the two columns */
-        DispOutAt( 1, 1, cnc_Center( "Name" + ::sortMark( CNC_SORT_NAME ), nCol2 - 1 ), CNC_CLR_HEAD )
-        DispOutAt( 1, nCol2, cS, CNC_CLR_PANEL )
-        DispOutAt( 1, nCol2 + 1, cnc_Center( "Name" + ::sortMark( CNC_SORT_NAME ), nW - 2 - nCol2 ), CNC_CLR_HEAD )
-        FOR r := 1 TO nRows
-            DispOutAt( r + 1, 1, Space( nCol2 - 1 ), CNC_CLR_PANEL )
-            DispOutAt( r + 1, nCol2, cS, CNC_CLR_PANEL )
-            DispOutAt( r + 1, nCol2 + 1, Space( nW - 2 - nCol2 ), CNC_CLR_PANEL )
-            i := ::nTop + r - 1
-            IF i <= Len( ::aFiles )
-                DispOutAt( r + 1, 1, cnc_Fit( ::aFiles[ i ][ F_NAME ], nCol2 - 1 ), cnc_RowColor( ::aFiles[ i ], i == ::nCur .AND. lFocus ) )
-            ENDIF
-            i += nRows
-            IF i <= Len( ::aFiles )
-                DispOutAt( r + 1, nCol2 + 1, cnc_Fit( ::aFiles[ i ][ F_NAME ], nW - 2 - nCol2 ), cnc_RowColor( ::aFiles[ i ], i == ::nCur .AND. lFocus ) )
+        aCol := ::columns()
+        c := ht_glyph( 0x255F, "|" )
+        FOR EACH k IN aCol
+            DispOutAt( 1, k[ 1 ], cnc_Center( "Name" + ::sortMark( CNC_SORT_NAME ), k[ 2 ] ), CNC_CLR_HEAD )
+            c += Replicate( ht_glyph( 0x2500, "-" ), k[ 2 ] )
+            IF ! k:__enumIsLast()
+                DispOutAt( 1, k[ 1 ] + k[ 2 ], cS, CNC_CLR_PANEL )
+                c += ht_glyph( 0x2534, "-" )
             ENDIF
         NEXT
-        DispOutAt( nH - 3, 0, ht_glyph( 0x255F, "|" ) + Replicate( ht_glyph( 0x2500, "-" ), nCol2 - 1 ) + ;
-                   ht_glyph( 0x2534, "-" ) + Replicate( ht_glyph( 0x2500, "-" ), nW - 2 - nCol2 ) + ht_glyph( 0x2562, "|" ), CNC_CLR_PANEL )
+        FOR r := 1 TO nRows
+            FOR EACH k IN aCol
+                i := ::nTop + ( k:__enumIndex() - 1 ) * nRows + r - 1
+                IF i <= Len( ::aFiles )
+                    DispOutAt( r + 1, k[ 1 ], cnc_Fit( ::briefName( ::aFiles[ i ] ), k[ 2 ] ), cnc_RowColor( ::aFiles[ i ], i == ::nCur .AND. lFocus ) )
+                ELSE
+                    DispOutAt( r + 1, k[ 1 ], Space( k[ 2 ] ), CNC_CLR_PANEL )
+                ENDIF
+                IF ! k:__enumIsLast()
+                    DispOutAt( r + 1, k[ 1 ] + k[ 2 ], cS, CNC_CLR_PANEL )
+                ENDIF
+            NEXT
+        NEXT
+        DispOutAt( nH - 3, 0, c + ht_glyph( 0x2562, "|" ), CNC_CLR_PANEL )
     ELSE
         /* Name │ Ext │ Size │ Date (as Total Commander): 5 + 10 + 14 cells and 3 lines */
         nNameW := nW - 2 - 32
@@ -547,9 +598,7 @@ RETURN c + cOut
 
 METHOD PROCEDURE keyEvent( keyEvent ) CLASS CNCPanel
 
-    LOCAL nKey := keyEvent:key, nRows := ::rows(), nPage, a
-
-    nPage := nRows * IIF( ::isBrief(), 2, 1 )
+    LOCAL nKey := keyEvent:key, nRows := ::rows(), nPage := ::pageSize(), a
 
     /* quick search: letters go on, Backspace takes one back, other keys end it */
     IF ::cQuick != NIL
@@ -638,14 +687,16 @@ RETURN
 
 METHOD PROCEDURE mouseEvent( eventMouse ) CLASS CNCPanel
 
-    LOCAL nR := eventMouse:mouseRow, nC := eventMouse:mouseCol, nRows := ::rows(), i := 0
+    LOCAL nR := eventMouse:mouseRow, nC := eventMouse:mouseCol, nRows := ::rows(), i := 0, k
 
-    /* the entry under the mouse */
+    /* the entry under the mouse (a │ belongs to the column on its left) */
     IF nR >= 2 .AND. nR <= nRows + 1 .AND. nC >= 1 .AND. nC < ::Fwidth - 1
         i := ::nTop + nR - 2
-        IF ::isBrief() .AND. nC > Int( ( ::Fwidth - 3 ) / 2 )
-            i += nRows
-        ENDIF
+        FOR EACH k IN ::columns()
+            IF nC >= k[ 1 ]
+                i := ::nTop + ( k:__enumIndex() - 1 ) * nRows + nR - 2
+            ENDIF
+        NEXT
         IF i > Len( ::aFiles )
             i := 0
         ENDIF

@@ -21,6 +21,10 @@
 #define CNC_SORT_SIZE   4
 #define CNC_SORT_NONE   5
 
+#define CNC_VIEW_FULL   1               /* Name, Ext, Size, Date */
+#define CNC_VIEW_BRIEF  2               /* two columns of names (NC) */
+#define CNC_VIEW_TC     3               /* columns as wide as the longest name (Total Commander) */
+
 /* the classic colors (VGA palette of the "Norton" theme) */
 #define CNC_CLR_PANEL   "11/1"          /* files, frame: bright cyan on blue */
 #define CNC_CLR_DIR     "15/1"          /* folders: white */

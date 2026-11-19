@@ -72,7 +72,8 @@ of every command. F1 shows all the keys.
 | F7 / F8 | make a folder / delete |
 | F10 | quit |
 | Ctrl-U | swap the panels |
-| Ctrl-P | brief (two columns of names) / full (Name, Ext, Size, Date - as Total Commander) |
+| Ctrl-P | full (Name, Ext, Size, Date - as Total Commander) / brief (two columns of names, NC) / brief TC (as many columns as the longest name lets, folders in [ ], scrolled by columns); also Left / Right menu, the current one marked √ |
+| Options - Show hidden files | hidden and system files on / off (√ while on; kept in cnc.ini) |
 | Ctrl-F3 .. Ctrl-F6, a click on Name / Ext / Size / Date | sort by name, extension, time, size; the same again turns the order round (the arrow in the title shows it) |
 | Ctrl-R | read the folders again |
 | Ctrl-F7 | find files by a mask in the folder and below |

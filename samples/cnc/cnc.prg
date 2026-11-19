@@ -46,6 +46,7 @@ STATIC s_aHot := {}                     /* the directory hotlist (Ctrl-D) */
 STATIC s_cOutput := ""                  /* the output of the last command (Ctrl-W) */
 STATIC s_cOutCmd := ""
 STATIC s_hFtp := { => }                 /* the FTP connections (cnc.ini [FTP]) */
+STATIC s_aCheck := {}                   /* menu entries with a check: { oAction, cText, cKey, bOn } */
 
 PROCEDURE Main( ... )
 
@@ -77,7 +78,7 @@ PROCEDURE Main( ... )
         s_aPanel[ i ] := CNCPanel():new( s_oMain )
         s_aPanel[ i ]:nSort := s_hSet[ "sort" + hb_ntos( i ) ]
         s_aPanel[ i ]:lDesc := s_hSet[ "desc" + hb_ntos( i ) ]
-        s_aPanel[ i ]:lFull := s_hSet[ "full" + hb_ntos( i ) ]
+        s_aPanel[ i ]:nView := s_hSet[ "view" + hb_ntos( i ) ]
         s_aPanel[ i ]:lHidden := s_hSet[ "hidden" ]
         s_aPanel[ i ]:bEnter := {| o, a | cnc_OpenFile( o, a ) }
         s_aPanel[ i ]:bActivate := {| o | cnc_Activated( o ) }
@@ -238,7 +239,7 @@ STATIC FUNCTION cnc_CtrlKey( c )
         s_aPanel[ s_nAct ]:quickSearch( "" )
         EXIT
     CASE "P"
-        cnc_SetMode( s_nAct, ! s_aPanel[ s_nAct ]:lFull )
+        cnc_SetMode( s_nAct, s_aPanel[ s_nAct ]:nView % 3 + 1 )    /* full, brief, brief TC */
         EXIT
     CASE "F"                                     /* Ctrl-F FTP connect, Ctrl-Shift-F disconnect */
         IF hb_bitAnd( hb_gtInfo( HB_GTI_KBDSHIFTS ), HB_GTI_KBD_SHIFT ) != 0
@@ -365,8 +366,8 @@ STATIC PROCEDURE cnc_BuildMenu()
             cnc_Item( oMenu, "Network computers...", "", NIL, {|| cnc_NetCmd( 3 ) } )
 
             oMenu := s_oBar:addMenu( "Options" )
-            cnc_Item( oMenu, "Show hidden files", "", NIL, {|| cnc_Hidden() } )
-            cnc_Item( oMenu, "Show command output", "", NIL, {|| cnc_OutputOpt() } )
+            cnc_Item( oMenu, "Show hidden files", "", NIL, {|| cnc_Hidden() }, {|| s_hSet[ "hidden" ] } )
+            cnc_Item( oMenu, "Show command output", "", NIL, {|| cnc_OutputOpt() }, {|| s_hSet[ "output" ] } )
             cnc_Item( oMenu, "Theme...", "", NIL, {|| cnc_Theme() } )
             cnc_Item( oMenu, "About", "", NIL, {|| cnc_About() } )
         ENDIF
@@ -379,8 +380,9 @@ STATIC PROCEDURE cnc_PanelMenu( oMenu, n )
     LOCAL cDrv := IIF( n == 1, "Alt-F1", "Alt-F2" ), nDrv := IIF( n == 1, K_ALT_F1, K_ALT_F2 )
     LOCAL nCD := IIF( n == 1, K_CTRL_F1, K_CTRL_F2 )
 
-    cnc_Item( oMenu, "Brief", "", NIL, {|| cnc_SetMode( n, .F. ) } )
-    cnc_Item( oMenu, "Full", "", NIL, {|| cnc_SetMode( n, .T. ) } )
+    cnc_Item( oMenu, "Brief", "", NIL, {|| cnc_SetMode( n, CNC_VIEW_BRIEF ) }, {|| s_aPanel[ n ]:nView == CNC_VIEW_BRIEF } )
+    cnc_Item( oMenu, "Brief (Total Commander)", "", NIL, {|| cnc_SetMode( n, CNC_VIEW_TC ) }, {|| s_aPanel[ n ]:nView == CNC_VIEW_TC } )
+    cnc_Item( oMenu, "Full", "", NIL, {|| cnc_SetMode( n, CNC_VIEW_FULL ) }, {|| s_aPanel[ n ]:nView == CNC_VIEW_FULL } )
     oMenu:addSeparator()
     cnc_Item( oMenu, "Name", "Ctrl-F3", NIL, {|| cnc_Sort( n, CNC_SORT_NAME ) } )
     cnc_Item( oMenu, "Extension", "Ctrl-F4", NIL, {|| cnc_Sort( n, CNC_SORT_EXT ) } )
@@ -393,15 +395,33 @@ STATIC PROCEDURE cnc_PanelMenu( oMenu, n )
 
 RETURN
 
-/* menu entry "Text    Key"; nKey: the key runs it from anywhere */
-STATIC PROCEDURE cnc_Item( oMenu, cText, cKey, nKey, bAction )
+/* menu entry "√ Text    Key"; nKey: the key runs it from anywhere; bOn: the
+   entry shows √ while it returns .T. (cnc_Checks()) */
+STATIC PROCEDURE cnc_Item( oMenu, cText, cKey, nKey, bAction, bOn )
 
-    LOCAL oAct := oMenu:addAction( PadR( cText, 22 ) + PadL( cKey, 11 ) )
+    LOCAL oAct := oMenu:addAction( cnc_ItemText( cText, cKey, bOn ) )
 
     IF nKey != NIL
         oAct:setShortcut( nKey )
     ENDIF
     oAct:onTriggered := bAction
+    IF bOn != NIL
+        AAdd( s_aCheck, { oAct, cText, cKey, bOn } )
+    ENDIF
+
+RETURN
+
+STATIC FUNCTION cnc_ItemText( cText, cKey, bOn )
+RETURN IIF( bOn != NIL .AND. Eval( bOn ), ht_glyph( 0x221A, "*" ), " " ) + " " + PadR( cText, 23 ) + PadL( cKey, 11 )
+
+/* the √ of the menu entries again, after a setting changed */
+STATIC PROCEDURE cnc_Checks()
+
+    LOCAL a
+
+    FOR EACH a IN s_aCheck
+        a[ 1 ]:setText( cnc_ItemText( a[ 2 ], a[ 3 ], a[ 4 ] ) )
+    NEXT
 
 RETURN
 
@@ -477,7 +497,7 @@ STATIC PROCEDURE cnc_Swap()
 
     LOCAL o1 := s_aPanel[ 1 ], o2 := s_aPanel[ 2 ], c, x
 
-    FOR EACH c IN { "oNet", "cLocal", "cDir", "aFiles", "nCur", "nTop", "nSort", "lDesc", "lFull" }
+    FOR EACH c IN { "oNet", "cLocal", "cDir", "aFiles", "nCur", "nTop", "nSort", "lDesc", "nView", "nLongest" }
         x := __objSendMsg( o1, c )
         __objSendMsg( o1, "_" + c, __objSendMsg( o2, c ) )
         __objSendMsg( o2, "_" + c, x )
@@ -485,6 +505,7 @@ STATIC PROCEDURE cnc_Swap()
     o1:ensureVisible()
     o2:ensureVisible()
     AEval( s_aPanel, {| o | o:refresh() } )
+    cnc_Checks()
     cnc_Changed( cnc_Act() )
 
 RETURN
@@ -510,22 +531,25 @@ STATIC PROCEDURE cnc_Sort( n, nSort )
     s_aPanel[ n ]:sortBy( nSort )
 RETURN
 
-STATIC PROCEDURE cnc_SetMode( n, lFull )
-    s_aPanel[ n ]:lFull := lFull
+STATIC PROCEDURE cnc_SetMode( n, nView )
+    s_aPanel[ n ]:nView := nView
     s_aPanel[ n ]:ensureVisible()
     s_aPanel[ n ]:refresh()
+    cnc_Checks()
 RETURN
 
 /* Options - Show command output: the output screen after a command, or only
    a short message (Ctrl-W shows the output) */
 STATIC PROCEDURE cnc_OutputOpt()
     s_hSet[ "output" ] := ! s_hSet[ "output" ]
+    cnc_Checks()
     HTToast():show( IIF( s_hSet[ "output" ], "The output is shown after a command", ;
                          "After a command only its exit code; Ctrl-W shows the output" ), 2500, HT_CLR_TOAST_INFO )
 RETURN
 
 STATIC PROCEDURE cnc_Hidden()
     s_hSet[ "hidden" ] := ! s_hSet[ "hidden" ]
+    cnc_Checks()
     AEval( s_aPanel, {| o | o:lHidden := s_hSet[ "hidden" ], o:reread(), o:refresh() } )
     HTToast():show( IIF( s_hSet[ "hidden" ], "Hidden files are shown", "Hidden files are not shown" ), 1500, HT_CLR_TOAST_INFO )
 RETURN
@@ -1914,7 +1938,8 @@ RETURN ce_Join( { ;
     "  +  -  *      mark / unmark by a mask (*.prg), invert (while the", ;
     "               command line is empty)", ;
     "  Ctrl-S, Alt + letter   quick search (Alt-L F C O R open the menus)", ;
-    "  Ctrl-P       brief / full view (Name, Ext, Size, Date)", ;
+    "  Ctrl-P       full view (Name, Ext, Size, Date), brief (2 columns),", ;
+    "               brief as Total Commander (as many columns as fit)", ;
     "  Ctrl-R       read the folders again", ;
     "  Ctrl-F3 .. Ctrl-F6     sort by name, extension, time, size; a click", ;
     "               on Name / Ext / Size / Date sorts too; again: the other way", ;
@@ -1994,7 +2019,7 @@ STATIC PROCEDURE cnc_LoadSettings()
     LOCAL hIni, h, c, cKey
 
     s_hSet := { "theme" => "Norton", "dir1" => "", "dir2" => "", "active" => 1, ;
-                "sort1" => CNC_SORT_NAME, "sort2" => CNC_SORT_NAME, "full1" => .T., "full2" => .T., "hidden" => .F., ;
+                "sort1" => CNC_SORT_NAME, "sort2" => CNC_SORT_NAME, "view1" => CNC_VIEW_FULL, "view2" => CNC_VIEW_FULL, "hidden" => .F., ;
                 "desc1" => .F., "desc2" => .F., "output" => .T. }
     s_cIni := cnc_IniPath()
     IF ! hb_FileExists( s_cIni )
@@ -2012,8 +2037,9 @@ STATIC PROCEDURE cnc_LoadSettings()
     s_hSet[ "active" ] := Val( hb_HGetDef( h, "active", "1" ) )
     s_hSet[ "sort1" ]  := Max( 1, Min( 4, Val( hb_HGetDef( h, "sort1", "1" ) ) ) )
     s_hSet[ "sort2" ]  := Max( 1, Min( 4, Val( hb_HGetDef( h, "sort2", "1" ) ) ) )
-    s_hSet[ "full1" ]  := !( hb_HGetDef( h, "full1", "1" ) == "0" )
-    s_hSet[ "full2" ]  := !( hb_HGetDef( h, "full2", "1" ) == "0" )
+    FOR EACH c IN { "1", "2" }                /* full1=0 of older versions: brief */
+        s_hSet[ "view" + c ] := Max( 1, Min( 3, Val( hb_HGetDef( h, "view" + c, IIF( hb_HGetDef( h, "full" + c, "1" ) == "0", "2", "1" ) ) ) ) )
+    NEXT
     s_hSet[ "desc1" ]  := hb_HGetDef( h, "desc1", "0" ) == "1"
     s_hSet[ "desc2" ]  := hb_HGetDef( h, "desc2", "0" ) == "1"
     s_hSet[ "hidden" ] := hb_HGetDef( h, "hidden", "0" ) == "1"
@@ -2044,7 +2070,7 @@ STATIC PROCEDURE cnc_SaveSettings()
     FOR i := 1 TO 2
         h[ "dir" + hb_ntos( i ) ]  := IIF( s_aPanel[ i ]:isNet(), s_aPanel[ i ]:cLocal, s_aPanel[ i ]:cDir )
         h[ "sort" + hb_ntos( i ) ] := hb_ntos( s_aPanel[ i ]:nSort )
-        h[ "full" + hb_ntos( i ) ] := IIF( s_aPanel[ i ]:lFull, "1", "0" )
+        h[ "view" + hb_ntos( i ) ] := hb_ntos( s_aPanel[ i ]:nView )
         h[ "desc" + hb_ntos( i ) ] := IIF( s_aPanel[ i ]:lDesc, "1", "0" )
     NEXT
     h[ "active" ] := hb_ntos( s_nAct )

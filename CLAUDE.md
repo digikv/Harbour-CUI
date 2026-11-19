@@ -425,7 +425,7 @@ samples/          Demo applications (human-facing, require a display)
                   on Windows that send keys steal the user's keyboard: only when the user is away.
                   On main since 1.0; releases cedit-1.0, cedit-1.0.1 (-win32.zip, -linux-x86_64.tar.gz).
   cnc/            CNC: two-panel file manager like Norton Commander, keys of HbCommander (Kresin) + NC,
-                  written from scratch. cncpanel.prg = CNCPanel (draws the NC frame, full / brief, marks,
+                  written from scratch. cncpanel.prg = CNCPanel (draws the NC frame, full / brief NC / brief TC (columns), marks,
                   quick search, sort), cnc.prg = menus, F-keys, copy/move/delete (recursive), command line
                   (hb_processRun, output Ctrl-W), "Norton" theme (VGA palette), cnc.ini. F3/F4 = CEdit's
                   HTCodeEdit + CEBuffer in a full-screen HTDialog (cnc.hbp links ../cedit/*.prg).
