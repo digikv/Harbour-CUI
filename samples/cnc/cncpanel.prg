@@ -12,6 +12,9 @@
  *   ║ main.prg   1234 18.11.26 ║   the current file
  *   ╚═ 12,345 bytes in 3 files ═╝   the marked files
  *
+ * A click on a column title (Name, Size, Date, Time) sorts by it, a second
+ * click turns the order round; the title shows it with an arrow.
+ *
  * The panel moves the cursor, marks files (Ins, right click), goes into
  * folders (Enter, double click) and up (Backspace, Ctrl-PgUp); everything
  * else (copy, delete, view ...) is done by cnc.prg on ::marked().
@@ -29,6 +32,7 @@ CLASS CNCPanel FROM HTWidget
     DATA nCur        INIT 1
     DATA nTop        INIT 1
     DATA nSort       INIT CNC_SORT_NAME
+    DATA lDesc       INIT .F.             /* the sort order turned round */
     DATA lFull       INIT .T.             /* full: name, size, date, time; else brief */
     DATA lHidden     INIT .F.             /* hidden and system files */
     DATA cQuick                           /* quick search text, NIL = off */
@@ -48,9 +52,11 @@ CLASS CNCPanel FROM HTWidget
     METHOD markMask( cMask, lOn )
     METHOD invertMarks()
     METHOD sortFiles()
+    METHOD sortBy( nSort )
     METHOD isBrief()                      INLINE ! ::lFull .OR. ::Fwidth < 40
     METHOD rows()                         INLINE Max( 1, ::Fheight - 5 )
     METHOD title()
+    METHOD sortMark( nCol )
     METHOD ensureVisible()
     METHOD refresh()
     METHOD quickSearch( cText )
@@ -111,21 +117,47 @@ RETURN .T.
 
 /* ".." first, then the folders, then the files */
 METHOD sortFiles() CLASS CNCPanel
-    LOCAL nSort := ::nSort
-    ASort( ::aFiles, , , {| a, b | cnc_Less( a, b, nSort ) } )
+    LOCAL nSort := ::nSort, lDesc := ::lDesc
+    ASort( ::aFiles, , , {| a, b | cnc_Less( a, b, nSort, lDesc ) } )
 RETURN NIL
 
-STATIC FUNCTION cnc_Less( a, b, nSort )
+/* another sort order; the same one again turns it round. The cursor stays
+   on its file. */
+METHOD sortBy( nSort ) CLASS CNCPanel
 
-    LOCAL cA, cB
+    LOCAL a := ::current()
+
+    IF nSort == ::nSort
+        ::lDesc := ! ::lDesc
+    ELSE
+        ::nSort := nSort
+        ::lDesc := .F.
+    ENDIF
+    ::sortFiles()
+    IF a != NIL
+        ::goName( a[ F_NAME ] )
+    ENDIF
+    ::ensureVisible()
+    ::refresh()
+
+RETURN NIL
+
+STATIC FUNCTION cnc_Less( a, b, nSort, lDesc )
 
     IF a[ F_NAME ] == ".."
         RETURN .T.
     ELSEIF b[ F_NAME ] == ".."
         RETURN .F.
     ELSEIF a[ F_DIR ] != b[ F_DIR ]
-        RETURN a[ F_DIR ]
+        RETURN a[ F_DIR ]                         /* the folders stay first */
     ENDIF
+
+RETURN IIF( lDesc, cnc_Before( b, a, nSort ), cnc_Before( a, b, nSort ) )
+
+/* a before b in the order nSort (folders: always by name) */
+STATIC FUNCTION cnc_Before( a, b, nSort )
+
+    LOCAL cA, cB
     IF ! a[ F_DIR ]
         SWITCH nSort
         CASE CNC_SORT_EXT
@@ -257,6 +289,14 @@ METHOD invertMarks() CLASS CNCPanel
     ::refresh()
 RETURN NIL
 
+/* the arrow after the title of the column the panel is sorted by: up in the
+   usual order (A..Z, the newest, the biggest first), down turned round */
+METHOD sortMark( nCol ) CLASS CNCPanel
+    IF ::nSort == nCol .OR. ( nCol == CNC_SORT_NAME .AND. ::nSort == CNC_SORT_EXT )
+        RETURN IIF( ::lDesc, ht_glyph( 0x2193, "v" ), ht_glyph( 0x2191, "^" ) )
+    ENDIF
+RETURN ""
+
 METHOD title() CLASS CNCPanel
 
     LOCAL c := ::cDir, nMax := Max( 6, ::Fwidth - 6 )
@@ -340,9 +380,9 @@ METHOD PROCEDURE paintEvent( event ) CLASS CNCPanel
 
     IF lBrief
         nCol2 := 1 + Int( ( nW - 3 ) / 2 )           /* the separator of the two columns */
-        DispOutAt( 1, 1, cnc_Center( "Name", nCol2 - 1 ), CNC_CLR_HEAD )
+        DispOutAt( 1, 1, cnc_Center( "Name" + ::sortMark( CNC_SORT_NAME ), nCol2 - 1 ), CNC_CLR_HEAD )
         DispOutAt( 1, nCol2, cS, CNC_CLR_PANEL )
-        DispOutAt( 1, nCol2 + 1, cnc_Center( "Name", nW - 2 - nCol2 ), CNC_CLR_HEAD )
+        DispOutAt( 1, nCol2 + 1, cnc_Center( "Name" + ::sortMark( CNC_SORT_NAME ), nW - 2 - nCol2 ), CNC_CLR_HEAD )
         FOR r := 1 TO nRows
             DispOutAt( r + 1, 1, Space( nCol2 - 1 ), CNC_CLR_PANEL )
             DispOutAt( r + 1, nCol2, cS, CNC_CLR_PANEL )
@@ -360,8 +400,9 @@ METHOD PROCEDURE paintEvent( event ) CLASS CNCPanel
                    ht_glyph( 0x2534, "-" ) + Replicate( ht_glyph( 0x2500, "-" ), nW - 2 - nCol2 ) + ht_glyph( 0x2562, "|" ), CNC_CLR_PANEL )
     ELSE
         nNameW := nW - 2 - 26                         /* │ size 10 │ date 8 │ time 5 */
-        DispOutAt( 1, 1, cnc_Center( "Name", nNameW ) + cS + cnc_Center( "Size", 10 ) + cS + ;
-                   cnc_Center( "Date", 8 ) + cS + cnc_Center( "Time", 5 ), CNC_CLR_HEAD )
+        DispOutAt( 1, 1, cnc_Center( IIF( ::nSort == CNC_SORT_EXT, "Name.Ext", "Name" ) + ::sortMark( CNC_SORT_NAME ), nNameW ) + cS + ;
+                   cnc_Center( "Size" + ::sortMark( CNC_SORT_SIZE ), 10 ) + cS + ;
+                   cnc_Center( "Date" + ::sortMark( CNC_SORT_TIME ), 8 ) + cS + cnc_Center( "Time", 5 ), CNC_CLR_HEAD )
         AEval( { nNameW + 1, nNameW + 12, nNameW + 21 }, {| x | DispOutAt( 1, x, cS, CNC_CLR_PANEL ) } )
         FOR r := 1 TO nRows
             i := ::nTop + r - 1
@@ -571,6 +612,16 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS CNCPanel
 
     SWITCH eventMouse:nKey
     CASE K_LBUTTONDOWN
+        IF nR == 1 .AND. nC >= 1 .AND. nC < ::Fwidth - 1      /* the column titles */
+            IF ::isBrief() .OR. nC <= ::Fwidth - 28
+                ::sortBy( IIF( ::nSort == CNC_SORT_EXT, CNC_SORT_EXT, CNC_SORT_NAME ) )
+            ELSEIF nC <= ::Fwidth - 17
+                ::sortBy( CNC_SORT_SIZE )
+            ELSE
+                ::sortBy( CNC_SORT_TIME )
+            ENDIF
+            EXIT
+        ENDIF
         IF i > 0
             ::nCur := i
             ::cQuick := NIL

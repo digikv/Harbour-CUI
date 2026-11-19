@@ -45,7 +45,7 @@ of every command. F1 shows all the keys.
 | F10 | quit |
 | Ctrl-U | swap the panels |
 | Ctrl-P | brief (two columns of names) / full (name, size, date, time) |
-| Ctrl-F3 .. Ctrl-F6 | sort by name, extension, time, size |
+| Ctrl-F3 .. Ctrl-F6, a click on Name / Size / Date | sort by name, extension, time, size; the same again turns the order round (the arrow in the title shows it) |
 | Ctrl-R | read the folders again |
 | Ctrl-F7 | find files by a mask in the folder and below |
 | Ctrl-Ins | the full name of the current file to the clipboard |

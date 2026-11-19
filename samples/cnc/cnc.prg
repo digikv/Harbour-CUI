@@ -71,6 +71,7 @@ PROCEDURE Main( ... )
     FOR i := 1 TO 2
         s_aPanel[ i ] := CNCPanel():new( s_oMain )
         s_aPanel[ i ]:nSort := s_hSet[ "sort" + hb_ntos( i ) ]
+        s_aPanel[ i ]:lDesc := s_hSet[ "desc" + hb_ntos( i ) ]
         s_aPanel[ i ]:lFull := s_hSet[ "full" + hb_ntos( i ) ]
         s_aPanel[ i ]:lHidden := s_hSet[ "hidden" ]
         s_aPanel[ i ]:bEnter := {| o, a | cnc_OpenFile( o, a ) }
@@ -447,10 +448,10 @@ STATIC PROCEDURE cnc_Swap()
 
 RETURN
 
+/* Ctrl-F3 .. Ctrl-F6, the menu, a click on a column title: the same
+   order again turns it round */
 STATIC PROCEDURE cnc_Sort( n, nSort )
-    s_aPanel[ n ]:nSort := nSort
-    s_aPanel[ n ]:reread()
-    s_aPanel[ n ]:refresh()
+    s_aPanel[ n ]:sortBy( nSort )
 RETURN
 
 STATIC PROCEDURE cnc_SetMode( n, lFull )
@@ -1464,7 +1465,8 @@ RETURN ce_Join( { ;
     "  +  -  *      mark / unmark by a mask (*.prg), invert", ;
     "  Ctrl-S, Alt + letter   quick search (Alt-L F C O R open the menus)", ;
     "  Ctrl-P       brief / full view       Ctrl-R     read again", ;
-    "  Ctrl-F3 .. Ctrl-F6     sort by name, extension, time, size", ;
+    "  Ctrl-F3 .. Ctrl-F6     sort by name, extension, time, size; a click", ;
+    "               on Name / Size / Date sorts too; again: the other way", ;
     "", ;
     "FILES", ;
     "  F1  help                    F2  menu of the current file", ;
@@ -1526,7 +1528,8 @@ STATIC PROCEDURE cnc_LoadSettings()
     LOCAL hIni, h, c, cKey
 
     s_hSet := { "theme" => "Norton", "dir1" => "", "dir2" => "", "active" => 1, ;
-                "sort1" => CNC_SORT_NAME, "sort2" => CNC_SORT_NAME, "full1" => .T., "full2" => .T., "hidden" => .F. }
+                "sort1" => CNC_SORT_NAME, "sort2" => CNC_SORT_NAME, "full1" => .T., "full2" => .T., "hidden" => .F., ;
+                "desc1" => .F., "desc2" => .F. }
     s_cIni := cnc_IniPath()
     IF ! hb_FileExists( s_cIni )
         RETURN
@@ -1545,6 +1548,8 @@ STATIC PROCEDURE cnc_LoadSettings()
     s_hSet[ "sort2" ]  := Max( 1, Min( 4, Val( hb_HGetDef( h, "sort2", "1" ) ) ) )
     s_hSet[ "full1" ]  := !( hb_HGetDef( h, "full1", "1" ) == "0" )
     s_hSet[ "full2" ]  := !( hb_HGetDef( h, "full2", "1" ) == "0" )
+    s_hSet[ "desc1" ]  := hb_HGetDef( h, "desc1", "0" ) == "1"
+    s_hSet[ "desc2" ]  := hb_HGetDef( h, "desc2", "0" ) == "1"
     s_hSet[ "hidden" ] := hb_HGetDef( h, "hidden", "0" ) == "1"
 
     h := hb_HGetDef( hIni, "BOOKMARKS", { => } )
@@ -1572,6 +1577,7 @@ STATIC PROCEDURE cnc_SaveSettings()
         h[ "dir" + hb_ntos( i ) ]  := s_aPanel[ i ]:cDir
         h[ "sort" + hb_ntos( i ) ] := hb_ntos( s_aPanel[ i ]:nSort )
         h[ "full" + hb_ntos( i ) ] := IIF( s_aPanel[ i ]:lFull, "1", "0" )
+        h[ "desc" + hb_ntos( i ) ] := IIF( s_aPanel[ i ]:lDesc, "1", "0" )
     NEXT
     h[ "active" ] := hb_ntos( s_nAct )
     h[ "hidden" ] := IIF( s_hSet[ "hidden" ], "1", "0" )
