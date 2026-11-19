@@ -1,7 +1,7 @@
 # CNC
 
-A two-panel file manager in character mode, in the style of Norton Commander, built on
-Harbour-CUI. Copyright (c) 2026 Srđan Dragojlović. Dual licensed: GNU GPL version 3 or later
+A two-panel file manager in character mode, in the style of Norton Commander with options of
+Total Commander, built on Harbour-CUI. Copyright (c) 2026 Srđan Dragojlović. Dual licensed: GNU GPL version 3 or later
 (`COPYING`), or a commercial license from the author — see `LICENSE`.
 
 The keys follow HbCommander, the file manager of HbEdit by Alexander S. Kresin, and the classic
@@ -9,6 +9,15 @@ Norton Commander (F3 view, F4 edit, F5 copy, F6 move, F7 folder, F8 delete, F9 m
 It is written from scratch on Harbour-CUI: no HbEdit code is used. F3 and F4 open the editor of
 [CEdit](../cedit/README.md) (`htcodeedit.prg`, `cebuffer.prg`, `cesyntax.prg`), with syntax
 highlighting.
+
+From Total Commander:
+
+- the columns **Name │ Ext │ Size │ Date** (date and time together); a click on a column title
+  sorts by it, a second click turns the order round, an arrow in the title shows it
+- the **Net** menu: an **FTP server in a panel** (Ctrl-F connect, Ctrl-N new connection,
+  Ctrl-Shift-F disconnect; view, edit, copy and move both ways, make folders, delete, rename on
+  the server; saved connections), and on Windows network drives (map / disconnect) and the
+  computers of the network with their shares
 
 ```
 ╔═════════════════ C:\work\ ═════════════════╗
