@@ -10,15 +10,20 @@ Its GUI sibling is GBro (HWGUI).
 
 ## Download
 
-Ready-to-run programs, no build needed: **[CBro 1.1.2 release](https://github.com/digikv/Harbour-CUI/releases/tag/cbro-1.1.2)**
+Ready-to-run programs, no build needed: **[CBro 1.1.3 release](https://github.com/digikv/Harbour-CUI/releases/tag/cbro-1.1.3)**
 
 | File | Platform |
 |---|---|
-| `cbro-1.1.2-win32.zip` | Windows (32-bit, runs on 64-bit Windows too) |
-| `cbro-1.1.2-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6`, `libodbc2` (unixODBC), `libgpm2` |
+| `cbro-1.1.3-win32.zip` | Windows (32-bit, runs on 64-bit Windows too) |
+| `cbro-1.1.3-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6`, `libodbc2` (unixODBC), `libgpm2` |
 
 Unpack and run `cbro` (`cbro /DEMO` opens demo tables, `cbro /?` lists the parameters). Both are
 the GPL build with the LetoDBf client. To build CBro yourself, see [Build](#build).
+
+New in 1.1.3: Report Form to Word (`.docx`) and Excel (`.xlsx`); SQLite to DBF; the newer field
+types (integer, autoincrement, double, currency, date-time, varchar, blob ...) in the structure
+editor, with a list for the type and keys (+ Ins Del, Alt-A I D S T); the real number of rows an
+SQLite statement changed; Alt-D no longer opens the Harbour debugger.
 
 New in 1.1.2: the Windows program needs no `libsqlite3-0.dll` (SQLite is linked in), and the text
 cursor no longer blinks in a browse or a list.
@@ -54,7 +59,7 @@ under the fullscreen window.
 
 ### Tools used
 
-CBro 1.1.2 was built and tested with:
+CBro 1.1.3 was built and tested with:
 
 | | Windows | Linux |
 |---|---|---|

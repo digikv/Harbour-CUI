@@ -9,15 +9,18 @@ feel at home — but written from scratch on Harbour-CUI: no HbEdit source code 
 
 ## Download
 
-Ready-to-run programs, no build needed: **[CEdit 1.0.1 release](https://github.com/digikv/Harbour-CUI/releases/tag/cedit-1.0.1)**
+Ready-to-run programs, no build needed: **[CEdit 1.0.2 release](https://github.com/digikv/Harbour-CUI/releases/tag/cedit-1.0.2)**
 
 | File | Platform |
 |---|---|
-| `cedit-1.0.1-win32.zip` | Windows 7 and newer (32-bit, runs on 64-bit Windows too) |
-| `cedit-1.0.1-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6` and `libgpm2` |
+| `cedit-1.0.2-win32.zip` | Windows 7 and newer (32-bit, runs on 64-bit Windows too) |
+| `cedit-1.0.2-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6` and `libgpm2` |
 
 Unpack and run `cedit` or `cedit file.txt`. To build CEdit yourself, see
 [Building CEdit, step by step](#building-cedit-step-by-step).
+
+New in 1.0.2: the program icon; no Harbour debugger inside (Alt-D opened it); the text cursor
+is hidden in lists.
 
 New in 1.0.1: the mouse wheel and two-finger scrolling on a touchpad scroll the text and the lists.
 

@@ -2,8 +2,8 @@
 
 Character User Interface (CUI) library for the [Harbour](https://harbour.github.io/) compiler.
 
-**CBro 1.1**, an xBase database browser built on Harbour-CUI (a successor to BroPlus), is ready to run on
-Windows and Linux: [download the release](https://github.com/digikv/Harbour-CUI/releases/tag/cbro-1.1)
+**CBro 1.1.3**, an xBase database browser built on Harbour-CUI (a successor to BroPlus), is ready to run on
+Windows and Linux: [download the release](https://github.com/digikv/Harbour-CUI/releases/tag/cbro-1.1.3)
 ([samples/cbro](samples/cbro/README.md)).
 
 ## Origin
@@ -133,9 +133,9 @@ cd samples/hello && hbmk2 hello.prg hbmk.hbm && ./hello
 | `fonteditor` | Pixel font editor for `.glyphs` files: draw with the mouse, preview, build TTF + X11 fonts (F9) |
 | `game` | NEBULA RAID: a shooter drawn entirely with its own 8×8 font, held keys for moving and firing ([release nebula-raid-1.0](https://github.com/digikv/Harbour-CUI/releases/tag/nebula-raid-1.0)) |
 | `showcase` | Full controls demo |
-| `cbro` | CBro: xBase database browser and file manager, a successor to BroPlus - DBF, LetoDB/LetoDBf, SQL, Excel, scripts (own build: `samples/cbro/README.md`; programs: [release cbro-1.1](https://github.com/digikv/Harbour-CUI/releases/tag/cbro-1.1); dual license GPL-3+ / commercial) |
-| `cedit` | CEdit: text editor with the keys of HbEdit, tabs, find / replace, syntax highlighting (`samples/cedit/README.md`; programs: [release cedit-1.0.1](https://github.com/digikv/Harbour-CUI/releases/tag/cedit-1.0.1); dual license GPL-3+ / commercial) |
-| `cnc` | CNC: two-panel file manager in the style of Norton Commander with options of Total Commander - Name / Ext / Size / Date columns sorted by a click, the Net menu (FTP in a panel, network drives); F3 / F4 with the editor of CEdit (`samples/cnc/README.md`; programs: [release cnc-1.0.1](https://github.com/digikv/Harbour-CUI/releases/tag/cnc-1.0.1); dual license GPL-3+ / commercial) |
+| `cbro` | CBro: xBase database browser and file manager, a successor to BroPlus - DBF, LetoDB/LetoDBf, SQL, Excel, scripts (own build: `samples/cbro/README.md`; programs: [release cbro-1.1.3](https://github.com/digikv/Harbour-CUI/releases/tag/cbro-1.1.3); dual license GPL-3+ / commercial) |
+| `cedit` | CEdit: text editor with the keys of HbEdit, tabs, find / replace, syntax highlighting (`samples/cedit/README.md`; programs: [release cedit-1.0.2](https://github.com/digikv/Harbour-CUI/releases/tag/cedit-1.0.2); dual license GPL-3+ / commercial) |
+| `cnc` | CNC: two-panel file manager in the style of Norton Commander with options of Total Commander - Name / Ext / Size / Date columns sorted by a click, the Net menu (FTP in a panel, network drives); F3 / F4 with the editor of CEdit (`samples/cnc/README.md`; programs: [release cnc-1.0.2](https://github.com/digikv/Harbour-CUI/releases/tag/cnc-1.0.2); dual license GPL-3+ / commercial) |
 
 ```bash
 cd samples/<name> && hbmk2 <name>.prg hbmk.hbm && ./<name>

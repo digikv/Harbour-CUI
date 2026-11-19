@@ -4,7 +4,7 @@
  * Copyright (c) 2026 Srđan Dragojlović - dual licensed, see LICENSE
  */
 
-#define CNC_VERSION     "1.0.1"
+#define CNC_VERSION     "1.0.2"
 
 /* a panel entry: { cName, nSize, dDate, cTime, cAttr, lDir, lMarked } */
 #define F_NAME          1
