@@ -3155,7 +3155,7 @@ STATIC FUNCTION StructEditor( cFile, aStru )
 
     cFile := PadR( cFile, 200 )
     nH := Max( 20, Min( 28, ht_ScreenMaxRow() - 4 ) )
-    dlg := HTDialog():new( NIL, "Create/Modify Structure" )
+    dlg := CBStruDlg():new( NIL, "Create/Modify Structure" )
     dlg:resize( 56, nH )
 
     oGet := HTGet():new( dlg )
@@ -3178,40 +3178,36 @@ STATIC FUNCTION StructEditor( cFile, aStru )
     brw:onActivated := {|| IIF( brw:browse():colPos == 2, ;
                                 ( StructPickType( aStru, aRec ), brw:refreshAll() ), brw:beginEdit( 0 ) ) }
 
-    /* the buttons and their keys (F-keys and Ctrl: Ins / Del belong to the
-       cell being edited) */
+    /* the buttons and their keys: + Ins Del work while the browse has the
+       keys and no cell is edited (CBStruDlg), the Alt keys always */
     nBtn := 37
-    btn := HTPushButton():new( "Add      F3", dlg )
-    btn:setGeometry( nBtn, 3, 15, 1 )
+    btn := HTPushButton():new( "Add        +", dlg )
+    btn:setGeometry( nBtn, 3, 16, 1 )
     btn:onClicked := {|| StructNewField( dlg, brw, aStru, aRec, .F. ) }
-    btn := HTPushButton():new( "Insert   F4", dlg )
-    btn:setGeometry( nBtn, 5, 15, 1 )
+    btn := HTPushButton():new( "Insert   Ins", dlg )
+    btn:setGeometry( nBtn, 5, 16, 1 )
     btn:onClicked := {|| StructNewField( dlg, brw, aStru, aRec, .T. ) }
-    btn := HTPushButton():new( "Delete   F8", dlg )
-    btn:setGeometry( nBtn, 7, 15, 1 )
+    btn := HTPushButton():new( "Delete   Del", dlg )
+    btn:setGeometry( nBtn, 7, 16, 1 )
     btn:onClicked := {|| StructDelField( brw, aStru, aRec ) }
-    btn := HTPushButton():new( "Types... F5", dlg )
-    btn:setGeometry( nBtn, 9, 15, 1 )
+    btn := HTPushButton():new( "Types...  F5", dlg )
+    btn:setGeometry( nBtn, 9, 16, 1 )
     btn:onClicked := {|| StructPickType( aStru, aRec ), brw:refreshAll() }
     HTLabel():new( "C N D L M I + B Y", dlg ):move( nBtn, 11 )
     HTLabel():new( "F @ = ^ Q W", dlg ):move( nBtn, 12 )
     HTLabel():new( "Enter edits a cell", dlg ):move( nBtn, 13 )
     HTLabel():new( "(Type: a list)", dlg ):move( nBtn, 14 )
-    HTLabel():new( "Ctrl-Y deletes too", dlg ):move( nBtn, 15 )
+    HTLabel():new( "Alt-A I D S T too", dlg ):move( nBtn, 15 )
 
-    btn := HTPushButton():new( "Save     F2", dlg )
-    btn:setGeometry( nBtn, nH - 6, 15, 1 )
+    btn := HTPushButton():new( "Save      F2", dlg )
+    btn:setGeometry( nBtn, nH - 6, 16, 1 )
     btn:onClicked := {|| dlg:accept() }
-    btn := HTPushButton():new( "Cancel  Esc", dlg )
-    btn:setGeometry( nBtn, nH - 4, 15, 1 )
+    btn := HTPushButton():new( "Cancel   Esc", dlg )
+    btn:setGeometry( nBtn, nH - 4, 16, 1 )
     btn:onClicked := {|| dlg:reject() }
 
-    dlg:onKey( K_F3, {|| StructNewField( dlg, brw, aStru, aRec, .F. ) } )
-    dlg:onKey( K_F4, {|| StructNewField( dlg, brw, aStru, aRec, .T. ) } )
-    dlg:onKey( K_F8, {|| StructDelField( brw, aStru, aRec ) } )
-    dlg:onKey( K_CTRL_Y, {|| StructDelField( brw, aStru, aRec ) } )
-    dlg:onKey( K_F5, {|| StructPickType( aStru, aRec ), brw:refreshAll() } )
-    dlg:onKey( K_F2, {|| dlg:accept() } )
+    dlg:bKeys := {| nKey | StructKey( nKey, dlg, brw, aStru, aRec ) }
+    dlg:setFocusChild( brw )                   /* the fields have the keys (Tab: File) */
 
     IF dlg:exec() == HT_DIALOG_ACCEPTED
         RETURN { AllTrim( cFile ), aStru }
@@ -3219,7 +3215,44 @@ STATIC FUNCTION StructEditor( cFile, aStru )
 
 RETURN NIL
 
-/* Add (F3) / Insert (F4): a new field at the end / above the current one;
+/* the keys of the structure editor; .T. = done */
+STATIC FUNCTION StructKey( nKey, dlg, brw, aStru, aRec )
+
+    LOCAL lBrowse := dlg:focusWidget() == brw .AND. ! brw:isEditing()
+
+    DO CASE
+    CASE nKey == K_ALT_A .OR. ( lBrowse .AND. nKey == 43 )             /* + */
+        StructNewField( dlg, brw, aStru, aRec, .F. )
+    CASE nKey == K_ALT_I .OR. ( lBrowse .AND. nKey == K_INS )
+        StructNewField( dlg, brw, aStru, aRec, .T. )
+    CASE nKey == K_ALT_D .OR. ( lBrowse .AND. ( nKey == K_DEL .OR. nKey == K_CTRL_Y ) )
+        StructDelField( brw, aStru, aRec )
+    CASE nKey == K_ALT_T .OR. nKey == K_F5
+        StructPickType( aStru, aRec )
+        brw:refreshAll()
+    CASE nKey == K_ALT_S .OR. nKey == K_F2
+        dlg:accept()
+    OTHERWISE
+        RETURN .F.
+    ENDCASE
+
+RETURN .T.
+
+/* the dialog of the structure editor: its own keys first (bKeys) */
+CLASS CBStruDlg FROM HTDialog
+    DATA bKeys
+    METHOD keyEvent( keyEvent )
+ENDCLASS
+
+METHOD PROCEDURE keyEvent( keyEvent ) CLASS CBStruDlg
+    IF HB_ISEVALITEM( ::bKeys ) .AND. Eval( ::bKeys, keyEvent:key )
+        keyEvent:accept()
+        RETURN
+    ENDIF
+    ::super:keyEvent( keyEvent )
+RETURN
+
+/* Add (+) / Insert (Ins): a new field at the end / above the current one;
    the browse gets the keys and the name of the new field is edited */
 STATIC PROCEDURE StructNewField( dlg, brw, aStru, aRec, lInsert )
 
@@ -3244,7 +3277,7 @@ STATIC PROCEDURE StructNewField( dlg, brw, aStru, aRec, lInsert )
 
 RETURN
 
-/* Delete (F8, Ctrl-Y): the current field; one field always stays */
+/* Delete (Del, Ctrl-Y): the current field; one field always stays */
 STATIC PROCEDURE StructDelField( brw, aStru, aRec )
     IF Len( aStru ) > 1
         hb_ADel( aStru, aRec[ 1 ], .T. )
