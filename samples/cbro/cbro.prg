@@ -3178,37 +3178,80 @@ STATIC FUNCTION StructEditor( cFile, aStru )
     brw:onActivated := {|| IIF( brw:browse():colPos == 2, ;
                                 ( StructPickType( aStru, aRec ), brw:refreshAll() ), brw:beginEdit( 0 ) ) }
 
+    /* the buttons and their keys (F-keys and Ctrl: Ins / Del belong to the
+       cell being edited) */
     nBtn := 37
-    btn := HTPushButton():new( "Add", dlg )
-    btn:setGeometry( nBtn, 3, 14, 1 )
-    btn:onClicked := {|| AAdd( aStru, { Space( 10 ), "C", 10, 0 } ), brw:browse():goBottom(), brw:refreshAll() }
-    btn := HTPushButton():new( "Insert", dlg )
-    btn:setGeometry( nBtn, 5, 14, 1 )
-    btn:onClicked := {|| hb_AIns( aStru, aRec[ 1 ], { Space( 10 ), "C", 10, 0 }, .T. ), brw:refreshAll() }
-    btn := HTPushButton():new( "Delete", dlg )
-    btn:setGeometry( nBtn, 7, 14, 1 )
-    btn:onClicked := {|| IIF( Len( aStru ) > 1, ( hb_ADel( aStru, aRec[ 1 ], .T. ), ;
-        aRec[ 1 ] := Min( aRec[ 1 ], Len( aStru ) ), brw:refreshAll() ), NIL ) }
-    btn := HTPushButton():new( "Types...", dlg )
-    btn:setGeometry( nBtn, 9, 14, 1 )
+    btn := HTPushButton():new( "Add      F3", dlg )
+    btn:setGeometry( nBtn, 3, 15, 1 )
+    btn:onClicked := {|| StructNewField( dlg, brw, aStru, aRec, .F. ) }
+    btn := HTPushButton():new( "Insert   F4", dlg )
+    btn:setGeometry( nBtn, 5, 15, 1 )
+    btn:onClicked := {|| StructNewField( dlg, brw, aStru, aRec, .T. ) }
+    btn := HTPushButton():new( "Delete   F8", dlg )
+    btn:setGeometry( nBtn, 7, 15, 1 )
+    btn:onClicked := {|| StructDelField( brw, aStru, aRec ) }
+    btn := HTPushButton():new( "Types... F5", dlg )
+    btn:setGeometry( nBtn, 9, 15, 1 )
     btn:onClicked := {|| StructPickType( aStru, aRec ), brw:refreshAll() }
     HTLabel():new( "C N D L M I + B Y", dlg ):move( nBtn, 11 )
     HTLabel():new( "F @ = ^ Q W", dlg ):move( nBtn, 12 )
     HTLabel():new( "Enter edits a cell", dlg ):move( nBtn, 13 )
     HTLabel():new( "(Type: a list)", dlg ):move( nBtn, 14 )
+    HTLabel():new( "Ctrl-Y deletes too", dlg ):move( nBtn, 15 )
 
-    btn := HTPushButton():new( "Save", dlg )
-    btn:setGeometry( nBtn, nH - 6, 14, 1 )
+    btn := HTPushButton():new( "Save     F2", dlg )
+    btn:setGeometry( nBtn, nH - 6, 15, 1 )
     btn:onClicked := {|| dlg:accept() }
-    btn := HTPushButton():new( "Cancel", dlg )
-    btn:setGeometry( nBtn, nH - 4, 14, 1 )
+    btn := HTPushButton():new( "Cancel  Esc", dlg )
+    btn:setGeometry( nBtn, nH - 4, 15, 1 )
     btn:onClicked := {|| dlg:reject() }
+
+    dlg:onKey( K_F3, {|| StructNewField( dlg, brw, aStru, aRec, .F. ) } )
+    dlg:onKey( K_F4, {|| StructNewField( dlg, brw, aStru, aRec, .T. ) } )
+    dlg:onKey( K_F8, {|| StructDelField( brw, aStru, aRec ) } )
+    dlg:onKey( K_CTRL_Y, {|| StructDelField( brw, aStru, aRec ) } )
+    dlg:onKey( K_F5, {|| StructPickType( aStru, aRec ), brw:refreshAll() } )
+    dlg:onKey( K_F2, {|| dlg:accept() } )
 
     IF dlg:exec() == HT_DIALOG_ACCEPTED
         RETURN { AllTrim( cFile ), aStru }
     ENDIF
 
 RETURN NIL
+
+/* Add (F3) / Insert (F4): a new field at the end / above the current one;
+   the browse gets the keys and the name of the new field is edited */
+STATIC PROCEDURE StructNewField( dlg, brw, aStru, aRec, lInsert )
+
+    LOCAL oOld := dlg:focusWidget()
+
+    IF lInsert
+        hb_AIns( aStru, aRec[ 1 ], { Space( 10 ), "C", 10, 0 }, .T. )
+    ELSE
+        AAdd( aStru, { Space( 10 ), "C", 10, 0 } )
+        brw:browse():goBottom()
+    ENDIF
+    brw:browse():colPos := 1
+    brw:refreshAll()
+    IF ! oOld == brw
+        dlg:setFocusChild( brw )
+        IF oOld != NIL
+            oOld:focusOutEvent( NIL )
+        ENDIF
+        brw:focusInEvent( NIL )
+    ENDIF
+    brw:beginEdit( 0 )
+
+RETURN
+
+/* Delete (F8, Ctrl-Y): the current field; one field always stays */
+STATIC PROCEDURE StructDelField( brw, aStru, aRec )
+    IF Len( aStru ) > 1
+        hb_ADel( aStru, aRec[ 1 ], .T. )
+        aRec[ 1 ] := Min( aRec[ 1 ], Len( aStru ) )
+        brw:refreshAll()
+    ENDIF
+RETURN
 
 /* the field types of DBFCDX: { cType, cText, nLen, nDec } (nLen 0 = as typed) */
 STATIC FUNCTION StructTypes()
