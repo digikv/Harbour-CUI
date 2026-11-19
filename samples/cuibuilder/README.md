@@ -251,7 +251,9 @@ default GT, then the project's libraries, the Harbour-CUI library, the Harbour l
 
 What is "changed": an object is older than its source or than a local header that the source
 includes (`#include "x.ch"`, in its folder or `incpath`); a program is linked again when an
-object or a library is newer than it.
+object or a library is newer than it. When the flags of the compilers change (`-d...`, `-gc3`,
+include folders, C flags - kept in `_cbflags.txt` of the objects folder), everything is compiled
+again, as the objects were made with the old ones.
 
 ## Dialogs of Harbour-CUI
 

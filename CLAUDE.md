@@ -442,7 +442,8 @@ samples/          Demo applications (human-facing, require a display)
                   bcc; cmd_comp/res/lib/exe), .hwprj read/written (:project parts, {filters}, @lists, sub
                   projects; read with lEdit=.T. keeps filters/macros raw for saving), .hbp/.hbm/.hbc read
                   (${hb_name} in an .hbc = its own name), _cbstub.c sets the default GT (as hbmk2), make
-                  mode by obj time vs source + local #includes, relink when an object / library is newer.
+                  mode by obj time vs source + local #includes, relink when an object / library is newer;
+                  the flags of a build in <objdir>/_cbflags.txt: other flags (or objects without it) = all again.
                   cuibuilder.prg = screen (files, options, messages, CEdit editor at the error line),
                   cuibc.prg = command line (gtcgi). cbwin.c CB_RUNHIDDEN / CB_STARTPROGRAM. Focus a child
                   with setFocusChild() (setFocus() does not move it). cuibuilder.hwprj builds itself.

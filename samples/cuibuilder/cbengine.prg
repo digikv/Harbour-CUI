@@ -1306,7 +1306,7 @@ STATIC FUNCTION cb_BuildOne( oP, hSet, lClean, bOut, bStop )
     LOCAL hComp := cb_Compiler( hSet, oP:cComp ), hHb := hSet[ "harbour" ], hGui := hSet[ "guilib" ]
     LOCAL cErr, cObjDir, cFile, cSrc, cExt, cObj, cC, aObjs := {}, aRes := {}, aLibFiles := {}
     LOCAL lRelink := .F., cOut, tOut, cCmd, cIncs, cHbIncs, cFlags, cLibs, cLibPaths, cGt, cStub
-    LOCAL nComp := 0, nSkip := 0, nRes, cP, cFam, cHbBin, aHw := {}, cRes, cName, l, cLibF, aIncDirs
+    LOCAL nComp := 0, nSkip := 0, nRes, cP, cFam, cHbBin, aHw := {}, cRes, cName, l, cLibF, aIncDirs, lAll, cSig
 
     IF hComp == NIL
         Eval( bOut, "Unknown compiler: " + oP:cComp + " (cuibuild.ini [C_COMPILER] id=)", CB_MSG_ERROR )
@@ -1357,6 +1357,17 @@ STATIC FUNCTION cb_BuildOne( oP, hSet, lClean, bOut, bStop )
     cHbBin := cb_DirSep( hHb[ "harbour_bin_path" ] ) + "harbour" + IIF( "windows" $ Lower( OS() ), ".exe", "" )
     cFlags := cb_Join( IIF( oP:cDefFlagsC == NIL, hComp[ "def_cflags" ], oP:cDefFlagsC ), oP:cFlagsC )
 
+    /* the flags of the compilers changed (-d..., -gc3, include folders, C flags): the objects
+       are of the old flags - everything is compiled again (as -rebuild) */
+    lAll := lClean .OR. ! oP:lMake
+    cSig := hHb[ "def_flags" ] + "|" + oP:cFlagsPrg + "|" + cHbIncs + "|" + cFlags + "|" + cFam
+    IF ! lAll .AND. IIF( hb_FileExists( cObjDir + "_cbflags.txt" ), ! hb_MemoRead( cObjDir + "_cbflags.txt" ) == cSig, ;
+                         Len( Directory( cObjDir + "*" + cb_FamDef( cFam, "obj" ) ) ) > 0 )     /* objects of unknown flags */
+        Eval( bOut, "The flags of the compilers changed: everything is compiled again", CB_MSG_INFO )
+        lAll := .T.
+        lRelink := .T.
+    ENDIF
+
     /* the sources */
     FOR EACH cFile IN oP:aFiles
         IF bStop != NIL .AND. Eval( bStop )
@@ -1389,7 +1400,7 @@ STATIC FUNCTION cb_BuildOne( oP, hSet, lClean, bOut, bStop )
                 LOOP                            /* no resources in a library / on Linux */
             ENDIF
             cRes := cObjDir + cName + IIF( cFam == "mingw", "_rc", "" ) + cb_FamDef( cFam, "resobj" )
-            IF ! lClean .AND. oP:lMake .AND. cb_UpToDate( cRes, cSrc, aIncDirs )
+            IF ! lAll .AND. cb_UpToDate( cRes, cSrc, aIncDirs )
                 nSkip++
             ELSE
                 cCmd := cb_Fill( cb_Tmpl( hComp, "res" ), hComp, hSet, ;
@@ -1407,7 +1418,7 @@ STATIC FUNCTION cb_BuildOne( oP, hSet, lClean, bOut, bStop )
             RETURN .F.
         ENDIF
         cObj := cObjDir + cName + cb_FamDef( cFam, "obj" )
-        IF ! lClean .AND. oP:lMake .AND. cb_UpToDate( cObj, cSrc, aIncDirs )
+        IF ! lAll .AND. cb_UpToDate( cObj, cSrc, aIncDirs )
             nSkip++
             AAdd( aObjs, cObj )
             LOOP
@@ -1433,6 +1444,8 @@ STATIC FUNCTION cb_BuildOne( oP, hSet, lClean, bOut, bStop )
         lRelink := .T.
         AAdd( aObjs, cObj )
     NEXT
+
+    hb_MemoWrit( cObjDir + "_cbflags.txt", cSig )
 
     /* the GT and the main function of a program: a C stub, as hbmk2 makes */
     cGt := oP:gt( hSet )       /* none: as hbmk2, the program's own REQUEST HB_GT_xxx_DEFAULT
@@ -1522,7 +1535,10 @@ STATIC FUNCTION cb_BuildOne( oP, hSet, lClean, bOut, bStop )
         Eval( bOut, hb_FNameNameExt( cOut ) + " is up to date (" + hb_ntos( nSkip ) + " files unchanged)", CB_MSG_OK )
         RETURN .T.
     ENDIF
-    FErase( cOut )
+    IF hb_FileExists( cOut ) .AND. FErase( cOut ) != 0
+        Eval( bOut, "Cannot replace " + cOut + ": it is in use (is the program running?)", CB_MSG_ERROR, cOut, 0 )
+        RETURN .F.
+    ENDIF
     IF oP:lLib
         cCmd := cb_Fill( cb_Tmpl( hComp, "lib" ), hComp, hSet, ;
             { "out" => cb_Quote( cOut ), "objs" => cb_ObjList( aObjs, cFam ), ;
