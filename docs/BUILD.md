@@ -102,6 +102,7 @@ from the LetoDBf / LetoDB sources with their `rddleto.hbp` - see
 |---|---|
 | `Cannot open ..\..\..\xlsx\XLSXClass.prg, assumed external` | an older `cbro.hbp`: the XLSX class is not next to the repository. Update Harbour-CUI (`git pull`) - CBro is then built without Excel - or clone https://github.com/digikv/xlsx next to the Harbour-CUI folder |
 | `undefined reference to HB_FUN_WORKBOOK` (link) | the same: the XLSX class was not compiled in |
+| `cbro.exe` asks for `libsqlite3-0.dll` | the SQLite of MSYS2 was linked (as a DLL): Harbour's own SQLite was not built. Build it once - `hbmk2 sqlite3.hbp` in `<harbour>\contrib\3rd\sqlite3`, copy `libsqlite3.a` to `<harbour>\lib\win\mingw` - and build CBro again. `objdump -p cbro.exe \| findstr DLL` must list only Windows DLLs |
 | `cannot find -lrddleto` | the LETO client library is not in `samples/cbro/lib/<platform>/letodbf` (or `letodb`): build it as above |
 | `cannot find -lhbtui` | the library was not built (`hbmk2 hbtui.hbp` in the repository root), or with another compiler |
 | boxes instead of Chinese / Japanese / Korean on Linux | the "Unifont Cell" X font: `tools/unifont-cell.sh` (see DEPENDENCIES.md) |

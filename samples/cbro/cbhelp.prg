@@ -17,7 +17,7 @@
 #include "hbtui.ch"
 #include "inkey.ch"
 
-#define CB_VERSION   "1.1.1"
+#define CB_VERSION   "1.1.2"
 #define KEY_COL      27          /* width of the key column */
 
 /*---------------------------------------------------------------- the text view */
