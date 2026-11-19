@@ -1,0 +1,19 @@
+# CNC - a two-panel file manager in the style of Norton Commander (Harbour-CUI)
+# build.bat (Windows) / build.sh (Linux) build the library first when it is missing.
+#   hbmk2 cnc.hbp
+# F3 / F4 use the editor of CEdit (../cedit).
+
+-w3 -es2
+-ocnc
+-i../cedit
+
+../../hbtui.hbc
+{win}hbwin.hbc
+
+cnc.prg
+cncpanel.prg
+../cedit/htcodeedit.prg
+../cedit/cebuffer.prg
+../cedit/cesyntax.prg
+
+{unix}-lX11
