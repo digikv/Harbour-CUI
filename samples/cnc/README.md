@@ -68,9 +68,9 @@ Commands - Compare directories marks the files that are only in one panel or new
 | Ctrl-F | FTP connect: the saved connections, or a new one |
 | Ctrl-N | FTP new connection: host (or `ftp://user@host:port/folder`), port, user, password, folder; "Save as" keeps it in `cnc.ini` (without the password) |
 | Ctrl-Shift-F | FTP disconnect: the panel goes back to its local folder |
-| Net - Map network drive | `net use X: \server\share` (Windows) |
+| Net - Map network drive | `net use X: \\server\share` (Windows) |
 | Net - Disconnect network drive | `net use X: /delete` (Windows) |
-| Net - Network computers | `net view`: the computers, then their shares; a share opens in the panel as `\pc\share\` (Windows) |
+| Net - Network computers | `net view`: the computers, then their shares; a share opens in the panel as `\\pc\share\` (Windows) |
 
 On an FTP panel Enter goes into folders, Enter / F3 view a file, F4 edits it (saved back to the
 server when changed), F5 / F6 copy / move to the local panel and from it (folders too), F7 makes
