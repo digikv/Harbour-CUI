@@ -55,7 +55,8 @@ of every command. F1 shows all the keys.
 | Enter, double click | into a folder; a program runs, a document opens in its program |
 | Backspace, Ctrl-PgUp | the parent folder |
 | Ins, right click | mark a file; F5 / F6 / F8 work on the marked files, else on the current one |
-| + / - / * | mark / unmark by a mask (`*.prg`), invert the marks |
+| typing | goes to the command line, as in Norton Commander (the cursor stays there); Enter runs it, Backspace / Esc correct it - with an empty command line Enter and Backspace are the panel's |
+| + / - / * | mark / unmark by a mask (`*.prg`), invert the marks (while the command line is empty) |
 | Ctrl-S, Alt + letter | quick search (Alt-L, F, C, O, R open the menus) |
 | F1 / F2 | help / the commands for the current file |
 | F3 | view (on a folder: its size, files and folders) |
@@ -70,14 +71,14 @@ of every command. F1 shows all the keys.
 | Ctrl-R | read the folders again |
 | Ctrl-F7 | find files by a mask in the folder and below |
 | Ctrl-Ins | the full name of the current file to the clipboard |
-| D, Ctrl-F1 / Ctrl-F2 | type a folder for the active / left / right panel |
+| `cd folder`, Ctrl-F1 / Ctrl-F2 | another folder for the active panel (typed) / the left / the right panel |
 | Alt-F1 / Alt-F2 | drive of the left / right panel (Linux: /, home, /mnt, /media) |
-| H | the folders visited |
-| M / ' | set a bookmark (a, s, d) on the folder / go to a bookmark |
-| Ctrl-O | the command line; Enter runs the command in the folder of the active panel, Esc back |
+| Alt-Down | the folders visited |
+| Ctrl-D | the directory hotlist (as in Total Commander): go to a folder, add this one, remove one |
+| Ctrl-O | the command line takes all the keys (to edit a long command); Esc gives them back |
 | Ctrl-Enter | the current name to the command line |
 | Ctrl-W | the output of the last command |
-| = | a Harbour expression: `=1024*16`, `=Date()` (also `=...` in the command line) |
+| `=expr` | typed in the command line: a Harbour expression, `=1024*16`, `=Date()` |
 
 Commands - Compare directories marks the files that are only in one panel or newer there.
 

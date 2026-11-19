@@ -42,7 +42,7 @@ STATIC s_nAct := 1                      /* the active panel */
 STATIC s_hSet                           /* settings (cnc.ini [OPTIONS]) */
 STATIC s_cIni := ""
 STATIC s_aHist := {}                    /* folders visited, the newest first */
-STATIC s_hMarks := { => }               /* bookmarks: "a" / "s" / "d" -> folder */
+STATIC s_aHot := {}                     /* the directory hotlist (Ctrl-D) */
 STATIC s_cOutput := ""                  /* the output of the last command (Ctrl-W) */
 STATIC s_cOutCmd := ""
 STATIC s_hFtp := { => }                 /* the FTP connections (cnc.ini [FTP]) */
@@ -81,6 +81,7 @@ PROCEDURE Main( ... )
         s_aPanel[ i ]:bEnter := {| o, a | cnc_OpenFile( o, a ) }
         s_aPanel[ i ]:bActivate := {| o | cnc_Activated( o ) }
         s_aPanel[ i ]:bChanged := {| o | cnc_Changed( o ) }
+        s_aPanel[ i ]:bCursor := {| o | cnc_CmdCursor( o ) }
     NEXT
     s_oPrompt := HTLabel():new( "", s_oMain )
     s_oCmd := CNCLine():new( s_oMain )
@@ -156,7 +157,11 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS CNCMain
         keyEvent:accept()
         cnc_NameToCmd()
         RETURN
-    CASE lPanel .AND. s_aPanel[ s_nAct ]:cQuick == NIL .AND. cnc_LetterKey( nKey )
+    CASE nKey == K_ALT_DOWN
+        keyEvent:accept()
+        cnc_History()
+        RETURN
+    CASE lPanel .AND. s_aPanel[ s_nAct ]:cQuick == NIL .AND. cnc_TypeKey( nKey )
         keyEvent:accept()
         RETURN
     CASE lPanel .AND. ! Empty( c := cnc_AltLetter( nKey ) ) .AND. !( c $ "LFCNOR" )
@@ -174,42 +179,42 @@ METHOD PROCEDURE screenResized() CLASS CNCMain
     cnc_Arrange()
 RETURN
 
-/* the letters of HbCommander (only while a panel has the focus) */
-STATIC FUNCTION cnc_LetterKey( nKey )
+/* as in Norton Commander, while a panel has the keys: what is typed goes
+   to the command line (the cursor stays there); + - * mark files while it
+   is empty; Enter runs it, Backspace takes a character back, Esc clears it.
+   With an empty command line Enter and Backspace are the panel's. */
+STATIC FUNCTION cnc_TypeKey( nKey )
 
-    SWITCH nKey
-    CASE 100                                     /* d D */
-    CASE 68
-        cnc_ChDir( s_nAct )
-        EXIT
-    CASE 104                                     /* h H */
-    CASE 72
-        cnc_History()
-        EXIT
-    CASE 109                                     /* m M */
-    CASE 77
-        cnc_BookmarkSet()
-        EXIT
-    CASE 39                                      /* ' */
-        cnc_BookmarkGo()
-        EXIT
-    CASE 61                                      /* = */
-        cnc_Calc( "" )
-        EXIT
-    CASE 43                                      /* + */
-        cnc_SelectMask( .T. )
-        EXIT
-    CASE 45                                      /* - */
-        cnc_SelectMask( .F. )
-        EXIT
-    CASE 42                                      /* * */
+    LOCAL cCmd := s_oCmd:text, c
+
+    DO CASE
+    CASE nKey == K_ENTER .AND. ! Empty( cCmd )
+        cnc_RunLine()
+    CASE nKey == K_BS .AND. ! Empty( cCmd )
+        cnc_SetCmd( hb_StrShrink( cCmd, 1 ) )
+    CASE nKey == K_ESC .AND. ! Empty( cCmd )
+        cnc_SetCmd( "" )
+    CASE Empty( cCmd ) .AND. ( nKey == 43 .OR. nKey == 45 )       /* + - */
+        cnc_SelectMask( nKey == 43 )
+    CASE Empty( cCmd ) .AND. nKey == 42                           /* * */
         s_aPanel[ s_nAct ]:invertMarks()
-        EXIT
+    CASE !( ( c := ht_keyText( nKey ) ) == "" )         /* also a space */
+        cnc_SetCmd( cCmd + c )
     OTHERWISE
         RETURN .F.
-    ENDSWITCH
+    ENDCASE
 
 RETURN .T.
+
+STATIC PROCEDURE cnc_SetCmd( cText )
+    s_oCmd:setText( cText )
+    s_oMain:repaintChild( s_oCmd )
+    HTApplication():syncCursor()
+RETURN
+
+/* the text cursor of an active panel: at the end of the command line */
+STATIC FUNCTION cnc_CmdCursor( oPanel )
+RETURN { s_oCmd:y - oPanel:y, s_oCmd:x - oPanel:x + Min( ht_strWidth( s_oCmd:text ), Max( 0, s_oCmd:width - 1 ) ) }
 
 STATIC FUNCTION cnc_CtrlKey( c )
 
@@ -241,6 +246,9 @@ STATIC FUNCTION cnc_CtrlKey( c )
         EXIT
     CASE "N"
         cnc_FtpConnect( .T. )
+        EXIT
+    CASE "D"                                     /* the directory hotlist (Total Commander) */
+        cnc_Hotlist()
         EXIT
     OTHERWISE
         RETURN .F.
@@ -332,10 +340,9 @@ STATIC PROCEDURE cnc_BuildMenu()
 
             oMenu := s_oBar:addMenu( "Commands" )
             cnc_Item( oMenu, "Find file", "Ctrl-F7", K_CTRL_F7, {|| cnc_Find() } )
-            cnc_Item( oMenu, "Directory history", "H", NIL, {|| cnc_History() } )
-            cnc_Item( oMenu, "Change directory", "D", NIL, {|| cnc_ChDir( s_nAct ) } )
-            cnc_Item( oMenu, "Set bookmark", "M", NIL, {|| cnc_BookmarkSet() } )
-            cnc_Item( oMenu, "Go to bookmark", "'", NIL, {|| cnc_BookmarkGo() } )
+            cnc_Item( oMenu, "Directory history", "Alt-Down", NIL, {|| cnc_History() } )
+            cnc_Item( oMenu, "Directory hotlist", "Ctrl-D", NIL, {|| cnc_Hotlist() } )
+            cnc_Item( oMenu, "Change directory", "cd ...", NIL, {|| cnc_ChDir( s_nAct ) } )
             oMenu:addSeparator()
             cnc_Item( oMenu, "Swap panels", "Ctrl-U", NIL, {|| cnc_Swap() } )
             cnc_Item( oMenu, "Compare directories", "", NIL, {|| cnc_Compare() } )
@@ -343,7 +350,7 @@ STATIC PROCEDURE cnc_BuildMenu()
             oMenu:addSeparator()
             cnc_Item( oMenu, "Command line", "Ctrl-O", NIL, {|| cnc_Console() } )
             cnc_Item( oMenu, "Last output", "Ctrl-W", NIL, {|| cnc_ShowOutput() } )
-            cnc_Item( oMenu, "Calculator", "=", NIL, {|| cnc_Calc( "" ) } )
+            cnc_Item( oMenu, "Calculator", "=expr", NIL, {|| cnc_Calc( "" ) } )
 
             oMenu := s_oBar:addMenu( "Net" )
             cnc_Item( oMenu, "FTP connect...", "Ctrl-F", NIL, {|| cnc_FtpConnect( .F. ) } )
@@ -599,38 +606,33 @@ STATIC PROCEDURE cnc_History()
     ENDIF
 RETURN
 
-/* M: a bookmark (a, s, d) on the folder of the active panel */
-STATIC PROCEDURE cnc_BookmarkSet()
+/* Ctrl-D: the directory hotlist (as in Total Commander): a folder of the
+   list, add the folder of the active panel, or remove one */
+STATIC PROCEDURE cnc_Hotlist()
 
-    LOCAL aKeys := { "a", "s", "d" }, aItems := {}, n
+    LOCAL aItems := AClone( s_aHot ), n, cDir := cnc_Act():cDir
 
-    AEval( aKeys, {| c | AAdd( aItems, c + "  " + hb_HGetDef( s_hMarks, c, "" ) ) } )
-    n := cnc_List( "Set bookmark on " + cnc_Act():cDir, aItems, 1 )
-    IF n > 0
-        s_hMarks[ aKeys[ n ] ] := cnc_Act():cDir
+    AAdd( aItems, "<Add " + cDir + ">" )
+    IF ! Empty( s_aHot )
+        AAdd( aItems, "<Remove a folder...>" )
     ENDIF
-
-RETURN
-
-/* ': go to a bookmark */
-STATIC PROCEDURE cnc_BookmarkGo()
-
-    LOCAL aKeys := {}, aItems := {}, c, n
-
-    FOR EACH c IN { "a", "s", "d" }
-        IF ! Empty( hb_HGetDef( s_hMarks, c, "" ) )
-            AAdd( aKeys, c )
-            AAdd( aItems, c + "  " + s_hMarks[ c ] )
+    n := cnc_List( "Directory hotlist", aItems, 1 )
+    DO CASE
+    CASE n == 0
+    CASE n <= Len( s_aHot )
+        cnc_GoDir( s_nAct, s_aHot[ n ] )
+    CASE n == Len( s_aHot ) + 1
+        IF cnc_Act():isNet()
+            HTToast():show( "Not for an FTP folder (Ctrl-F keeps the connections)", 2000, HT_CLR_TOAST_INFO )
+        ELSEIF AScan( s_aHot, {| c | cnc_SamePath( c, cDir ) } ) == 0
+            AAdd( s_aHot, cDir )
         ENDIF
-    NEXT
-    IF Empty( aKeys )
-        HTToast():show( "No bookmarks: M sets one", 1500, HT_CLR_TOAST_INFO )
-        RETURN
-    ENDIF
-    n := cnc_List( "Go to bookmark", aItems, 1 )
-    IF n > 0
-        cnc_GoDir( s_nAct, s_hMarks[ aKeys[ n ] ] )
-    ENDIF
+    OTHERWISE
+        n := cnc_List( "Remove from the hotlist", s_aHot, 1 )
+        IF n > 0
+            hb_ADel( s_aHot, n, .T. )
+        ENDIF
+    ENDCASE
 
 RETURN
 
@@ -1906,7 +1908,8 @@ RETURN ce_Join( { ;
     "  Backspace, Ctrl-PgUp   the parent folder", ;
     "  Ins, right click       mark a file (the marked ones are copied,", ;
     "                         moved, deleted together)", ;
-    "  +  -  *      mark / unmark by a mask (*.prg), invert", ;
+    "  +  -  *      mark / unmark by a mask (*.prg), invert (while the", ;
+    "               command line is empty)", ;
     "  Ctrl-S, Alt + letter   quick search (Alt-L F C O R open the menus)", ;
     "  Ctrl-P       brief / full view (Name, Ext, Size, Date)", ;
     "  Ctrl-R       read the folders again", ;
@@ -1925,20 +1928,23 @@ RETURN ce_Join( { ;
     "  Ctrl-F7      find files by a mask in the folder and below", ;
     "", ;
     "FOLDERS", ;
-    "  D, Ctrl-F1 / Ctrl-F2   type a folder (active / left / right panel)", ;
+    "  cd <folder>  (typed), Ctrl-F1 / Ctrl-F2: left / right panel", ;
     "  Alt-F1 / Alt-F2        drive of the left / right panel", ;
-    "  H            the folders visited", ;
-    "  M            a bookmark (a, s, d) on this folder; ' goes to one", ;
+    "  Alt-Down     the folders visited", ;
+    "  Ctrl-D       the directory hotlist: go, add this folder, remove", ;
     "  Commands - Compare directories: marks the files that differ", ;
     "", ;
     "COMMAND LINE", ;
-    "  Ctrl-O       the command line; Enter runs the command in the folder", ;
-    "               of the active panel, Esc goes back to the panel", ;
+    "  Type         what is typed goes to the command line (as in NC);", ;
+    "               Enter runs it in the folder of the active panel,", ;
+    "               Backspace / Esc correct it; with an empty command line", ;
+    "               Enter and Backspace are the panel's", ;
+    "  Ctrl-O       the command line takes all the keys (Esc: back)", ;
     "  Ctrl-Enter   the current name to the command line", ;
     "  Ctrl-W       the output of the last command (Options - Show command", ;
     "               output: off = only the exit code after a command)", ;
     "  cd <folder>  changes the folder of the active panel", ;
-    "  =<expr>, =   a Harbour expression: =1024*16, =Date()", ;
+    "  =<expr>      a Harbour expression: =1024*16, =Date()", ;
     "", ;
     "NET (as Total Commander)", ;
     "  Ctrl-F       FTP connect: the saved connections, or a new one", ;
@@ -2008,10 +2014,10 @@ STATIC PROCEDURE cnc_LoadSettings()
     s_hSet[ "hidden" ] := hb_HGetDef( h, "hidden", "0" ) == "1"
     s_hSet[ "output" ] := !( hb_HGetDef( h, "output", "1" ) == "0" )
 
-    h := hb_HGetDef( hIni, "BOOKMARKS", { => } )
-    FOR EACH cKey IN hb_HKeys( h )
-        IF Lower( cKey ) $ "a|s|d"
-            s_hMarks[ Lower( cKey ) ] := h[ cKey ]
+    h := hb_HGetDef( hIni, "HOTLIST", hb_HGetDef( hIni, "BOOKMARKS", { => } ) )
+    FOR EACH cKey IN h
+        IF ! Empty( cKey )
+            AAdd( s_aHot, cKey )
         ENDIF
     NEXT
     s_hFtp := hb_HGetDef( hIni, "FTP", { => } )
@@ -2041,10 +2047,10 @@ STATIC PROCEDURE cnc_SaveSettings()
     h[ "output" ] := IIF( s_hSet[ "output" ], "1", "0" )
     hIni[ "OPTIONS" ] := h
     h := { => }
-    FOR EACH c IN hb_HKeys( s_hMarks )
-        h[ c ] := s_hMarks[ c ]
+    FOR EACH c IN s_aHot
+        h[ hb_ntos( c:__enumIndex() ) ] := c
     NEXT
-    hIni[ "BOOKMARKS" ] := h
+    hIni[ "HOTLIST" ] := h
     h := { => }
     FOR EACH c IN s_aHist
         h[ hb_ntos( c:__enumIndex() ) ] := c

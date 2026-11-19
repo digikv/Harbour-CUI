@@ -41,6 +41,7 @@ CLASS CNCPanel FROM HTWidget
     DATA bEnter                           /* {| oPanel, aFile | } Enter on a file */
     DATA bActivate                        /* {| oPanel | } the panel got the focus */
     DATA bChanged                         /* {| oPanel | } another folder */
+    DATA bCursor                          /* {| oPanel | } -> { nRow, nCol }: where the text cursor is shown */
 
     METHOD new( parent )
     METHOD read( cDir, cSelect )
@@ -69,6 +70,7 @@ CLASS CNCPanel FROM HTWidget
     METHOD keyEvent( keyEvent )
     METHOD mouseEvent( eventMouse )
     METHOD focusInEvent( eventFocus )
+    METHOD cursorPos()                    INLINE IIF( HB_ISEVALITEM( ::bCursor ) .AND. ::hasFocus(), Eval( ::bCursor, self ), NIL )
 
 ENDCLASS
 
