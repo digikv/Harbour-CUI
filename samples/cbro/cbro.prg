@@ -3174,7 +3174,9 @@ STATIC FUNCTION StructEditor( cFile, aStru )
     brw:setHeadSep( e"\xC4" )
     brw:setColSep( e"\xB3" )
     brw:editable := .T.
-    brw:onActivated := {|| brw:beginEdit( 0 ) }
+    /* Enter on Type: the list of the types (a combo), else edit the cell */
+    brw:onActivated := {|| IIF( brw:browse():colPos == 2, ;
+                                ( StructPickType( aStru, aRec ), brw:refreshAll() ), brw:beginEdit( 0 ) ) }
 
     nBtn := 37
     btn := HTPushButton():new( "Add", dlg )
@@ -3193,6 +3195,7 @@ STATIC FUNCTION StructEditor( cFile, aStru )
     HTLabel():new( "C N D L M I + B Y", dlg ):move( nBtn, 11 )
     HTLabel():new( "F @ = ^ Q W", dlg ):move( nBtn, 12 )
     HTLabel():new( "Enter edits a cell", dlg ):move( nBtn, 13 )
+    HTLabel():new( "(Type: a list)", dlg ):move( nBtn, 14 )
 
     btn := HTPushButton():new( "Save", dlg )
     btn:setGeometry( nBtn, nH - 6, 14, 1 )
