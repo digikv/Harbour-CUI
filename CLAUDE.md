@@ -432,6 +432,17 @@ samples/          Demo applications (human-facing, require a display)
                   cncnet.prg = Net menu: CNCFtp (hbtip TIPClientFTP) behind CNCPanel:oNet, net use /
                   net view (Windows). cncwin.c CNC_RUNHIDDEN: commands with CREATE_NO_WINDOW (hb_processRun
                   opened a black console window). Test FTP: WSL python3-pyftpdlib on port 2121.
+  cuibuilder/     CuiBuilder: builds Harbour programs / libraries like HwBuilder (Kresin), written from scratch
+                  (own cuibuilder.hbp + cuibc.hbp + build.bat/.sh; dual license like cbro). cbengine.prg = the
+                  engine (no UI): cuibuild.ini (sections of hwbuild.ini; %APPDATA%\CuiBuilder or
+                  ~/.config/cuibuilder, auto-detected), command templates per family (mingw gcc clang msvc
+                  bcc; cmd_comp/res/lib/exe), .hwprj read/written (:project parts, {filters}, @lists, sub
+                  projects; read with lEdit=.T. keeps filters/macros raw for saving), .hbp/.hbm/.hbc read
+                  (${hb_name} in an .hbc = its own name), _cbstub.c sets the default GT (as hbmk2), make
+                  mode by obj time vs source + local #includes, relink when an object / library is newer.
+                  cuibuilder.prg = screen (files, options, messages, CEdit editor at the error line),
+                  cuibc.prg = command line (gtcgi). cbwin.c CB_RUNHIDDEN / CB_STARTPROGRAM. Focus a child
+                  with setFocusChild() (setFocus() does not move it). cuibuilder.hwprj builds itself.
 tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_basic      HTPoint, HTSize, all HTEvent subclasses
   test_eventloop  HTEventLoop schedule, scheduleRepeat, cancelTask, runPendingTasks

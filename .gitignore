@@ -25,3 +25,4 @@ samples/cbro/*.xlsx
 samples/cbro/cbro.ini
 !COPYING
 samples/cbro/*.db
+samples/*/obj/

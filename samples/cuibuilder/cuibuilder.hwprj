@@ -1,0 +1,13 @@
+# CuiBuilder built by itself:  cuibuilder cuibuilder.hwprj  (F9), or  cuibc cuibuilder.hwprj
+# (the same as cuibuilder.hbp for hbmk2). The Harbour-CUI library comes from
+# [GUILIB] of cuibuild.ini.
+
+outname=cuibuilder
+incpath=../cedit
+prgflags=-w3 -es2
+cuibuilder.prg
+cbengine.prg
+../cedit/htcodeedit.prg
+../cedit/cebuffer.prg
+../cedit/cesyntax.prg
+{win}cbwin.c

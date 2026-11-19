@@ -1,0 +1,12 @@
+# cuibc - CuiBuilder on the command line (no screen)
+#   hbmk2 cuibc.hbp
+# build.bat / build.sh build it together with cuibuilder.
+
+-w3 -es2
+-ocuibc
+-gtcgi
+-std
+
+cuibc.prg
+cbengine.prg
+{win}cbwin.c

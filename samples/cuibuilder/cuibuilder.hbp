@@ -1,0 +1,20 @@
+# CuiBuilder - builds Harbour programs and libraries (Harbour-CUI)
+# build.bat (Windows) / build.sh (Linux) build the library first when it is missing.
+#   hbmk2 cuibuilder.hbp
+# The editor (F4, errors) is the one of CEdit (../cedit). cuibuilder.hwprj
+# builds the same with CuiBuilder itself.
+
+-w3 -es2
+-ocuibuilder
+-i../cedit
+
+../../hbtui.hbc
+
+cuibuilder.prg
+cbengine.prg
+{win}cbwin.c
+../cedit/htcodeedit.prg
+../cedit/cebuffer.prg
+../cedit/cesyntax.prg
+
+{unix}-lX11
