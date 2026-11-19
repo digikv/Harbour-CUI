@@ -8,6 +8,7 @@ prgflags=-w3 -es2
 cuibuilder.prg
 cbengine.prg
 cbrepdes.prg
+cbformdes.prg
 ../shared/cbreport.prg
 hbziparc.hbc
 {hb_ispath='../../../docx/DOCXClass.prg'}../../../docx/DOCXClass.prg

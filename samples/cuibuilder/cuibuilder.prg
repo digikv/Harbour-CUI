@@ -51,7 +51,7 @@ STATIC s_aCheck := {}                   /* menu entries with a check */
 
 PROCEDURE Main( ... )
 
-    LOCAL cArg, cPrj := ""
+    LOCAL cArg, cPrj := "", aSize
 
     hb_cdpSelect( "UTF8EX" )
     s_hSet := cb_SettingsLoad()
@@ -61,6 +61,14 @@ PROCEDURE Main( ... )
     ENDIF
 
     s_oApp := HTApplication():new()
+    /* the screen: -size=50x160, else [VIEW] rows= cols= of cuibuild.ini (40 x 132) */
+    aSize := { Val( hb_HGetDef( s_hSet[ "view" ], "rows", "40" ) ), Val( hb_HGetDef( s_hSet[ "view" ], "cols", "132" ) ) }
+    FOR EACH cArg IN hb_AParams()
+        IF Lower( Left( cArg, 6 ) ) == "-size="
+            aSize := { Val( SubStr( cArg, 7 ) ), Val( SubStr( cArg, At( "x", Lower( cArg ) ) + 1 ) ) }
+        ENDIF
+    NEXT
+    s_oApp:setDisplaySize( Max( 25, aSize[ 1 ] ), Max( 80, aSize[ 2 ] ) )
     ht_cuiSetupDisplay( s_oApp:rows(), s_oApp:cols() )
     hb_gtInfo( HB_GTI_WINTITLE, "CuiBuilder" )
     hb_gtInfo( HB_GTI_ICONRES, 1 )
@@ -616,7 +624,7 @@ STATIC PROCEDURE cb_AddFiles()
         RETURN
     ENDIF
     cBase := IIF( Empty( oP:cSrcPath ), oP:cDir, cb_Abs( oP:cSrcPath, oP:cDir ) )
-    a := cb_FileDlg( "Add files (Space / Ins marks)", cBase, "*.prg;*.c;*.cpp;*.rc;*.frm;*.hbc;*.hwprj;*.hbp;*.o;*.obj;*.a;*.lib", .T., .F. )
+    a := cb_FileDlg( "Add files (Space / Ins marks)", cBase, "*.prg;*.c;*.cpp;*.rc;*.cuiform;*.frm;*.hbc;*.hwprj;*.hbp;*.o;*.obj;*.a;*.lib", .T., .F. )
     FOR EACH cF IN a
         IF cb_ExtIn( Lower( hb_FNameExt( cF ) ), { ".hwprj", ".hbp" } )
             cRel := cb_Rel( cF, oP:cDir )
@@ -693,6 +701,8 @@ STATIC PROCEDURE cb_EditCurrent()
     ENDIF
     IF x < 0
         cb_EditFile( cb_Abs( oP:aSubFiles[ -x ], oP:cDir ), 0 )
+    ELSEIF Lower( hb_FNameExt( oP:aFiles[ x ] ) ) == ".cuiform"
+        cb_FormDesigner( oP:srcFile( oP:aFiles[ x ] ), s_hSet, {| a | cb_AddToProject( a ) } )
     ELSEIF Lower( hb_FNameExt( oP:aFiles[ x ] ) ) == ".frm"
         cb_ReportDesigner( oP:srcFile( oP:aFiles[ x ] ), s_hSet, {| a | cb_AddToProject( a ) } )
     ELSE
@@ -763,6 +773,63 @@ STATIC PROCEDURE cb_Report( lNew )
     ENDIF
     cb_ReportDesigner( cFrm, s_hSet, {| x | cb_AddToProject( x ) } )
     cb_SaveView()
+
+RETURN
+
+/* a dialog (.cuiform) in the dialog designer (cbformdes.prg); a new one goes into the project */
+STATIC PROCEDURE cb_Form( lNew )
+
+    LOCAL a, cFile, oP := cb_Part()
+
+    a := cb_FileDlg( IIF( lNew, "New dialog: the name of the .cuiform", "Open dialog" ), ;
+                     IIF( oP == NIL, hb_cwd(), oP:cDir ), "*.cuiform", .F., lNew )
+    IF Len( a ) == 0
+        RETURN
+    ENDIF
+    cFile := a[ 1 ]
+    IF Empty( hb_FNameExt( cFile ) )
+        cFile += ".cuiform"
+    ENDIF
+    IF lNew .AND. oP != NIL .AND. s_oPF:cType == "hwprj"
+        cb_AddToProject( { cFile } )
+    ENDIF
+    cb_FormDesigner( cFile, s_hSet, {| x | cb_AddToProject( x ) } )
+
+RETURN
+
+/* the number of rows and columns of the screen (kept in cuibuild.ini) */
+STATIC PROCEDURE cb_ScreenSize()
+
+    LOCAL aSizes := { { 25, 80 }, { 30, 100 }, { 40, 132 }, { 50, 160 }, { 60, 200 }, { 75, 240 } }, aNames := {}, a, n, c
+
+    FOR EACH a IN aSizes
+        AAdd( aNames, PadL( hb_ntos( a[ 1 ] ), 3 ) + " x " + hb_ntos( a[ 2 ] ) )
+    NEXT
+    AAdd( aNames, "Other ..." )
+    n := cb_List( "Screen size (rows x columns), now " + hb_ntos( MaxRow() + 1 ) + " x " + hb_ntos( MaxCol() + 1 ), aNames, ;
+                  Max( 1, hb_AScan( aSizes, {| x | x[ 1 ] == MaxRow() + 1 .AND. x[ 2 ] == MaxCol() + 1 } ) ) )
+    IF n == 0
+        RETURN
+    ENDIF
+    IF n > Len( aSizes )
+        c := cb_Input( "Screen size", "Rows x columns:", hb_ntos( MaxRow() + 1 ) + "x" + hb_ntos( MaxCol() + 1 ) )
+        IF Empty( c ) .OR. ! "x" $ Lower( c )
+            RETURN
+        ENDIF
+        a := { Val( c ), Val( SubStr( c, At( "x", Lower( c ) ) + 1 ) ) }
+    ELSE
+        a := aSizes[ n ]
+    ENDIF
+    a[ 1 ] := Min( 256, Max( 25, a[ 1 ] ) )
+    a[ 2 ] := Min( 256, Max( 80, a[ 2 ] ) )
+    s_hSet[ "view" ][ "rows" ] := hb_ntos( a[ 1 ] )
+    s_hSet[ "view" ][ "cols" ] := hb_ntos( a[ 2 ] )
+    cb_SettingsSave( s_hSet )
+    s_oApp:setDisplaySize( a[ 1 ], a[ 2 ] )
+    ht_cuiSetupDisplay( a[ 1 ], a[ 2 ] )
+    s_oMain:screenResized()
+    HTApplication():repaintAll()
+    HTToast():show( "Screen: " + hb_ntos( MaxRow() + 1 ) + " x " + hb_ntos( MaxCol() + 1 ), 2000, HT_CLR_TOAST_INFO )
 
 RETURN
 
@@ -996,7 +1063,10 @@ STATIC PROCEDURE cb_BuildMenu()
     cb_Item( oMenu, "Previous error", "Shift-F8", NIL, {|| cb_NextError( .F. ) } )
     cb_Item( oMenu, "Show command lines", "", NIL, {|| cb_ToggleCmd() }, {|| s_lShowCmd } )
 
-    oMenu := s_oBar:addMenu( "&Reports" )
+    oMenu := s_oBar:addMenu( "&Design" )
+    cb_Item( oMenu, "New dialog ...", "", NIL, {|| cb_Form( .T. ) } )
+    cb_Item( oMenu, "Open dialog ...", "", NIL, {|| cb_Form( .F. ) } )
+    oMenu:addSeparator()
     cb_Item( oMenu, "New report ...", "", NIL, {|| cb_Report( .T. ) } )
     cb_Item( oMenu, "Open report ...", "", NIL, {|| cb_Report( .F. ) } )
 
@@ -1005,6 +1075,7 @@ STATIC PROCEDURE cb_BuildMenu()
     cb_Item( oMenu, "Default compiler ...", "", NIL, {|| cb_DefCompiler() } )
     cb_Item( oMenu, "Edit cuibuild.ini", "", NIL, {|| cb_EditIni() } )
     cb_Item( oMenu, "Theme ...", "", NIL, {|| cb_Theme() } )
+    cb_Item( oMenu, "Screen size ...", "", NIL, {|| cb_ScreenSize() } )
     oMenu:addSeparator()
     cb_Item( oMenu, "About", "", NIL, {|| cb_About() } )
 
@@ -1025,7 +1096,7 @@ STATIC PROCEDURE cb_Item( oMenu, cText, cKey, nKey, bAction, bOn )
 RETURN
 
 STATIC FUNCTION cb_ItemText( cText, cKey, bOn )
-RETURN IIF( bOn != NIL .AND. Eval( bOn ), ht_glyph( 0x221A, "*" ), " " ) + " " + PadR( cText, 25 ) + PadL( cKey, 10 )
+RETURN IIF( bOn != NIL .AND. Eval( bOn ), ht_glyph( 0x221A, "*" ), " " ) + " &" + PadR( cText, 25 ) + PadL( cKey, 10 )
 
 STATIC PROCEDURE cb_Checks()
 

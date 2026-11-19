@@ -450,6 +450,11 @@ samples/          Demo applications (human-facing, require a display)
                   DBF (F5), try in Word / Excel (F6/F7, CB_OPENDOC / xdg-open), F9 generates
                   rpt_<name>.prg (Rpt_<Name>( cFile, bFor, cTitle, @cErr, cCdp )) and adds it, the shared
                   module, DOCXClass / XLSXClass ([REPORTS] of cuibuild.ini) and hbziparc.hbc to the project.
+                  cbformdes.prg = dialog designer: .cuiform (JSON; positions numbers, the rest text),
+                  canvas drawn like the widgets (CBFormCanvas, mouse drag), F5 = the real dialog
+                  (cbf_Build), F9 = dlg_<name>.prg with Dlg_<Name>( hValues ) -> hValues / NIL built of
+                  HTDialog/HTGet/HTLineEdit/... (cbf_Code; keep both in step). Screen size: [VIEW] rows/cols,
+                  -size=RxC, Options - Screen size (ht_cuiSetupDisplay + screenResized at run time).
   shared/         cbreport.prg: Report Form to Word (.docx) / Excel (.xlsx), used by CBro and CuiBuilder:
                   CBR_Load / CBR_Save (writes the 1990-byte .frm) / CBR_Rows / CBR_Docx / CBR_Xlsx, a report
                   in code: CBR_New / CBR_Title / CBR_Group / CBR_Column / CBR_Make (.docx or .xlsx by the

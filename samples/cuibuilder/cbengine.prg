@@ -1344,7 +1344,7 @@ STATIC FUNCTION cb_BuildOne( oP, hSet, lClean, bOut, bStop )
         CASE cExt == ".res"
             AAdd( aRes, cSrc )
             LOOP
-        CASE cb_ExtIn( cExt, { ".frm", ".ch", ".h", ".hbc", ".txt", ".md" } )
+        CASE cb_ExtIn( cExt, { ".frm", ".cuiform", ".ch", ".h", ".hbc", ".txt", ".md" } )
             LOOP                                /* reports, headers: nothing to build */
         ENDCASE
         IF ! hb_FileExists( cSrc )

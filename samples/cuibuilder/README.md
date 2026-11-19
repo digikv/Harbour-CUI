@@ -10,7 +10,8 @@ command templates of the compiler family in `cuibuild.ini`, and builds only the 
 changed. It reads and writes HwBuilder's `.hwprj` projects and reads hbmk2's `.hbp` projects.
 Written from scratch on Harbour-CUI: no HwBuilder source code is used.
 
-It also has a **report designer**: reports for Word (`.docx`) and Excel (`.xlsx`), saved as
+It has a **dialog designer** - dialogs of the Harbour-CUI widgets, from which it generates the
+Harbour code (see [Dialogs](#dialogs-of-harbour-cui)) - and a **report designer**: reports for Word (`.docx`) and Excel (`.xlsx`), saved as
 Clipper `.frm` files, from which it generates the Harbour code of the report for your program
 (see [Reports](#reports-word-and-excel)).
 
@@ -109,6 +110,7 @@ util.c
 | `sub.hwprj`, `sub.hbp` | another project, built first |
 | `name.hbc` | the libraries, paths and flags of an `.hbc` (`hbziparc.hbc`, `hbct.hbc` ...; searched next to the project, then in Harbour's `contrib` / `addons`) |
 | `report.frm` | a report: Enter opens it in the report designer, the build skips it |
+| `dialog.cuiform` | a dialog: Enter opens it in the dialog designer, the build skips it |
 | `@files.txt` | the files listed in a text file |
 | `:project name` | a new part: several programs / libraries in one file, built in order |
 
@@ -226,6 +228,50 @@ default GT, then the project's libraries, the Harbour-CUI library, the Harbour l
 What is "changed": an object is older than its source or than a local header that the source
 includes (`#include "x.ch"`, in its folder or `incpath`); a program is linked again when an
 object or a library is newer than it.
+
+## Dialogs of Harbour-CUI
+
+`Design - New dialog` (or Enter on a `.cuiform` in the list of files) opens the dialog designer:
+the dialog is drawn as it will look, the selected control in the color of a selection. On the
+right: the dialog or the selected control, and the keys.
+
+| Key | Command |
+|---|---|
+| Ins | add a control: label, text field (HTLineEdit), GET with PICTURE (HTGet), button, check box, radio button, combo box, list, text of several lines (HTTextEdit), number with arrows (HTSpinner), progress bar, frame |
+| arrows / Ctrl + arrows | move / size the selected control (no selection: Ctrl + arrows size the dialog) |
+| Tab / Shift-Tab | the next / previous control |
+| Enter, double click | the properties: position, size, name (the variable), text, PICTURE, type and length of a GET, VALID / WHEN, items, start value, the action of a button (`ok`, `cancel` or a function) |
+| Del | delete the control |
+| Ctrl-PgUp / Ctrl-PgDn | earlier / later in the Tab order |
+| mouse | click selects, drag moves |
+| Esc | no selection (the dialog); again: close |
+| F3 | the dialog: name, title, size, the buttons at the bottom (`OK,Cancel`) |
+| F5 | the dialog itself, made of the widgets, and the values it returns |
+| F2 / F9 | save the `.cuiform` (JSON) / generate the code |
+
+F9 writes `dlg_<name>.prg` and adds it to the project. It has the function
+`Dlg_<Name>( [hValues] ) -> hValues / NIL`: it builds the dialog with HTDialog, HTLabel, HTGet,
+HTLineEdit, HTCheckBox ... (the code you would write by hand), takes the start values of the
+fields from `hValues` by their names, shows the dialog and returns the values of the fields
+(`NIL` = cancelled). A button with a function as its action calls `Func( dlg, hCtl )`
+(`hCtl`: the widgets by their names).
+
+```
+hVal := Dlg_Kupac( { "cNaziv" => KUPCI->NAZIV, "nRok" => KUPCI->ROK } )
+IF hVal != NIL
+   KUPCI->NAZIV := hVal[ "cNaziv" ]
+   KUPCI->ROK   := hVal[ "nRok" ]
+ENDIF
+```
+
+The program creates `HTApplication():new()` first, as every Harbour-CUI program does.
+
+## Screen size
+
+40 rows x 132 columns by default; `Options - Screen size` chooses 25x80 up to 75x240 or any other
+(kept in `cuibuild.ini [VIEW] rows= cols=`), `cuibuilder -size=60x200` for one start. On Windows
+the font is made to fit the whole screen (on 1920x1080: 9.6 x 18 pixels at 60x200, 7.7 x 13.5 at
+80x250); gtxwc (Linux) has at most 256 x 256 cells, its font keeps its size.
 
 ## Reports: Word and Excel
 

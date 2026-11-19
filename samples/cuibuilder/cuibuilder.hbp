@@ -13,6 +13,7 @@
 cuibuilder.prg
 cbengine.prg
 cbrepdes.prg
+cbformdes.prg
 ../shared/cbreport.prg
 {win}cbwin.c
 ../cedit/htcodeedit.prg
