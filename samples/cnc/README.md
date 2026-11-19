@@ -78,7 +78,7 @@ of every command. F1 shows all the keys.
 | Ctrl-O | the command line takes all the keys (to edit a long command); Esc gives them back |
 | Ctrl-Enter | the current name to the command line |
 | Ctrl-W | the output of the last command |
-| `=expr` | typed in the command line: a Harbour expression, `=1024*16`, `=Date()` |
+| = | the calculator (with an empty command line, as in HbCommander): a Harbour expression, `1024*16`, `Date()`; `=expr` + Enter in the command line does the same |
 
 Commands - Compare directories marks the files that are only in one panel or newer there.
 

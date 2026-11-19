@@ -180,8 +180,8 @@ METHOD PROCEDURE screenResized() CLASS CNCMain
 RETURN
 
 /* as in Norton Commander, while a panel has the keys: what is typed goes
-   to the command line (the cursor stays there); + - * mark files while it
-   is empty; Enter runs it, Backspace takes a character back, Esc clears it.
+   to the command line (the cursor stays there); + - * mark files and =
+   opens the calculator while it is empty; Enter runs it, Backspace takes a character back, Esc clears it.
    With an empty command line Enter and Backspace are the panel's. */
 STATIC FUNCTION cnc_TypeKey( nKey )
 
@@ -198,6 +198,8 @@ STATIC FUNCTION cnc_TypeKey( nKey )
         cnc_SelectMask( nKey == 43 )
     CASE Empty( cCmd ) .AND. nKey == 42                           /* * */
         s_aPanel[ s_nAct ]:invertMarks()
+    CASE Empty( cCmd ) .AND. nKey == 61                           /* = the calculator (HbCommander) */
+        cnc_Calc( "" )
     CASE !( ( c := ht_keyText( nKey ) ) == "" )         /* also a space */
         cnc_SetCmd( cCmd + c )
     OTHERWISE
@@ -350,7 +352,7 @@ STATIC PROCEDURE cnc_BuildMenu()
             oMenu:addSeparator()
             cnc_Item( oMenu, "Command line", "Ctrl-O", NIL, {|| cnc_Console() } )
             cnc_Item( oMenu, "Last output", "Ctrl-W", NIL, {|| cnc_ShowOutput() } )
-            cnc_Item( oMenu, "Calculator", "=expr", NIL, {|| cnc_Calc( "" ) } )
+            cnc_Item( oMenu, "Calculator", "=", NIL, {|| cnc_Calc( "" ) } )
 
             oMenu := s_oBar:addMenu( "Net" )
             cnc_Item( oMenu, "FTP connect...", "Ctrl-F", NIL, {|| cnc_FtpConnect( .F. ) } )
@@ -1944,7 +1946,9 @@ RETURN ce_Join( { ;
     "  Ctrl-W       the output of the last command (Options - Show command", ;
     "               output: off = only the exit code after a command)", ;
     "  cd <folder>  changes the folder of the active panel", ;
-    "  =<expr>      a Harbour expression: =1024*16, =Date()", ;
+    "  =            the calculator (command line empty): a Harbour", ;
+    "               expression, 1024*16, Date(); or =1024*16 typed after", ;
+    "               a command", ;
     "", ;
     "NET (as Total Commander)", ;
     "  Ctrl-F       FTP connect: the saved connections, or a new one", ;
