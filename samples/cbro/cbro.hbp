@@ -16,6 +16,7 @@ cbro.prg
 cbhelp.prg
 cbcalc.prg
 cbxlsx.prg
+cbreport.prg
 cbmemo.prg
 # the XLSX class of Srđan Dragojlović (github.com/digikv/xlsx)
 # in ../../../xlsx (next to the repository); another folder: build.bat with CBRO_XLSXDIR,
@@ -25,6 +26,11 @@ cbmemo.prg
 {!CBRO_XLSXOWN&!CBRO_NOXLSX&hb_ispath='../../../xlsx/XLSXClass.prg'}../../../xlsx/XLSXClass.prg
 {!CBRO_XLSXOWN&!hb_ispath='../../../xlsx/XLSXClass.prg'}-prgflag=-DCBRO_NO_XLSX
 {CBRO_NOXLSX}-prgflag=-DCBRO_NO_XLSX
+# the DOCX class (github.com/digikv/docx) in ../../../docx, for Report Form to Word;
+# without it CBro is built without Word (.docx) (also -env:CBRO_NODOCX=yes)
+{!CBRO_NODOCX&hb_ispath='../../../docx/DOCXClass.prg'}../../../docx/DOCXClass.prg
+{!hb_ispath='../../../docx/DOCXClass.prg'}-prgflag=-DCBRO_NO_DOCX
+{CBRO_NODOCX}-prgflag=-DCBRO_NO_DOCX
 
 hbziparc.hbc
 hbmzip.hbc

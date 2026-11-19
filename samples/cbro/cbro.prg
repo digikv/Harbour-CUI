@@ -5100,9 +5100,16 @@ STATIC PROCEDURE LabelReport( lLabel )
         RETURN
     ENDIF
     aAsk := { { "FOR:", PadR( ".T.", 200 ), "@S40" }, ;
-              { "To (S=screen F=file P=printer):", "S", "!" } }
+              { IIF( lLabel, "To (S=screen F=file P=printer):", ;
+                             "To (S=screen F=file P=printer W=Word X=Excel):" ), "S", "!" } }
     IF ! Ask( IIF( lLabel, "Label Form ", "Report Form " ) + hb_FNameNameExt( cForm ), aAsk ) .OR. ;
        ( bFor := ExprBlock( aAsk[ 1 ][ 2 ], "L" ) ) == NIL
+        RETURN
+    ENDIF
+    IF ! lLabel .AND. aAsk[ 2 ][ 2 ] $ "WX"
+        ReportDocument( cForm, bFor, aAsk[ 2 ][ 2 ] == "W" )
+        dbGoto( nRec )
+        RefreshCur()
         RETURN
     ENDIF
     cOut := FullPath( Lower( Alias() ) + IIF( lLabel, "_labels.txt", "_report.txt" ) )
@@ -5131,6 +5138,46 @@ STATIC PROCEDURE LabelReport( lLabel )
         FErase( cOut )
     ENDCASE
 
+RETURN
+
+/* Report Form to Word (.docx) or Excel (.xlsx): cbreport.prg reads the form
+   and the records, the DOCX / XLSX class writes the document; it can be
+   opened at once */
+STATIC PROCEDURE ReportDocument( cForm, bFor, lWord )
+
+    LOCAL aRep, aRows, cErr := "", cFile, cCdp := s_aAreas[ s_nArea ][ AR_CDP ], cTitle, lOk := .F.
+
+    IF ( aRep := CBR_Load( cForm, @cErr ) ) == NIL
+        Warn( cErr )
+        RETURN
+    ENDIF
+    cFile := FullPath( Lower( Alias() ) + "_report" + IIF( lWord, ".docx", ".xlsx" ) )
+    IF AScan( s_aAreas, {| a | Upper( a[ AR_FILE ] ) == Upper( cFile ) } ) > 0
+        Warn( hb_FNameNameExt( cFile ) + " is open - close it first" )
+        RETURN
+    ENDIF
+    cTitle := Alias() + " - " + hb_FNameName( cForm )
+    Toast( "Report " + hb_FNameNameExt( cForm ) + " ..." )
+    cErr := Try( {|| aRows := CBR_Rows( aRep, bFor ), ;
+                     lOk := IIF( lWord, CBR_Docx( cFile, aRep, aRows, cTitle, @cErr, IIF( Empty( cCdp ), "CP852", cCdp ) ), ;
+                                        CBR_Xlsx( cFile, aRep, aRows, cTitle, @cErr, IIF( Empty( cCdp ), "CP852", cCdp ) ) ) } )
+    IF ! lOk
+        Warn( "The report was not written" + IIF( Empty( cErr ), "", ": " + cErr ) )
+        RETURN
+    ENDIF
+    IF Confirm( hb_FNameNameExt( cFile ) + " written (" + hb_ntos( Len( aRows ) ) + " rows). Open it?" )
+        OpenDocument( cFile )
+    ENDIF
+
+RETURN
+
+/* a document in its program (Word, Excel, LibreOffice ...) */
+STATIC PROCEDURE OpenDocument( cFile )
+#ifdef __PLATFORM__WINDOWS
+    wapi_ShellExecute( NIL, "open", cFile, NIL, hb_FNameDir( cFile ), 1 )
+#else
+    hb_processOpen( "xdg-open '" + StrTran( cFile, "'", "'\''" ) + "'", , , , .T. )
+#endif
 RETURN
 
 /*---------------------------------------------------------------- scripts */

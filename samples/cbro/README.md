@@ -47,7 +47,8 @@ under the fullscreen window.
 - Indexes, scopes, filters, relations (master-detail), color conditions, views (`.cbv`),
   structure editor (also the newer field types: integer, autoincrement, double, currency,
   date-time, modification time, row version, varchar, blob), Copy To / Append From / Replace / Count / Sum / Pack / Zap / Reindex,
-  Label and Report Form, List to file / printer, calculator, expression evaluator, help
+  Label and Report Form (a report also to Word `.docx` or Excel `.xlsx`), List to file / printer,
+  calculator, expression evaluator, help
 
 ## Build
 

@@ -5,7 +5,7 @@ rem   build letodb       LetoDB client
 rem   build commercial   without the Harbour compiler (GPL, no linking exception):
 rem                      for programs distributed under the commercial license
 rem   build commercial letodb
-rem   build update ...   first update the XLSX class (git pull in ..\..\..\xlsx)
+rem   build update ...   first update the XLSX and DOCX classes (git pull in ..\..\..\xlsx, ..\..\..\docx)
 rem
 rem The XLSX class (https://github.com/digikv/xlsx) is taken from ..\..\..\xlsx, next to
 rem the Harbour-CUI folder. When it is not there, it is cloned with git; without git
@@ -17,6 +17,7 @@ if not defined HBMK2 set HBMK2=D:\tools\harbour-core\bin\win\mingw\hbmk2.exe
 set OPT=
 if /i "%1"=="update" (
    if exist ..\..\..\xlsx\.git git -C ..\..\..\xlsx pull --ff-only
+   if exist ..\..\..\docx\.git git -C ..\..\..\docx pull --ff-only
    shift
 )
 if defined CBRO_XLSXDIR (
@@ -26,6 +27,13 @@ if defined CBRO_XLSXDIR (
    if not exist ..\..\..\xlsx\XLSXClass.prg (
       echo Note: ..\..\..\xlsx\XLSXClass.prg not found - CBro is built without Excel ^(.xlsx^).
       echo       For .xlsx: git clone https://github.com/digikv/xlsx next to the Harbour-CUI folder.
+   )
+)
+rem the DOCX class (https://github.com/digikv/docx), for Report Form to Word: cloned the same way
+if not exist ..\..\..\docx\DOCXClass.prg (
+   where git >nul 2>nul && git clone https://github.com/digikv/docx ..\..\..\docx
+   if not exist ..\..\..\docx\DOCXClass.prg (
+      echo Note: ..\..\..\docx\DOCXClass.prg not found - CBro is built without Word ^(.docx^).
    )
 )
 if /i "%1"=="commercial" (

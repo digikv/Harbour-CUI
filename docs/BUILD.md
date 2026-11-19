@@ -45,15 +45,20 @@ which has its own project.
 
 ### The folders
 
-CBro uses the XLSX class (https://github.com/digikv/xlsx) for Excel files. It is a separate
-repository and is expected **next to** the Harbour-CUI folder:
+CBro uses the XLSX class (https://github.com/digikv/xlsx) for Excel files and the DOCX class
+(https://github.com/digikv/docx) for Report Form to Word. They are separate repositories and are
+expected **next to** the Harbour-CUI folder:
 
 ```
 <projects>/
     Harbour-CUI/          this repository
         samples/cbro/
     xlsx/                 https://github.com/digikv/xlsx  (XLSXClass.prg)
+    docx/                 https://github.com/digikv/docx  (DOCXClass.prg)
 ```
+
+Both are optional: without one CBro is built without that format, and its commands say so.
+`build.bat` clones the missing ones when git is in the PATH.
 
 ### Windows: `build.bat`
 
@@ -86,6 +91,8 @@ hbmk2 cbro.hbp
 |---|---|
 | (none) | with the XLSX class from `../../../xlsx` if it is there, else without Excel |
 | `-env:CBRO_NOXLSX=yes` | without Excel, also when the class is there |
+| (none) | with the DOCX class from `../../../docx` if it is there, else without Word |
+| `-env:CBRO_NODOCX=yes` | without Word (.docx), also when the class is there |
 | `-env:CBRO_XLSXOWN=yes <folder>/XLSXClass.prg` | the class from another folder |
 | `-env:CBRO_LETODB=yes` | the LetoDB client instead of LetoDBf |
 | `-env:CBRO_NOCOMPILER=yes` | without the Harbour compiler (commercial license) |

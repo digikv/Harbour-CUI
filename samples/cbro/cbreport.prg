@@ -1,0 +1,461 @@
+/** @file cbreport.prg
+ * CBro - Report Form to Word (.docx) and Excel (.xlsx)
+ *
+ * A Clipper .frm report (title, columns with totals, a group and a
+ * subgroup) is read by Harbour's own HBReportForm:LoadReportFile(); the
+ * records are walked as REPORT FORM does (FOR, groups, subtotals, total,
+ * SUMMARY), and the result is written as a Word table (the DOCX class of
+ * Srđan Dragojlović, github.com/digikv/docx) or an Excel sheet (the XLSX
+ * class) instead of text.
+ *
+ *   CBR_Load( cFrm, @cErr )                    -> aReport or NIL
+ *   CBR_Rows( aReport, bFor )                  -> { { cKind, nLevel, aValues, cLabel }, ... }
+ *        cKind: "G" group heading, "D" detail, "S" subtotal, "T" total
+ *   CBR_Docx( cFile, aReport, aRows, cTitle, @cErr, cCdp ) -> lOk
+ *   CBR_Xlsx( cFile, aReport, aRows, cTitle, @cErr, cCdp ) -> lOk
+ *
+ * Copyright (c) 2026 Srđan Dragojlović
+ * Dual licensed: GNU GPL version 3 or later (COPYING), or a commercial
+ * license from the author - see LICENSE.
+ */
+
+#include "set.ch"
+
+/* the report array of Harbour's treport.prg */
+#define RPT_HEADER      1
+#define RPT_WIDTH       2
+#define RPT_SUMMARY     10
+#define RPT_COLUMNS     11
+#define RPT_GROUPS      12
+#define RPT_HEADING     13
+
+#define RCT_EXP         1
+#define RCT_TEXT        2
+#define RCT_TYPE        3
+#define RCT_HEADER      4
+#define RCT_WIDTH       5
+#define RCT_DECIMALS    6
+#define RCT_TOTAL       7
+
+#define RGT_EXP         1
+#define RGT_HEADER      4
+
+/* a .frm file -> the report array of Harbour (NIL and cErr on an error) */
+FUNCTION CBR_Load( cFrm, cErr )
+
+    LOCAL aRep, oErr
+
+    cErr := ""
+    BEGIN SEQUENCE WITH {| e | Break( e ) }
+        aRep := HBReportForm():LoadReportFile( cFrm )
+    RECOVER USING oErr
+        cErr := "Cannot read " + hb_FNameNameExt( cFrm ) + ": " + oErr:description
+        RETURN NIL
+    END SEQUENCE
+    IF ! HB_ISARRAY( aRep ) .OR. Len( aRep ) < RPT_COLUMNS .OR. Empty( aRep[ RPT_COLUMNS ] )
+        cErr := hb_FNameNameExt( cFrm ) + " is not a report form"
+        RETURN NIL
+    ENDIF
+
+RETURN aRep
+
+/* the rows of the report from the current work area, from the top */
+FUNCTION CBR_Rows( aRep, bFor )
+
+    LOCAL aCols := aRep[ RPT_COLUMNS ], aGrp := hb_defaultValue( aRep[ RPT_GROUPS ], {} ), nG
+    LOCAL aRows := {}, aLast, aSub := {}, aTot, lFirst := .T., i, nBreak, x, aVal, nLevel, aCol
+    LOCAL lSummary := hb_defaultValue( aRep[ RPT_SUMMARY ], .F. )
+    LOCAL lTotals := AScan( aCols, {| c | hb_defaultValue( c[ RCT_TOTAL ], .F. ) } ) > 0
+
+    nG := Len( aGrp )
+    aLast := Array( nG )
+    aTot := CBR_Zero( aCols )
+    FOR i := 1 TO nG
+        AAdd( aSub, CBR_Zero( aCols ) )
+    NEXT
+    dbGoTop()
+    DO WHILE ! Eof()
+        IF bFor == NIL .OR. Eval( bFor )
+            /* a new group or subgroup: the subtotals of the ones that end */
+            nBreak := 0
+            FOR i := 1 TO nG
+                x := Eval( aGrp[ i ][ RGT_EXP ] )
+                IF lFirst .OR. !( hb_ValToExp( x ) == hb_ValToExp( aLast[ i ] ) )
+                    nBreak := i
+                    EXIT
+                ENDIF
+            NEXT
+            IF nBreak > 0
+                IF ! lFirst
+                    FOR nLevel := nG TO nBreak STEP -1
+                        IF lTotals
+                            AAdd( aRows, { "S", nLevel, aSub[ nLevel ], IIF( nLevel == 1, "** Subtotal **", "* Subsubtotal *" ) } )
+                        ENDIF
+                        aSub[ nLevel ] := CBR_Zero( aCols )
+                    NEXT
+                ENDIF
+                FOR nLevel := nBreak TO nG
+                    aLast[ nLevel ] := Eval( aGrp[ nLevel ][ RGT_EXP ] )
+                    AAdd( aRows, { "G", nLevel, NIL, IIF( nLevel == 1, "** ", "* " ) + ;
+                                   CBR_Unquote( aGrp[ nLevel ][ RGT_HEADER ] ) + " " + CBR_Text( aLast[ nLevel ] ) } )
+                NEXT
+            ENDIF
+            lFirst := .F.
+
+            aVal := {}
+            FOR EACH aCol IN aCols
+                x := Eval( aCol[ RCT_EXP ] )
+                AAdd( aVal, x )
+                IF hb_defaultValue( aCol[ RCT_TOTAL ], .F. ) .AND. HB_ISNUMERIC( x )
+                    i := aCol:__enumIndex()
+                    aTot[ i ] += x
+                    FOR nLevel := 1 TO nG
+                        aSub[ nLevel ][ i ] += x
+                    NEXT
+                ENDIF
+            NEXT
+            IF ! lSummary
+                AAdd( aRows, { "D", 0, aVal, "" } )
+            ENDIF
+        ENDIF
+        dbSkip()
+    ENDDO
+    IF ! lFirst .AND. lTotals
+        FOR nLevel := nG TO 1 STEP -1
+            AAdd( aRows, { "S", nLevel, aSub[ nLevel ], IIF( nLevel == 1, "** Subtotal **", "* Subsubtotal *" ) } )
+        NEXT
+        AAdd( aRows, { "T", 0, aTot, "*** Total ***" } )
+    ENDIF
+
+RETURN aRows
+
+/* 0 for the columns with a total, NIL for the others */
+STATIC FUNCTION CBR_Zero( aCols )
+
+    LOCAL a := {}, c
+
+    FOR EACH c IN aCols
+        AAdd( a, IIF( hb_defaultValue( c[ RCT_TOTAL ], .F. ), 0, NIL ) )
+    NEXT
+
+RETURN a
+
+/* a value as REPORT FORM writes it in a group heading */
+STATIC FUNCTION CBR_Text( x )
+    DO CASE
+    CASE HB_ISSTRING( x )
+        RETURN RTrim( x )
+    CASE HB_ISDATETIME( x ) .AND. ! HB_ISDATE( x )
+        RETURN hb_TToC( x )
+    CASE HB_ISDATE( x )
+        RETURN DToC( x )
+    CASE HB_ISNUMERIC( x )
+        RETURN hb_ntos( x )
+    CASE HB_ISLOGICAL( x )
+        RETURN IIF( x, "T", "F" )
+    ENDCASE
+RETURN ""
+
+/* a heading kept as a string expression ("First" with its quotes) -> its text */
+STATIC FUNCTION CBR_Unquote( c )
+    c := AllTrim( hb_defaultValue( c, "" ) )
+    IF Len( c ) >= 2 .AND. Left( c, 1 ) $ ["'] .AND. Right( c, 1 ) == Left( c, 1 )
+        c := SubStr( c, 2, Len( c ) - 2 )
+    ENDIF
+RETURN c
+
+/* the heading of a column: its lines joined */
+STATIC FUNCTION CBR_ColHead( aCol )
+
+    LOCAL c := "", cLine
+
+    FOR EACH cLine IN hb_defaultValue( aCol[ RCT_HEADER ], {} )
+        IF HB_ISSTRING( cLine ) .AND. ! Empty( cLine := CBR_Unquote( cLine ) )
+            c += IIF( Empty( c ), "", " " ) + cLine
+        ENDIF
+    NEXT
+
+RETURN IIF( Empty( c ), CBR_Unquote( aCol[ RCT_TEXT ] ), c )
+
+/* the title lines: the page heading of the form, else cTitle */
+STATIC FUNCTION CBR_Titles( aRep, cTitle )
+
+    LOCAL aOut := {}, c
+
+    FOR EACH c IN hb_defaultValue( aRep[ RPT_HEADER ], {} )
+        IF HB_ISSTRING( c ) .AND. ! Empty( c := CBR_Unquote( c ) )
+            AAdd( aOut, c )
+        ENDIF
+    NEXT
+    IF HB_ISSTRING( aRep[ RPT_HEADING ] ) .AND. ! Empty( aRep[ RPT_HEADING ] )
+        AEval( hb_ATokens( aRep[ RPT_HEADING ], ";" ), {| x | AAdd( aOut, AllTrim( x ) ) } )
+    ENDIF
+    IF Empty( aOut )
+        AAdd( aOut, cTitle )
+    ENDIF
+
+RETURN aOut
+
+/* the type of a column: from the form, else from its first value */
+STATIC FUNCTION CBR_Type( aCol, aRows, nCol )
+
+    LOCAL r
+
+    IF HB_ISSTRING( aCol[ RCT_TYPE ] ) .AND. ! Empty( aCol[ RCT_TYPE ] )
+        RETURN aCol[ RCT_TYPE ]
+    ENDIF
+    FOR EACH r IN aRows
+        IF r[ 1 ] == "D" .AND. r[ 3 ][ nCol ] != NIL
+            RETURN ValType( r[ 3 ][ nCol ] )
+        ENDIF
+    NEXT
+
+RETURN "C"
+
+#ifndef CBRO_NO_DOCX
+
+/* European numbers (1.234,56) when SET DATE is a European one */
+STATIC FUNCTION CBR_European()
+RETURN SubStr( Set( _SET_DATEFORMAT ), 3, 1 ) $ ".-"
+
+/* the report as a Word table: a header row repeated on every page, group
+   headings shaded, subtotals and the total in bold */
+FUNCTION CBR_Docx( cFile, aRep, aRows, cTitle, cErr, cCdp )
+
+    LOCAL oDoc := WordDocument():New( cFile ), aCols := aRep[ RPT_COLUMNS ], nCols := Len( aCols )
+    LOCAL aW := {}, nTotW := 0, nPageW, oT, nBold, nHead, nGroup, nSum, nTitle, aPict := {}, aHead := {}
+    LOCAL r, nRow, i, x, aVal, cType, aCol, nW, cPic, cFoot
+
+    IF HB_ISSTRING( cCdp ) .AND. ! Empty( cCdp )
+        oDoc:cCodePage := cCdp
+    ENDIF
+    oDoc:cTitle := cTitle
+
+    /* the widths: the characters of the column (or of its heading) */
+    FOR EACH aCol IN aCols
+        nW := Max( hb_defaultValue( aCol[ RCT_WIDTH ], 10 ), Min( Len( CBR_ColHead( aCol ) ), 20 ) )
+        AAdd( aW, nW )
+        nTotW += nW
+    NEXT
+    oDoc:lLandscape := nTotW > 90
+    oDoc:nLeftMargin := 1.5
+    oDoc:nRightMargin := 1.5
+    nPageW := IIF( oDoc:lLandscape, 29.7, 21.0 ) - 3.0
+    AEval( aW, {| n, k | aW[ k ] := Round( Max( 1.0, n / nTotW * nPageW ), 2 ) } )
+    IF nTotW > 140
+        oDoc:nFontSize := 8
+    ELSEIF nTotW > 100
+        oDoc:nFontSize := 9
+    ENDIF
+
+    cFoot := "Page &P of &" + "N"
+    oDoc:AddHeader( cTitle, "", "&D" )
+    oDoc:AddFooter( "", "", cFoot )
+
+    nBold := oDoc:NewFont( , , .T. )
+    nTitle := oDoc:NewStyle( oDoc:NewFont( , 14, .T. ), 2, , 2 )
+    nHead := oDoc:NewStyle( nBold, 2 )
+    nGroup := oDoc:NewStyle( nBold )
+    nSum := oDoc:NewStyle( nBold, 3 )
+    FOR EACH x IN CBR_Titles( aRep, cTitle )
+        oDoc:Paragraph( x, nTitle )
+    NEXT
+
+    /* number pictures per column */
+    FOR EACH aCol IN aCols
+        i := aCol:__enumIndex()
+        cType := CBR_Type( aCol, aRows, i )
+        cPic := NIL
+        IF cType == "N"
+            cPic := Replicate( "9", Max( 1, hb_defaultValue( aCol[ RCT_WIDTH ], 10 ) - hb_defaultValue( aCol[ RCT_DECIMALS ], 0 ) ) )
+            cPic := CBR_Thousands( cPic )             /* @E shows 1.234,56 */
+            IF hb_defaultValue( aCol[ RCT_DECIMALS ], 0 ) > 0
+                cPic += "." + Replicate( "9", aCol[ RCT_DECIMALS ] )
+            ENDIF
+            cPic := IIF( CBR_European(), "@E ", "" ) + cPic
+        ENDIF
+        AAdd( aPict, cPic )
+        AAdd( aHead, CBR_ColHead( aCol ) )
+    NEXT
+
+    oT := oDoc:Table( aW )
+    oT:nHeaderRows := 1
+    oT:aPictures := aPict
+    oT:AddRow( aHead, nHead, "D9E1F2" )
+    FOR EACH r IN aRows
+        SWITCH r[ 1 ]
+        CASE "G"
+            nRow := oT:AddRow()
+            IF nCols > 1
+                oT:Merge( nRow, 1, nRow, nCols )
+            ENDIF
+            oT:Cell( nRow, 1, r[ 4 ], nGroup )
+            oT:Shade( nRow, NIL, IIF( r[ 2 ] == 1, "E2EFDA", "F2F2F2" ) )
+            EXIT
+        CASE "D"
+            aVal := {}
+            FOR EACH x IN r[ 3 ]
+                AAdd( aVal, IIF( HB_ISNUMERIC( x ), x, CBR_Text( x ) ) )
+            NEXT
+            oT:AddRow( aVal )
+            EXIT
+        OTHERWISE                                    /* "S" subtotal, "T" total */
+            nRow := oT:AddRow()
+            FOR i := 1 TO nCols
+                IF r[ 3 ][ i ] != NIL
+                    oT:Cell( nRow, i, AllTrim( IIF( aPict[ i ] == NIL, hb_ntos( r[ 3 ][ i ] ), ;
+                                                    Transform( r[ 3 ][ i ], aPict[ i ] ) ) ), nSum )
+                ENDIF
+            NEXT
+            IF r[ 3 ][ 1 ] == NIL
+                oT:Cell( nRow, 1, r[ 4 ], nGroup )
+            ENDIF
+            oT:Shade( nRow, NIL, IIF( r[ 1 ] == "T", "D9E1F2", "F2F2F2" ) )
+        ENDSWITCH
+    NEXT
+
+    IF ! oDoc:Save()
+        cErr := oDoc:cError
+        RETURN .F.
+    ENDIF
+
+RETURN .T.
+
+/* "9999999" -> "9,999,999" (with @E it shows 9.999.999) */
+STATIC FUNCTION CBR_Thousands( cPic )
+
+    LOCAL cOut := ""
+
+    DO WHILE Len( cPic ) > 3
+        cOut := "," + Right( cPic, 3 ) + cOut
+        cPic := Left( cPic, Len( cPic ) - 3 )
+    ENDDO
+
+RETURN cPic + cOut
+
+#else
+
+FUNCTION CBR_Docx( cFile, aRep, aRows, cTitle, cErr, cCdp )
+    HB_SYMBOL_UNUSED( cFile )
+    HB_SYMBOL_UNUSED( aRep )
+    HB_SYMBOL_UNUSED( aRows )
+    HB_SYMBOL_UNUSED( cTitle )
+    HB_SYMBOL_UNUSED( cCdp )
+    cErr := "Word (.docx) is not available: CBro was built without the DOCX class" + ;
+            " (https://github.com/digikv/docx - clone it next to the Harbour-CUI folder)"
+RETURN .F.
+
+#endif
+
+#ifndef CBRO_NO_XLSX
+
+/* the report as an Excel sheet: the title, the headings, numbers as numbers */
+FUNCTION CBR_Xlsx( cFile, aRep, aRows, cTitle, cErr, cCdp )
+
+    LOCAL oBook := WorkBook():New( cFile ), oSheet, aCols := aRep[ RPT_COLUMNS ], nCols := Len( aCols )
+    LOCAL nTitle, nHead, nGroup, nSum, nDate, aStyle := {}, aSumStyle := {}, nRow := 0, r, i, x, aCol, cType, nDec
+
+    oBook:Application := "CBro"
+    IF HB_ISSTRING( cCdp ) .AND. ! Empty( cCdp )
+        oBook:cCodePage := cCdp
+    ENDIF
+    oSheet := oBook:WorkSheet( CBR_SheetName( cTitle ) )
+    nTitle := oBook:NewStyle( oBook:NewFont( , 14, .T. ) )
+    nHead := oBook:NewStyle( oBook:NewFont( , 11, .T. ), oBook:NewBorder( 0, 0, 0, 1 ), ;
+                             oBook:NewFillPattern( 1, "FFD9E1F2", "FFD9E1F2" ) )
+    nGroup := oBook:NewStyle( oBook:NewFont( , 11, .T. ), , oBook:NewFillPattern( 1, "FFE2EFDA", "FFE2EFDA" ) )
+    nSum := oBook:NewStyle( oBook:NewFont( , 11, .T. ) )
+    nDate := oBook:NewStyle( , , , , , oBook:NewFormat( Lower( Set( _SET_DATEFORMAT ) ) ) )
+    FOR EACH aCol IN aCols
+        i := aCol:__enumIndex()
+        cType := CBR_Type( aCol, aRows, i )
+        nDec := hb_defaultValue( aCol[ RCT_DECIMALS ], 0 )
+        DO CASE
+        CASE cType == "N"
+            x := oBook:NewFormat( "#,##0" + IIF( nDec > 0, "." + Replicate( "0", Min( nDec, 9 ) ), "" ) )
+            AAdd( aStyle, oBook:NewStyle( , , , , , x ) )
+            AAdd( aSumStyle, oBook:NewStyle( oBook:NewFont( , 11, .T. ), oBook:NewBorder( 0, 1, 0, 0 ), , , , x ) )
+        CASE cType $ "DT"
+            AAdd( aStyle, nDate )
+            AAdd( aSumStyle, nSum )
+        OTHERWISE
+            AAdd( aStyle, NIL )
+            AAdd( aSumStyle, nSum )
+        ENDCASE
+        oSheet:ColumnsWidth( i, i, Min( Max( hb_defaultValue( aCol[ RCT_WIDTH ], 10 ), Len( CBR_ColHead( aCol ) ) ) + 2, 60 ) )
+    NEXT
+
+    FOR EACH x IN CBR_Titles( aRep, cTitle )
+        oSheet:Cell( { ++nRow, 1 }, x, nTitle )
+    NEXT
+    nRow++
+    nRow++
+    FOR i := 1 TO nCols
+        oSheet:Cell( { nRow, i }, CBR_ColHead( aCols[ i ] ), nHead )
+    NEXT
+    FOR EACH r IN aRows
+        nRow++
+        SWITCH r[ 1 ]
+        CASE "G"
+            oSheet:Cell( { nRow, 1 }, r[ 4 ], nGroup )
+            EXIT
+        CASE "D"
+            FOR i := 1 TO nCols
+                x := r[ 3 ][ i ]
+                DO CASE
+                CASE HB_ISSTRING( x )
+                    IF ! ( x := RTrim( x ) ) == ""
+                        oSheet:Cell( { nRow, i }, x )
+                    ENDIF
+                CASE HB_ISDATE( x ) .OR. HB_ISDATETIME( x )
+                    IF ! Empty( x )
+                        oSheet:Cell( { nRow, i }, x, aStyle[ i ] )
+                    ENDIF
+                CASE HB_ISNUMERIC( x ) .OR. HB_ISLOGICAL( x )
+                    oSheet:Cell( { nRow, i }, x, aStyle[ i ] )
+                ENDCASE
+            NEXT
+            EXIT
+        OTHERWISE
+            IF r[ 3 ][ 1 ] == NIL
+                oSheet:Cell( { nRow, 1 }, r[ 4 ], nSum )
+            ENDIF
+            FOR i := 1 TO nCols
+                IF r[ 3 ][ i ] != NIL
+                    oSheet:Cell( { nRow, i }, r[ 3 ][ i ], aSumStyle[ i ] )
+                ENDIF
+            NEXT
+        ENDSWITCH
+    NEXT
+
+    IF ! oBook:Save()
+        cErr := oBook:cError
+        RETURN .F.
+    ENDIF
+
+RETURN .T.
+
+/* a sheet name: at most 31 characters, none of : \ / ? * [ ] */
+STATIC FUNCTION CBR_SheetName( c )
+
+    LOCAL ch
+
+    FOR EACH ch IN ":\/?*[]"
+        c := StrTran( c, ch, " " )
+    NEXT
+    c := AllTrim( Left( c, 31 ) )
+
+RETURN IIF( Empty( c ), "Report", c )
+
+#else
+
+FUNCTION CBR_Xlsx( cFile, aRep, aRows, cTitle, cErr, cCdp )
+    HB_SYMBOL_UNUSED( cFile )
+    HB_SYMBOL_UNUSED( aRep )
+    HB_SYMBOL_UNUSED( aRows )
+    HB_SYMBOL_UNUSED( cTitle )
+    HB_SYMBOL_UNUSED( cCdp )
+    cErr := CBX_NoXlsx()
+RETURN .F.
+
+#endif
