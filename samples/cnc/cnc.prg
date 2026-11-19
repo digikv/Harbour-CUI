@@ -57,6 +57,7 @@ PROCEDURE Main( ... )
     s_oApp := HTApplication():new()
     ht_cuiSetupDisplay( s_oApp:rows(), s_oApp:cols() )
     hb_gtInfo( HB_GTI_WINTITLE, "CNC" )
+    hb_gtInfo( HB_GTI_ICONRES, 1 )                 /* cnc.ico (cnc.rc), Windows */
     cnc_NortonTheme()
     IF HTTheme():hasTheme( s_hSet[ "theme" ] )
         HTTheme():loadTheme( s_hSet[ "theme" ] )

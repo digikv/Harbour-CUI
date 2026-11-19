@@ -60,6 +60,7 @@ PROCEDURE Main( ... )
        The input language / IME mode is shown in the status line (no taskbar). */
     ht_cuiSetupDisplay( s_oApp:rows(), s_oApp:cols() )
     hb_gtInfo( HB_GTI_WINTITLE, "CEdit" )
+    hb_gtInfo( HB_GTI_ICONRES, 1 )                 /* cedit.ico (cedit.rc), Windows */
     ce_TurboTheme()
     IF ! s_hSet[ "theme" ] == "Classic" .AND. HTTheme():hasTheme( s_hSet[ "theme" ] )
         HTTheme():loadTheme( s_hSet[ "theme" ] )

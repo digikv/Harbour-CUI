@@ -5,6 +5,7 @@
 
 -w3 -es2
 -ocedit
+{win}cedit.rc
 
 ../../hbtui.hbc
 

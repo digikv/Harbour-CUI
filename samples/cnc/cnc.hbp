@@ -5,6 +5,7 @@
 
 -w3 -es2
 -ocnc
+{win}cnc.rc
 -i../cedit
 
 ../../hbtui.hbc
