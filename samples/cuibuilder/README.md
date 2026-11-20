@@ -258,12 +258,14 @@ again, as the objects were made with the old ones.
 ## Dialogs of Harbour-CUI
 
 `Design - New dialog` (or Enter on a `.cuiform` in the list of files) opens the dialog designer:
-the dialog is drawn as it will look, the selected control in the color of a selection. On the
+the dialog is drawn as it will look - its widgets are the ones F5 shows, painting themselves
+under the title bar of a dialog (shadow, buttons at the bottom) - the selected control in the color
+of a selection. On the
 right: the dialog or the selected control, and the keys.
 
 | Key | Command |
 |---|---|
-| Ins | add a control: label, text field (HTLineEdit), GET with PICTURE (HTGet), button, check box, radio button, combo box, list, text of several lines (HTTextEdit), number with arrows (HTSpinner), progress bar, frame |
+| Ins | add a control: label, text field (HTLineEdit), GET with PICTURE (HTGet), button, check box, radio button, combo box, list, text of several lines (HTTextEdit), number with arrows (HTSpinner), progress bar, frame, line (HTSeparator) |
 | arrows / Ctrl + arrows | move / size the selected control (no selection: Ctrl + arrows size the dialog) |
 | Tab / Shift-Tab | the next / previous control |
 | Enter, double click | the properties: position, size, name (the variable), text, PICTURE, type and length of a GET, VALID / WHEN, items, start value, the action of a button (`ok`, `cancel` or a function) |

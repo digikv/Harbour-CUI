@@ -7,15 +7,16 @@
  * F9 generates dlg_<name>.prg from it: the function Dlg_<Name>( hValues ),
  * which builds the dialog with the classes of Harbour-CUI (HTDialog, HTLabel,
  * HTLineEdit, HTGet, HTPushButton, HTCheckBox, HTRadioButton, HTComboBox,
- * HTListBox, HTFrame, HTSpinner, HTProgressBar, HTTextEdit), shows it and
+ * HTListBox, HTFrame, HTSeparator, HTSpinner, HTProgressBar, HTTextEdit), shows it and
  * returns the values of the fields in a hash (NIL = cancelled). F5 shows the
  * dialog itself, made of the same classes. (The way of the dialog designer of
  * HbIde: a design file and the code generated from it.)
  *
  *   cb_FormDesigner( cFile, hSet, bAdd )   bAdd( aFiles ): adds files to the project
  *
- * The canvas: the dialog as it will look; the selected control in the color of
- * a selection. Ins adds a control, the arrows move it, Ctrl + arrows change its
+ * The canvas: the dialog as it will look - its widgets are built as for F5 and
+ * paint themselves, under the title bar of a dialog; the selected control in
+ * the color of a selection. Ins adds a control, the arrows move it, Ctrl + arrows change its
  * size (without a selected control: the size of the dialog), Tab / Shift-Tab
  * select the next / previous one, Enter its properties, Del deletes it,
  * Ctrl-PgUp / Ctrl-PgDn move it in the Tab order; the mouse selects and drags.
@@ -38,7 +39,8 @@ RETURN { { "label",    "Label (HTLabel)",                 10, 1 }, ;
          { "memo",     "Text, several lines (HTTextEdit)", 30, 5 }, ;
          { "spinner",  "Number with arrows (HTSpinner)",  20, 1 }, ;
          { "progress", "Progress bar (HTProgressBar)",    20, 1 }, ;
-         { "frame",    "Frame (HTFrame)",                 30, 6 } }
+         { "frame",    "Frame (HTFrame)",                 30, 6 }, ;
+         { "separator", "Line (HTSeparator)",             40, 1 } }
 
 /* the properties a kind has (besides col, row, width, height) */
 STATIC FUNCTION cbf_Props( cType )
@@ -185,8 +187,9 @@ RETURN "c"
 
 /*----------------------------------------------------------- the dialog itself */
 
-/* the dialog of a form, of the widgets of Harbour-CUI (F5, and what the generated code makes) */
-STATIC FUNCTION cbf_Build( hForm, hCtl, hVar )
+/* the dialog of a form, of the widgets of Harbour-CUI (F5, the canvas, and what the generated
+   code makes); aObj (optional) gets the widget of each control, in the order of the controls */
+STATIC FUNCTION cbf_Build( hForm, hCtl, hVar, aObj )
 
     LOCAL dlg := HTDialog():new(), h, o, c, cName, aBtn
 
@@ -253,7 +256,13 @@ STATIC FUNCTION cbf_Build( hForm, hCtl, hVar )
         CASE "frame"
             o := HTFrame():new( h[ "text" ], dlg )
             EXIT
+        CASE "separator"
+            o := HTSeparator():new( dlg )
+            EXIT
         ENDSWITCH
+        IF aObj != NIL
+            AAdd( aObj, o )
+        ENDIF
         IF o != NIL
             o:setGeometry( h[ "x" ], h[ "y" ], h[ "w" ], h[ "h" ] )
             IF ! Empty( cName )
@@ -354,6 +363,9 @@ STATIC FUNCTION cbf_Code( hForm, cFrom, cFunc )
             LOOP
         CASE "frame"
             c += "    HTFrame():new( " + hb_ValToExp( h[ "text" ] ) + ", dlg ):setGeometry( " + cbf_Geo( h ) + " )" + cEol
+            LOOP
+        CASE "separator"
+            c += "    HTSeparator():new( dlg ):setGeometry( " + cbf_Geo( h ) + " )" + cEol
             LOOP
         CASE "button"
             IF Empty( cO )
@@ -890,6 +902,7 @@ RETURN
 /* the dialog being designed, drawn as it will look */
 CLASS CBFormCanvas FROM HTWidget
     DATA oDlg
+    DATA oPrev                       /* the dialog whose widgets were painted last */
     DATA nOffX      INIT 2           /* where the dialog's frame starts on the canvas */
     DATA nOffY      INIT 1
     DATA lDrag      INIT .F.
@@ -910,116 +923,64 @@ RETURN self
 METHOD PROCEDURE paintEvent( event ) CLASS CBFormCanvas
 
     LOCAL d := ::oDlg, hF := d:hForm, nW := hF[ "width" ], nH := hF[ "height" ], nT := ::nOffY, nL := ::nOffX
-    LOCAL cWin := HTTheme():getColor( HT_CLR_WINDOW ), cSel := HTTheme():getColor( HT_CLR_LIST_SELECTED )
-    LOCAL h, cTitle, nCW := nW - 2, nCH := nH - 3, aBtn, c, nX, y, cClr, nMaxC := MaxCol(), nMaxR := MaxRow()
+    LOCAL cSel := HTTheme():getColor( HT_CLR_LIST_SELECTED ), cTitle := HTTheme():getColor( HT_CLR_TITLEBAR )
+    LOCAL cBtn := HTTheme():getColor( HT_CLR_TITLEBTN ), cWin, aObj := {}, oDlg, o, g, n, nBtn, nRight
+    LOCAL nMaxR := MaxRow(), nMaxC := MaxCol(), nTop, nLeft, nBot, nRgt
 
     HB_SYMBOL_UNUSED( event )
     DispBox( 0, 0, nMaxR, nMaxC, Replicate( " ", 9 ), HTTheme():getColor( HT_CLR_DESKTOP ) )
 
-    /* the frame and the title of the dialog (in a dialog the content starts at col 1, row 1) */
-    DispBox( nT, nL, nT + nH - 1, nL + nW - 1, Replicate( " ", 9 ), cWin )
-    DispBox( nT, nL, nT + nH - 1, nL + nW - 1, , IIF( d:nSel == 0 .AND. ::hasFocus(), cSel, cWin ) )
-    cTitle := " " + hF[ "title" ] + " "
-    DispOutAt( nT, nL + 2, ht_cellLeft( cTitle, nW - 4 ), HTTheme():getColor( HT_CLR_TITLEBAR ) )
-    nT++
-    nL++
+    /* the dialog of F5, not shown: its widgets paint themselves here. Kept until the
+       next paint - a widget knows its parent by the address of the object. */
+    oDlg := cbf_Build( hF, { => }, { => }, aObj )
+    ::oPrev := oDlg
+    cWin := oDlg:color
 
-    FOR EACH h IN hF[ "controls" ]
-        cClr := IIF( h:__enumIndex() == d:nSel, cSel, NIL )
-        cbf_Draw( h, nT, nL, cClr, nCW, nCH )
+    /* the shadow of a dialog (hb_Shadow: 2 columns on the right, a row below) */
+    DispBox( nT + 1, nL + nW, nT + nH, nL + nW + 1, Replicate( " ", 9 ), "N/N" )
+    DispBox( nT + nH, nL + 2, nT + nH, nL + nW + 1, Replicate( " ", 9 ), "N/N" )
+
+    /* the title bar and the client area, as HTWidget:drawCuiChrome() draws them */
+    nBtn := IIF( nW >= 24, 3, 1 )
+    nRight := nW - 1
+    DispOutAt( nT, nL, Space( nW ), cTitle )
+    FOR EACH g IN { oDlg:charWidgetClose, oDlg:charWidgetMaximize, oDlg:charWidgetHide }
+        DispOutAt( nT, nL + nRight - nBtn + 1, ht_cellPadC( g, nBtn ), cBtn )
+        nRight -= nBtn
     NEXT
+    DispOutAt( nT, nL, ht_cellPadR( " " + hF[ "title" ], nRight + 1 ), IIF( d:nSel == 0 .AND. ::hasFocus(), cSel, cTitle ) )
+    FOR n := 1 TO nH - 1
+        DispOutAt( nT + n, nL, Space( nW ), cWin )
+    NEXT
+    g := oDlg:charWidgetResize
+    DispOutAt( nT + nH - 1, nL + nW - ht_strWidth( g ), g, cWin )
 
-    /* the buttons of addButtonBar(), right-aligned on the last row */
-    aBtn := cbf_Buttons( hF )
-    IF Len( aBtn ) > 0
-        nX := nL + nCW
-        y := nT + nCH - 1
-        FOR c := Len( aBtn ) TO 1 STEP -1
-            nX -= ht_strWidth( aBtn[ c ] ) + 5
-            DispOutAt( y, nX, "[ " + aBtn[ c ] + " ]", HTTheme():getColor( HT_CLR_BUTTON_NORMAL ) )
-        NEXT
-    ENDIF
-
-RETURN
-
-/* one control on the canvas, clipped to the content of the dialog */
-STATIC PROCEDURE cbf_Draw( h, nT, nL, cSel, nCW, nCH )
-
-    LOCAL nY := nT + h[ "y" ], nX := nL + h[ "x" ], nW := Min( h[ "w" ], nCW - h[ "x" ] ), nHt := Min( h[ "h" ], nCH - h[ "y" ] )
-    LOCAL c, cClr, i, cLab, aItems, nLab
-
-    IF nW < 1 .OR. nHt < 1
-        RETURN
-    ENDIF
-    SWITCH h[ "type" ]
-    CASE "label"
-        DispOutAt( nY, nX, ht_cellPadR( h[ "text" ], nW ), hb_defaultValue( cSel, HTTheme():getColor( HT_CLR_LABEL ) ) )
-        EXIT
-    CASE "edit"
-        DispOutAt( nY, nX, ht_cellPadR( IIF( Empty( h[ "text" ] ), h[ "name" ], h[ "text" ] ), nW ), ;
-                   hb_defaultValue( cSel, HTTheme():getColor( HT_CLR_LINEEDIT_NORMAL ) ) )
-        EXIT
-    CASE "get"
-        cLab := h[ "text" ]
-        nLab := IIF( Empty( cLab ), 0, Min( nW - 1, ht_strWidth( cLab ) + 1 ) )
-        IF nLab > 0
-            DispOutAt( nY, nX, ht_cellPadR( cLab, nLab ), hb_defaultValue( cSel, HTTheme():getColor( HT_CLR_GET_LABEL ) ) )
-        ENDIF
-        c := Transform( cbf_GetInit( h ), h[ "picture" ] )
-        DispOutAt( nY, nX + nLab, ht_cellPadR( IIF( Empty( c ), h[ "name" ], c ), nW - nLab ), ;
-                   hb_defaultValue( cSel, HTTheme():getColor( HT_CLR_GET_NORMAL ) ) )
-        EXIT
-    CASE "button"
-        DispOutAt( nY, nX, ht_cellPadR( "[ " + h[ "text" ] + " ]", nW ), hb_defaultValue( cSel, HTTheme():getColor( HT_CLR_BUTTON_NORMAL ) ) )
-        EXIT
-    CASE "checkbox"
-    CASE "radio"
-        c := IIF( h[ "type" ] == "radio", IIF( cbf_IsTrue( h[ "value" ] ), "(*) ", "( ) " ), IIF( cbf_IsTrue( h[ "value" ] ), "[x] ", "[ ] " ) )
-        DispOutAt( nY, nX, ht_cellPadR( c + h[ "text" ], nW ), hb_defaultValue( cSel, HTTheme():getColor( HT_CLR_CHECK_NORMAL ) ) )
-        EXIT
-    CASE "combo"
-        aItems := hb_ATokens( h[ "items" ], "," )
-        c := IIF( Len( aItems ) >= Max( 1, cbf_Num( h[ "value" ] ) ), AllTrim( aItems[ Max( 1, cbf_Num( h[ "value" ] ) ) ] ), "" )
-        DispOutAt( nY, nX, ht_cellPadR( c, Max( 0, nW - 1 ) ) + ht_glyph( 0x25BC, "v" ), hb_defaultValue( cSel, HTTheme():getColor( HT_CLR_COMBO_NORMAL ) ) )
-        EXIT
-    CASE "list"
-    CASE "memo"
-        cClr := hb_defaultValue( cSel, HTTheme():getColor( IIF( h[ "type" ] == "list", HT_CLR_LIST_NORMAL, HT_CLR_LINEEDIT_NORMAL ) ) )
-        aItems := IIF( h[ "type" ] == "list", hb_ATokens( h[ "items" ], "," ), hb_ATokens( h[ "text" ], Chr( 10 ) ) )
-        FOR i := 1 TO nHt
-            c := IIF( i <= Len( aItems ), AllTrim( aItems[ i ] ), "" )
-            IF i == 1 .AND. Empty( c )
-                c := h[ "name" ]
+    /* the widgets, each in its viewport (HTWidget:paintChild(): the content starts
+       under the title bar, at column 0), clipped to the dialog and the canvas */
+    FOR EACH o IN oDlg:children
+        IF o:isDerivedFrom( "HTWidget" ) .AND. o:width > 0 .AND. o:height > 0
+            nTop := nT + 1 + o:y
+            nLeft := nL + o:x
+            nBot := Min( Min( nTop + o:height - 1, nT + nH - 1 ), nMaxR )
+            nRgt := Min( Min( nLeft + o:width - 1, nL + nW - 1 ), nMaxC )
+            IF nBot >= nTop .AND. nRgt >= nLeft
+                ht_wFormatPush( nTop, nLeft, nMaxR - nBot, nMaxC - nRgt )
+                o:paintEvent( HTPaintEvent():new() )
+                ht_wFormatPop()
+                /* the selected control: its own look in the color of a selection */
+                IF d:nSel > 0 .AND. d:nSel <= Len( aObj ) .AND. aObj[ d:nSel ] == o
+                    hb_ClrArea( ht_absRow( nTop ), ht_absCol( nLeft ), ht_absRow( nBot ), ht_absCol( nRgt ), hb_ColorToN( cSel ) )
+                ENDIF
             ENDIF
-            DispOutAt( nY + i - 1, nX, ht_cellPadR( c, nW ), cClr )
-        NEXT
-        EXIT
-    CASE "spinner"
-        c := IIF( Empty( h[ "text" ] ), "", h[ "text" ] + "  " ) + "[" + PadL( h[ "value" ], 5 ) + " ]" + ht_glyph( 0x2195, "^" )
-        DispOutAt( nY, nX, ht_cellPadR( c, nW ), hb_defaultValue( cSel, HTTheme():getColor( HT_CLR_SPINNER_NORMAL ) ) )
-        EXIT
-    CASE "progress"
-        i := Int( nW * Min( 100, Max( 0, cbf_Num( h[ "value" ] ) ) ) / 100 )
-        DispOutAt( nY, nX, Space( i ), hb_defaultValue( cSel, HTTheme():getColor( HT_CLR_PROGRESS_FILL ) ) )
-        DispOutAt( nY, nX + i, Space( nW - i ), hb_defaultValue( cSel, HTTheme():getColor( HT_CLR_PROGRESS_EMPTY ) ) )
-        EXIT
-    CASE "frame"
-        cClr := hb_defaultValue( cSel, HTTheme():getColor( HT_CLR_FRAME ) )
-        IF nHt >= 2 .AND. nW >= 2
-            DispBox( nY, nX, nY + nHt - 1, nX + nW - 1, , cClr )
         ENDIF
-        IF ! Empty( h[ "text" ] ) .AND. nW > 4
-            DispOutAt( nY, nX + 2, ht_cellLeft( " " + h[ "text" ] + " ", nW - 4 ), cClr )
-        ENDIF
-        EXIT
-    ENDSWITCH
+    NEXT
 
 RETURN
 
 /* a click selects the control under the mouse (else the dialog), a drag moves it */
 METHOD PROCEDURE mouseEvent( eventMouse ) CLASS CBFormCanvas
 
-    LOCAL d := ::oDlg, nRow := eventMouse:mouseRow - ::nOffY - 1, nCol := eventMouse:mouseCol - ::nOffX - 1, n, h
+    LOCAL d := ::oDlg, nRow := eventMouse:mouseRow - ::nOffY - 1, nCol := eventMouse:mouseCol - ::nOffX, n, h
 
     SWITCH eventMouse:nKey
     CASE K_LBUTTONDOWN
