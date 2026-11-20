@@ -32,6 +32,11 @@
 #include "hbgtinfo.ch"
 #include "cuibuild.ch"
 
+/* cbf_Code(): the codepage of the generated file, its texts through CpText(), a warning */
+STATIC s_cGenCP := "UTF8"
+STATIC s_lGenCP := .F.
+STATIC s_cGenWarn := ""
+
 /* the kinds of controls: { type, name in the list, default size, name on the palette } */
 STATIC FUNCTION cbf_Types()
 RETURN { { "label",    "Label (HTLabel)",                 10, 1, "Label" }, ;
@@ -119,6 +124,7 @@ STATIC FUNCTION cbf_New( cName )
     h[ "width" ] := 50
     h[ "height" ] := 14
     h[ "buttons" ] := "OK,Cancel"
+    h[ "codepage" ] := "UTF8"
     h[ "controls" ] := {}
 
 RETURN h
@@ -138,7 +144,7 @@ STATIC FUNCTION cbf_Load( cFile, cErr )
         cErr := cFile + " is not a dialog of CuiBuilder"
         RETURN NIL
     ENDIF
-    FOR EACH c IN { { "name", "Dialog" }, { "title", "" }, { "width", 50 }, { "height", 14 }, { "buttons", "" } }
+    FOR EACH c IN { { "name", "Dialog" }, { "title", "" }, { "width", 50 }, { "height", 14 }, { "buttons", "" }, { "codepage", "UTF8" } }
         IF ! hb_HHasKey( h, c[ 1 ] )
             h[ c[ 1 ] ] := c[ 2 ]
         ENDIF
@@ -358,6 +364,13 @@ STATIC FUNCTION cbf_Code( hForm, cFrom, cFunc )
 
     LOCAL c := "", cEol := hb_eol(), h, cName, cO, aBtn, aRet := {}, aGets := {}, x, cN, e, cA, aFunc := {}, a
 
+    s_cGenCP := Upper( hb_CStr( hb_HGetDef( hForm, "codepage", "UTF8" ) ) )
+    IF hb_AScan( { "CP950", "GBK" }, s_cGenCP,,, .T. ) == 0
+        s_cGenCP := "UTF8"
+    ENDIF
+    s_lGenCP := .F.
+    s_cGenWarn := ""
+
     FOR EACH h IN hForm[ "controls" ]
         IF h[ "type" ] == "get" .AND. ! Empty( hb_HGetDef( h, "name", "" ) )
             AAdd( aGets, h )
@@ -371,6 +384,12 @@ STATIC FUNCTION cbf_Code( hForm, cFrom, cFunc )
     c += " *" + cEol
     c += " * hValues: the start values of the fields by their names; the result has" + cEol
     c += " * the values of the fields: " + cbf_NameList( hForm ) + cEol
+    IF ! s_cGenCP == "UTF8"
+        c += " *" + cEol
+        c += " * Codepage: " + s_cGenCP + " (" + IIF( s_cGenCP == "CP950", "Big5", "GBK / CP936" ) + "). The texts go through CpText() into" + cEol
+        c += " * the codepage of the program (UTF8EX, or " + s_cGenCP + " itself); a text of your own" + cEol
+        c += ' * in the code of an event: CpText( "..." ).' + cEol
+    ENDIF
     c += " */" + cEol + cEol
     c += '#include "hbtui.ch"' + cEol + cEol
     c += "FUNCTION " + cFunc + "( hValues )" + cEol + cEol
@@ -387,7 +406,7 @@ STATIC FUNCTION cbf_Code( hForm, cFrom, cFunc )
         ENDIF
     NEXT
     c += cEol
-    c += "    dlg:setWindowTitle( " + hb_ValToExp( hForm[ "title" ] ) + " )" + cEol
+    c += "    dlg:setWindowTitle( " + cbf_Lit( hForm[ "title" ] ) + " )" + cEol
     c += "    dlg:resize( " + hb_ntos( hForm[ "width" ] ) + ", " + hb_ntos( hForm[ "height" ] ) + " )" + cEol + cEol
     FOR EACH h IN hForm[ "controls" ]
         cName := hb_HGetDef( h, "name", "" )
@@ -396,10 +415,10 @@ STATIC FUNCTION cbf_Code( hForm, cFrom, cFunc )
         cN := cFunc + "_" + IIF( Empty( cName ), "c" + hb_ntos( h:__enumIndex() ), cName ) + "_"
         SWITCH h[ "type" ]
         CASE "label"
-            c += "    HTLabel():new( " + hb_ValToExp( h[ "text" ] ) + ", dlg ):setGeometry( " + cbf_Geo( h ) + " )" + cEol
+            c += "    HTLabel():new( " + cbf_Lit( h[ "text" ] ) + ", dlg ):setGeometry( " + cbf_Geo( h ) + " )" + cEol
             LOOP
         CASE "frame"
-            c += "    HTFrame():new( " + hb_ValToExp( h[ "text" ] ) + ", dlg ):setGeometry( " + cbf_Geo( h ) + " )" + cEol
+            c += "    HTFrame():new( " + cbf_Lit( h[ "text" ] ) + ", dlg ):setGeometry( " + cbf_Geo( h ) + " )" + cEol
             LOOP
         CASE "separator"
             c += "    HTSeparator():new( dlg ):setGeometry( " + cbf_Geo( h ) + " )" + cEol
@@ -407,10 +426,10 @@ STATIC FUNCTION cbf_Code( hForm, cFrom, cFunc )
         CASE "button"
             IF Empty( cO )
                 cO := "o" + hb_ntos( h:__enumIndex() )
-                c += "    " + cO + " := HTPushButton():new( " + hb_ValToExp( h[ "text" ] ) + ", dlg )" + cEol
+                c += "    " + cO + " := HTPushButton():new( " + cbf_Lit( h[ "text" ] ) + ", dlg )" + cEol
                 c := StrTran( c, "LOCAL dlg := HTDialog():new(), hCtl := { => }", "LOCAL dlg := HTDialog():new(), hCtl := { => }, " + cO )
             ELSE
-                c += "    " + cO + " := HTPushButton():new( " + hb_ValToExp( h[ "text" ] ) + ", dlg )" + cEol
+                c += "    " + cO + " := HTPushButton():new( " + cbf_Lit( h[ "text" ] ) + ", dlg )" + cEol
             ENDIF
             cA := hb_HGetDef( h, "action", "" )
             DO CASE
@@ -427,13 +446,13 @@ STATIC FUNCTION cbf_Code( hForm, cFrom, cFunc )
             EXIT
         CASE "edit"
             c += "    " + cO + " := HTLineEdit():new( dlg )" + cEol
-            c += "    " + cO + ":setText( hb_HGetDef( hValues, " + x + ", " + hb_ValToExp( h[ "text" ] ) + " ) )" + cEol
+            c += "    " + cO + ":setText( hb_HGetDef( hValues, " + x + ", " + cbf_Lit( h[ "text" ] ) + " ) )" + cEol
             AAdd( aRet, x + " => " + cO + ":text" )
             EXIT
         CASE "get"
             c += "    " + cO + " := HTGet():new( dlg )" + cEol
             c += "    " + cO + ":setup( {| x | IIF( x == NIL, " + cName + ", " + cName + " := x ) }, " + ;
-                 hb_ValToExp( h[ "text" ] ) + ", " + hb_ValToExp( h[ "picture" ] ) + ", " + ;
+                 cbf_Lit( h[ "text" ] ) + ", " + hb_ValToExp( h[ "picture" ] ) + ", " + ;
                  IIF( Empty( cbf_Lines( hb_HGetDef( h, "valid", "" ) ) ), "", cbf_EventBlock( h[ "valid" ], "", cN + "valid", aFunc, .T. ) ) + ", " + ;
                  IIF( Empty( cbf_Lines( hb_HGetDef( h, "when", "" ) ) ), "", cbf_EventBlock( h[ "when" ], "", cN + "when", aFunc, .T. ) ) + ;
                  ",,,,, " + hb_ntos( h[ "w" ] ) + " )" + cEol
@@ -441,7 +460,7 @@ STATIC FUNCTION cbf_Code( hForm, cFrom, cFunc )
             EXIT
         CASE "checkbox"
         CASE "radio"
-            c += "    " + cO + " := " + IIF( h[ "type" ] == "radio", "HTRadioButton", "HTCheckBox" ) + "():new( " + hb_ValToExp( h[ "text" ] ) + ", dlg )" + cEol
+            c += "    " + cO + " := " + IIF( h[ "type" ] == "radio", "HTRadioButton", "HTCheckBox" ) + "():new( " + cbf_Lit( h[ "text" ] ) + ", dlg )" + cEol
             c += "    " + cO + ":setChecked( hb_HGetDef( hValues, " + x + ", " + IIF( cbf_IsTrue( h[ "value" ] ), ".T.", ".F." ) + " ) )" + cEol
             AAdd( aRet, x + " => " + cO + ":checked" )
             EXIT
@@ -454,12 +473,12 @@ STATIC FUNCTION cbf_Code( hForm, cFrom, cFunc )
             EXIT
         CASE "memo"
             c += "    " + cO + " := HTTextEdit():new( dlg )" + cEol
-            c += "    " + cO + ":setText( hb_HGetDef( hValues, " + x + ", " + hb_ValToExp( h[ "text" ] ) + " ) )" + cEol
+            c += "    " + cO + ":setText( hb_HGetDef( hValues, " + x + ", " + cbf_Lit( h[ "text" ] ) + " ) )" + cEol
             AAdd( aRet, x + " => " + cO + ":text" )
             EXIT
         CASE "spinner"
             c += "    " + cO + " := HTSpinner():new( dlg )" + cEol
-            c += "    " + cO + ":setup( " + hb_ValToExp( h[ "text" ] ) + ", " + hb_ntos( cbf_Num( h[ "min" ] ) ) + ", " + hb_ntos( cbf_Num( h[ "max" ] ) ) + ", " + ;
+            c += "    " + cO + ":setup( " + cbf_Lit( h[ "text" ] ) + ", " + hb_ntos( cbf_Num( h[ "min" ] ) ) + ", " + hb_ntos( cbf_Num( h[ "max" ] ) ) + ", " + ;
                  hb_ntos( cbf_Num( h[ "step" ] ) ) + ", hb_HGetDef( hValues, " + x + ", " + hb_ntos( cbf_Num( h[ "value" ] ) ) + " ) )" + cEol
             AAdd( aRet, x + " => " + cO + ":value" )
             EXIT
@@ -479,7 +498,7 @@ STATIC FUNCTION cbf_Code( hForm, cFrom, cFunc )
     aBtn := cbf_Buttons( hForm )
     IF Len( aBtn ) > 0
         c += cEol + "    dlg:addButtonBar( "
-        AEval( aBtn, {| b, n | c += IIF( n == 1, "", ", " ) + hb_ValToExp( b ) } )
+        AEval( aBtn, {| b, n | c += IIF( n == 1, "", ", " ) + cbf_Lit( b ) } )
         c += " )" + cEol
     ENDIF
     a := cbf_Lines( hb_HGetDef( hForm, "oninit", "" ) )
@@ -502,11 +521,38 @@ STATIC FUNCTION cbf_Code( hForm, cFrom, cFunc )
     FOR EACH x IN aFunc                   /* the events of more lines */
         c += cEol + x
     NEXT
+    IF ! s_cGenCP == "UTF8"
+        /* CpText( "..." ) of your own in the code of an event */
+        IF "CPTEXT(" $ Upper( StrTran( SubStr( c, At( '#include "hbtui.ch"', c ) ), " ", "" ) )
+            s_lGenCP := .T.
+        ENDIF
+        IF s_lGenCP
+            c := StrTran( c, '#include "hbtui.ch"' + cEol, '#include "hbtui.ch"' + cEol + cEol + "REQUEST HB_CODEPAGE_" + s_cGenCP + cEol, 1, 1 )
+            c += cEol + "/* a text of this file (" + s_cGenCP + ") in the codepage of the program */" + cEol
+            c += "STATIC FUNCTION CpText( c )" + cEol
+            c += "RETURN hb_Translate( c, " + hb_ValToExp( s_cGenCP ) + ", hb_cdpSelect() )" + cEol
+        ENDIF
+        x := hb_UTF8ToStr( c, s_cGenCP )
+        IF ! hb_StrToUTF8( x, s_cGenCP ) == c
+            s_cGenWarn := "Some characters have no code in " + s_cGenCP + ": they are ? in the file."
+        ENDIF
+        c := x
+    ENDIF
 
 RETURN c
 
 /* the code block of an event: one line = {|params| line }, more lines = a function of its own
    ( dlg, hCtl, params ) put at the end (aFunc); lRet: it RETURNs .T. when the code does not */
+/* a text in the code: in a file of Big5 / GBK through CpText() (a text with other than ASCII) */
+STATIC FUNCTION cbf_Lit( c )
+
+    IF ! s_cGenCP == "UTF8" .AND. hb_BLen( c ) != Len( c )
+        s_lGenCP := .T.
+        RETURN "CpText( " + hb_ValToExp( c ) + " )"
+    ENDIF
+
+RETURN hb_ValToExp( c )
+
 STATIC FUNCTION cbf_EventBlock( cCode, cParams, cFunc, aFunc, lRet )
 
     LOCAL a := cbf_Lines( cCode ), c, x, lHasRet := .F., cArgs := "dlg, hCtl" + IIF( Empty( cParams ), "", ", " + cParams )
@@ -539,7 +585,7 @@ STATIC FUNCTION cbf_ItemsExp( cItems )
     LOCAL c := "", x
 
     FOR EACH x IN hb_ATokens( cItems, "," )
-        c += IIF( x:__enumIndex() == 1, "", ", " ) + hb_ValToExp( AllTrim( x ) )
+        c += IIF( x:__enumIndex() == 1, "", ", " ) + cbf_Lit( AllTrim( x ) )
     NEXT
 
 RETURN c
@@ -554,7 +600,7 @@ STATIC FUNCTION cbf_InitExp( h )
     CASE "L" ; RETURN IIF( cbf_IsTrue( c ), ".T.", ".F." )
     ENDSWITCH
 
-RETURN hb_ValToExp( c )
+RETURN cbf_Lit( c )
 
 STATIC FUNCTION cbf_NameList( hForm )
 
@@ -868,7 +914,7 @@ METHOD info() CLASS CBFormDlg
             ENDIF
         ELSEIF h == NIL
             AEval( { { "Name", "name" }, { "Title", "title" }, { "Width", "width" }, { "Height", "height" }, ;
-                     { "Buttons", "buttons" } }, {| x | AAdd( ::aRows, x ) } )
+                     { "Buttons", "buttons" }, { "Codepage", "codepage" } }, {| x | AAdd( ::aRows, x ) } )
         ELSE
             AEval( { { "Column", "x" }, { "Row", "y" }, { "Width", "w" }, { "Height", "h" } }, {| x | AAdd( ::aRows, x ) } )
             FOR EACH p IN cbf_Props( h[ "type" ] )
@@ -1221,6 +1267,9 @@ METHOD choices( cKey ) CLASS CBFormDlg
         IF cKey == "buttons"
             RETURN { { "OK,Cancel", "OK,Cancel" }, { "OK", "OK" }, { "Save,Cancel", "Save,Cancel" }, ;
                      { "Yes,No", "Yes,No" }, { "(none)", "" }, { "other ...", NIL } }
+        ELSEIF cKey == "codepage"
+            RETURN { { "UTF8   UTF-8 (recommended)", "UTF8" }, { "CP950  Big5, Traditional Chinese", "CP950" }, ;
+                     { "GBK    GBK / CP936, Simplified Chinese", "GBK" } }
         ENDIF
         RETURN NIL
     ENDIF
@@ -1403,7 +1452,10 @@ METHOD generate() CLASS CBFormDlg
     IF ::bAdd != NIL
         Eval( ::bAdd, { cPrg } )
     ENDIF
-    HTMessageBox():information( "CuiBuilder", "Generated: " + cPrg + Chr( 10 ) + Chr( 10 ) + ;
+    IF ! Empty( s_cGenWarn )
+        HTMessageBox():warning( "CuiBuilder", s_cGenWarn )
+    ENDIF
+    HTMessageBox():information( "CuiBuilder", "Generated: " + cPrg + IIF( s_cGenCP == "UTF8", "", " (" + s_cGenCP + ")" ) + Chr( 10 ) + Chr( 10 ) + ;
         "In the program:" + Chr( 10 ) + ;
         "   hVal := " + cFunc + "( { " + IIF( Len( aSeen ) > 0, '"' + ATail( ::hForm[ "controls" ] )[ "type" ] + '" => ...', "" ) + " } )" + Chr( 10 ) + ;
         "   IF hVal != NIL" + Chr( 10 ) + "      ... hVal[ " + IIF( Len( aSeen ) > 0, '"' + aSeen[ 1 ] + '"', '"name"' ) + " ] ..." + Chr( 10 ) + "   ENDIF" )

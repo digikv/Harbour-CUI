@@ -463,6 +463,10 @@ samples/          Demo applications (human-facing, require a display)
                   (cbf_Build), F9 = dlg_<name>.prg with Dlg_<Name>( hValues ) -> hValues / NIL built of
                   HTDialog/HTGet/HTLineEdit/... (cbf_Code; keep both in step). Screen size: [VIEW] rows/cols,
                   -size=RxC, Options - Screen size (ht_cuiSetupDisplay + screenResized at run time).
+                  Big5/GBK: form property "codepage" (UTF8/CP950/GBK): cbf_Code writes the file in it
+                  (hb_UTF8ToStr), non-ASCII texts via cbf_Lit -> CpText() = hb_Translate( c, cp, hb_cdpSelect() )
+                  + REQUEST HB_CODEPAGE_xxx (only when used: an unused STATIC function is W0034); the editor
+                  (cb_EditFile) reads "Codepage: CP950|GBK" from the header, else cb_DefCP() (as CEdit).
                   New project: kind list (Harbour-CUI app = cb_MakeSkeleton(): <name>.prg with Main first in
                   the files, menu Dialogs calls Dlg_* of the .cuiform files via cb_FormGenerate()); F9 on a
                   program without Main (cb_FindMain regex) offers the skeleton.

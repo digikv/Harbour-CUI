@@ -27,6 +27,8 @@
 
 REQUEST HB_CODEPAGE_UTF8EX
 REQUEST HB_CODEPAGE_SL852
+REQUEST HB_CODEPAGE_CP950
+REQUEST HB_CODEPAGE_GBK
 
 #define VK_ESCAPE       0x1B
 
@@ -1457,13 +1459,35 @@ RETURN
 
 /*----------------------------------------------------------- editor */
 
+/* the codepage of a file that is not UTF-8: Big5 / GBK on a Chinese system (Windows ANSI
+   codepage 950 / 936, LANG zh_TW.Big5 / zh_CN.GBK), else CP852 (as CEdit) */
+STATIC FUNCTION cb_DefCP()
+
+    LOCAL cOS := hb_cdpOS()
+
+    DO CASE
+    CASE HB_ISSTRING( cOS ) .AND. ( Upper( cOS ) == "CP950" .OR. Upper( cOS ) == "BIG5" )
+        RETURN "CP950"
+    CASE HB_ISSTRING( cOS ) .AND. Upper( cOS ) == "GBK"
+        RETURN "GBK"
+    ENDCASE
+
+RETURN "SL852"
+
 /* a file in the editor of CEdit; nLine > 0: the cursor on that line */
 STATIC PROCEDURE cb_EditFile( cFile, nLine )
 
-    LOCAL oB := CEBuffer():new(), dlg
+    LOCAL oB := CEBuffer():new(), dlg, cCP := cb_DefCP(), cHead
 
     IF hb_FileExists( cFile )
-        IF ! oB:load( cFile, "SL852" )
+        /* a file that is not UTF-8: Big5 / GBK as its header says (a dialog generated so),
+           else the Chinese codepage of the system, else CP852 */
+        cHead := hb_BLeft( hb_MemoRead( cFile ), 2048 )
+        DO CASE
+        CASE "Codepage: CP950" $ cHead ; cCP := "CP950"
+        CASE "Codepage: GBK" $ cHead   ; cCP := "GBK"
+        ENDCASE
+        IF ! oB:load( cFile, cCP )
             HTMessageBox():error( "CuiBuilder", oB:cError )
             RETURN
         ENDIF

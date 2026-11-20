@@ -309,6 +309,18 @@ fields from `hValues` by their names, shows the dialog and returns the values of
 at the end of the file (it reaches the fields through `hCtl`); onInit / onAccept of the dialog are
 statements before `exec()` / after OK.
 
+**Chinese (Big5 / GBK).** The texts of a dialog (title, labels, buttons, items, start values) are
+typed in the designer as any text (IME). The property *Codepage* of the dialog (F3) chooses the
+codepage of `dlg_<name>.prg`: UTF-8 (recommended), **CP950** (Big5, Traditional Chinese) or
+**GBK** (CP936, Simplified Chinese) - for a program whose sources are in Big5 / GBK. Such a file
+is written in that codepage, and each text that is not ASCII goes through
+`CpText( "..." )` = `hb_Translate( c, "CP950", hb_cdpSelect() )`, so the program shows it right
+when it runs in UTF8EX (as Harbour-CUI does) or in CP950 itself; the file REQUESTs the codepage.
+A character Big5 / GBK has no code for is written as `?` (F9 warns). A text of your own in the
+code of an event: `CpText( "..." )`. The editor of CuiBuilder reads and writes such a file in its
+codepage (its header says `Codepage: CP950`), other files that are not UTF-8 in the Chinese
+codepage of the system (Windows 950 / 936), else in CP852.
+
 ```
 hVal := Dlg_Kupac( { "cNaziv" => KUPCI->NAZIV, "nRok" => KUPCI->ROK } )
 IF hVal != NIL
