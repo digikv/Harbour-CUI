@@ -7,7 +7,7 @@
  * F9 generates dlg_<name>.prg from it: the function Dlg_<Name>( hValues ),
  * which builds the dialog with the classes of Harbour-CUI (HTDialog, HTLabel,
  * HTLineEdit, HTGet, HTPushButton, HTCheckBox, HTRadioButton, HTComboBox,
- * HTListBox, HTSearchBox, HTFrame, HTSeparator, HTSpinner, HTProgressBar, HTTextEdit), shows it and
+ * HTListBox, HTSearchBox, HTDatePicker, HTFrame, HTSeparator, HTSpinner, HTProgressBar, HTTextEdit), shows it and
  * returns the values of the fields in a hash (NIL = cancelled). F5 shows the
  * dialog itself, made of the same classes. (The way of the dialog designer of
  * HbIde: a design file and the code generated from it.)
@@ -48,6 +48,7 @@ RETURN { { "label",    "Label (HTLabel)",                 10, 1, "Label" }, ;
          { "combo",    "Combo box (HTComboBox)",          20, 1, "Combo" }, ;
          { "list",     "List (HTListBox)",                20, 5, "List" }, ;
          { "searchbox", "Search box (HTSearchBox)",       30, 1, "Search" }, ;
+         { "date",     "Date with a calendar (HTDatePicker)", 13, 1, "Date" }, ;
          { "memo",     "Text, several lines (HTTextEdit)", 30, 5, "Memo" }, ;
          { "spinner",  "Number with arrows (HTSpinner)",  20, 1, "Spinner" }, ;
          { "progress", "Progress bar (HTProgressBar)",    20, 1, "Progress" }, ;
@@ -70,6 +71,7 @@ STATIC FUNCTION cbf_Props( cType )
     CASE "spinner"  ; RETURN { "name", "text", "min", "max", "step", "value" }
     CASE "progress" ; RETURN { "name", "value" }
     CASE "searchbox" ; RETURN { "name", "placeholder", "source", "details", "value" }
+    CASE "date"     ; RETURN { "name", "lang", "placeholder", "value" }
     CASE "frame"    ; RETURN { "text" }
     ENDSWITCH
 
@@ -90,6 +92,7 @@ STATIC FUNCTION cbf_Events( cType )
     CASE "combo"
     CASE "list"     ; RETURN { { "onchanged", "onChanged", "nIndex" } }
     CASE "spinner"  ; RETURN { { "onchanged", "onChanged", "nValue" } }
+    CASE "date"     ; RETURN { { "onchanged", "onChanged", "dDate" } }
     CASE "searchbox" ; RETURN { { "onselected", "onSelected", "xItem, xValue" }, { "oncleared", "onCleared", "" }, ;
                                 { "onadd", "onAdd", "" } }
     ENDSWITCH
@@ -113,6 +116,7 @@ STATIC FUNCTION cbf_PropLabel( cProp )
     CASE "max"     ; RETURN "Maximum"
     CASE "step"    ; RETURN "Step"
     CASE "placeholder" ; RETURN "Placeholder"
+    CASE "lang"    ; RETURN "Language"
     CASE "source"  ; RETURN "Items (expr)"
     CASE "details" ; RETURN "Details (x)"
     ENDSWITCH
@@ -197,6 +201,7 @@ STATIC FUNCTION cbf_Control( cType, nX, nY, aForm )
     CASE "memo"     ; h[ "text" ] := "" ; EXIT
     CASE "spinner"  ; h[ "text" ] := "" ; h[ "min" ] := "0" ; h[ "max" ] := "100" ; h[ "step" ] := "1" ; h[ "value" ] := "0" ; EXIT
     CASE "progress" ; h[ "value" ] := "0" ; EXIT
+    CASE "date"     ; h[ "lang" ] := "" ; h[ "placeholder" ] := "" ; h[ "value" ] := "today" ; EXIT
     CASE "searchbox" ; h[ "placeholder" ] := "Search ..." ; h[ "source" ] := "" ; h[ "details" ] := "" ; h[ "value" ] := "" ; EXIT
     CASE "frame"    ; h[ "text" ] := "Group" ; EXIT
     ENDSWITCH
@@ -228,6 +233,7 @@ STATIC FUNCTION cbf_Prefix( cType )
     CASE "spinner"
     CASE "searchbox"
     CASE "progress" ; RETURN "n"
+    CASE "date"     ; RETURN "d"
     CASE "button"   ; RETURN "btn"
     ENDSWITCH
 
@@ -306,6 +312,14 @@ STATIC FUNCTION cbf_Build( hForm, hCtl, hVar, aObj )
             EXIT
         CASE "separator"
             o := HTSeparator():new( dlg )
+            EXIT
+        CASE "date"
+            o := HTDatePicker():new( dlg )
+            IF ! Empty( hb_HGetDef( h, "lang", "" ) )
+                o:setLang( h[ "lang" ] )
+            ENDIF
+            o:placeholder := hb_HGetDef( h, "placeholder", "" )
+            o:setValue( cbf_DateVal( hb_HGetDef( h, "value", "" ) ) )
             EXIT
         CASE "searchbox"
             o := HTSearchBox():new( dlg )
@@ -507,6 +521,17 @@ STATIC FUNCTION cbf_Code( hForm, cFrom, cFunc )
             c += "    " + cO + " := HTProgressBar():new( dlg )" + cEol
             c += "    " + cO + ":setValue( hb_HGetDef( hValues, " + x + ", " + hb_ntos( cbf_Num( h[ "value" ] ) ) + " ) )" + cEol
             EXIT
+        CASE "date"
+            c += "    " + cO + " := HTDatePicker():new( dlg )" + cEol
+            IF ! Empty( hb_HGetDef( h, "lang", "" ) )         /* else ht_dateDefaultLang() of the program */
+                c += "    " + cO + ":setLang( " + hb_ValToExp( Lower( AllTrim( h[ "lang" ] ) ) ) + " )" + cEol
+            ENDIF
+            IF ! Empty( hb_HGetDef( h, "placeholder", "" ) )
+                c += "    " + cO + ":placeholder := " + cbf_Lit( h[ "placeholder" ] ) + cEol
+            ENDIF
+            c += "    " + cO + ":setValue( hb_HGetDef( hValues, " + x + ", " + cbf_DateExp( hb_HGetDef( h, "value", "" ) ) + " ) )" + cEol
+            AAdd( aRet, x + " => " + cO + ":getValue()" )
+            EXIT
         CASE "searchbox"
             /* the items: the expression of Items, else hValues[ "<name>_items" ] */
             c += "    " + cO + " := HTSearchBox():new( dlg )" + cEol
@@ -617,6 +642,31 @@ STATIC FUNCTION cbf_EventBlock( cCode, cParams, cFunc, aFunc, lRet )
     AAdd( aFunc, c )
 
 RETURN "{|" + cParams + "| " + cFunc + "( " + cArgs + " ) }"
+
+/* the start value of a date: "today" (danas, данас, Date()), dd.mm.yyyy / yyyy-mm-dd, "" = empty */
+STATIC FUNCTION cbf_DateVal( c )
+
+    LOCAL d
+
+    c := Lower( AllTrim( hb_CStr( c ) ) )
+    IF hb_AScan( { "today", "danas", "данас", "date()" }, c,,, .T. ) > 0
+        RETURN Date()
+    ENDIF
+    d := ht_dateParse( c )
+
+RETURN IIF( d == NIL, CToD( "" ), d )
+
+STATIC FUNCTION cbf_DateExp( c )
+
+    LOCAL d
+
+    c := Lower( AllTrim( hb_CStr( c ) ) )
+    IF hb_AScan( { "today", "danas", "данас", "date()" }, c,,, .T. ) > 0
+        RETURN "Date()"
+    ENDIF
+    d := ht_dateParse( c )
+
+RETURN IIF( d == NIL, 'CToD( "" )', "0d" + DToS( d ) )
 
 /* the start value of a search box: a number when it looks so, else text; "" = none */
 STATIC FUNCTION cbf_SBValue( c )
@@ -1385,6 +1435,10 @@ METHOD choices( cKey ) CLASS CBFormDlg
     ENDIF
     h := ::hForm[ "controls" ][ ::nSel ]
     DO CASE
+    CASE cKey == "lang" .AND. h[ "type" ] == "date"
+        a := { { "(the program's: ht_dateDefaultLang())", "" } }
+        AEval( ht_dateLangs(), {| l | AAdd( a, { PadR( l, 8 ) + ht_dateLang( l )[ "months" ][ 1 ] + "  " + ht_dateLang( l )[ "format" ], l } ) } )
+        RETURN a
     CASE cKey == "valtype"
         RETURN { { "C  text", "C" }, { "N  number", "N" }, { "D  date", "D" }, { "L  logical", "L" } }
     CASE cKey == "value" .AND. ( h[ "type" ] == "checkbox" .OR. h[ "type" ] == "radio" .OR. ;
@@ -1518,6 +1572,8 @@ METHOD preview() CLASS CBFormDlg
                 c += k + " = " + hb_ntos( hCtl[ k ]:currentIndex() ) + Chr( 10 )
             ELSEIF hCtl[ k ]:isDerivedFrom( "HTSpinner" )
                 c += k + " = " + hb_ntos( hCtl[ k ]:value ) + Chr( 10 )
+            ELSEIF hCtl[ k ]:isDerivedFrom( "HTDatePicker" )
+                c += k + " = " + ht_dateText( hCtl[ k ]:getValue() ) + Chr( 10 )
             ELSEIF hCtl[ k ]:isDerivedFrom( "HTSearchBox" )
                 c += k + " = " + hb_ValToExp( hCtl[ k ]:getValue() ) + Chr( 10 )
             ENDIF
@@ -1754,7 +1810,7 @@ RETURN
 CLASS CBFormCanvas FROM HTWidget
     DATA oDlg
     DATA oPrev                       /* the dialog whose widgets were painted last */
-    DATA aPal       INIT {}          /* the palette on row 0: { from col, to col, type } */
+    DATA aPal       INIT {}          /* the palette (rows 0 ..): { row, from col, to col, type } */
     DATA nOffX      INIT 2           /* where the dialog's title bar starts on the canvas */
     DATA nOffY      INIT 2
     DATA lDrag      INIT .F.
@@ -1774,7 +1830,7 @@ RETURN self
 
 METHOD PROCEDURE paintEvent( event ) CLASS CBFormCanvas
 
-    LOCAL d := ::oDlg, hF := d:hForm, nW := hF[ "width" ], nH := hF[ "height" ], nT := ::nOffY, nL := ::nOffX
+    LOCAL d := ::oDlg, hF := d:hForm, nW := hF[ "width" ], nH := hF[ "height" ], nT, nL := ::nOffX
     LOCAL cSel := HTTheme():getColor( HT_CLR_LIST_SELECTED ), cTitle := HTTheme():getColor( HT_CLR_TITLEBAR )
     LOCAL cBtn := HTTheme():getColor( HT_CLR_TITLEBTN ), cWin, aObj := {}, oDlg, o, g, n, nBtn, nRight
     LOCAL cBar := HTTheme():getColor( HT_CLR_MENU_BAR ), cBarSel := HTTheme():getColor( HT_CLR_MENU_BAR_SEL ), t, c, nX
@@ -1786,13 +1842,21 @@ METHOD PROCEDURE paintEvent( event ) CLASS CBFormCanvas
     /* the palette: a click picks a control, a click on the dialog places it */
     ::aPal := {}
     nX := 1
+    n := 0
     DispOutAt( 0, 0, Space( nMaxC + 1 ), cBar )
     FOR EACH t IN cbf_Types()
         c := " " + t[ 5 ] + " "
-        DispOutAt( 0, nX, c, IIF( t[ 1 ] == d:cPlace, cBarSel, cBar ) )
-        AAdd( ::aPal, { nX, nX + Len( c ) - 1, t[ 1 ] } )
+        IF nX + Len( c ) - 1 > nMaxC .AND. nX > 1          /* no room: on the next row */
+            n++
+            nX := 1
+            DispOutAt( n, 0, Space( nMaxC + 1 ), cBar )
+        ENDIF
+        DispOutAt( n, nX, c, IIF( t[ 1 ] == d:cPlace, cBarSel, cBar ) )
+        AAdd( ::aPal, { n, nX, nX + Len( c ) - 1, t[ 1 ] } )
         nX += Len( c ) + 1
     NEXT
+    ::nOffY := n + 2                        /* the dialog under the palette and an empty row */
+    nT := ::nOffY
 
     /* the dialog of F5, not shown: its widgets paint themselves here. Kept until the
        next paint - a widget knows its parent by the address of the object. */
@@ -1850,10 +1914,10 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS CBFormCanvas
 
     SWITCH eventMouse:nKey
     CASE K_LBUTTONDOWN
-        IF eventMouse:mouseRow == 0
+        IF eventMouse:mouseRow < ::nOffY - 1
             FOR EACH a IN ::aPal
-                IF eventMouse:mouseCol >= a[ 1 ] .AND. eventMouse:mouseCol <= a[ 2 ]
-                    d:placeStart( a[ 3 ] )
+                IF eventMouse:mouseRow == a[ 1 ] .AND. eventMouse:mouseCol >= a[ 2 ] .AND. eventMouse:mouseCol <= a[ 3 ]
+                    d:placeStart( a[ 4 ] )
                 ENDIF
             NEXT
             EXIT
@@ -1896,7 +1960,7 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS CBFormCanvas
         ::lDrag := .F.
         EXIT
     CASE K_LDBLCLK
-        IF Empty( d:cPlace ) .AND. eventMouse:mouseRow > 0
+        IF Empty( d:cPlace ) .AND. eventMouse:mouseRow >= ::nOffY - 1
             d:focusProps( .T. )
         ENDIF
         EXIT

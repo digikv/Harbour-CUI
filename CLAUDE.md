@@ -64,6 +64,13 @@ HTBase
                    Cyrillic: ht_latinToCyrillic(), ht_looksLatin(); ht_sameValue() 7 = "7".
                    Logic in handleKey() (testable headless, no window without a parent);
                    the open list runs a modal listLoop() like HTComboBox)
+      HTDatePicker (after digi-angular's serbian-date-picker: typing digits puts the
+                   separators in (ht_dateAutoFormat), Enter / blur check (a wrong date
+                   goes back), calendar Alt-Down / F4 / click: arrows, PgUp/PgDn month,
+                   Ctrl-PgUp/PgDn year, Home/End, Enter, T today, Esc; setLang( "en-us" ):
+                   ht_dateLang() tables - months, days from Monday, today, format, weekStart -
+                   16 languages (ht_dateLangs()), ht_dateDefaultLang() for new pickers;
+                   ht_dateText/ht_dateParse( c, cFormat ), ht_monthGrid( y, m, nWeekStart ))
       HTBrowse (TBrowse wrapper, inline editing), HTEditor (legacy, deprecated)
       HTTextEdit (modern multi-line editor, clipboard)
       HTGet (TGet-backed: full PICTURE, numeric/date/logical, undo, validation rejection)
@@ -384,6 +391,7 @@ samples/          Demo applications (human-facing, require a display)
   browse/         HTBrowse data grid with inline editing and context menu
   controls/       PushButton, CheckBox, RadioButton, Spinner, ComboBox, ListBox
   searchbox/      HTSearchBox: firms (Šifra, PIB) and accounts, Cyrillic names found in Latin
+  datepicker/     HTDatePicker: sr (default), en-us, zh fields and calendars
   get/            HTGet demo (string, numeric, date PICTURE, validation)
   grid_layout/    HTGridLayout 2D form arrangement
   hbox_layout/    HTHBoxLayout horizontal button bar
@@ -471,6 +479,9 @@ samples/          Demo applications (human-facing, require a display)
                   (cbf_Build), F9 = dlg_<name>.prg with Dlg_<Name>( hValues ) -> hValues / NIL built of
                   HTDialog/HTGet/HTLineEdit/... (cbf_Code; keep both in step). Screen size: [VIEW] rows/cols,
                   -size=RxC, Options - Screen size (ht_cuiSetupDisplay + screenResized at run time).
+                  date type: lang (choices of ht_dateLangs(), "" = the program's default), placeholder,
+                  value (today / a date -> Date() / 0dYYYYMMDD), event onchanged (dDate). The palette
+                  wraps to more rows when it does not fit (aPal { row, from, to, type }, nOffY follows).
                   searchbox type: source (items expr, empty = hValues["<name>_items"]), details (x),
                   value (cbf_SBValue: number when it looks so), events onselected/oncleared/onadd;
                   F5/canvas: cbf_PreviewItems (a literal array by macro, else samples), safe details.
@@ -495,7 +506,7 @@ tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_theme      HTTheme singleton, all built-in themes and palettes, own themes (save/add/
                   replace/remove, built-ins protected), category names, invalid index fallback
   test_widgets    HTLabel, HTLineEdit, HTCheckBox, HTPushButton, HTListBox, HTSparkline, HTBarChart, HTPixelFont (.glyphs, TTF checksum, BDF),
-                  HTComboBox, HTSearchBox, HTCheckList, HTSpinner, HTProgressBar, HTScrollBar,
+                  HTComboBox, HTSearchBox, HTDatePicker (languages), HTCheckList, HTSpinner, HTProgressBar, HTScrollBar,
  HTTextEdit, HTContextMenu, HTMenu:items() (submenu order),
  HTMenuBar hot keys / Alt / shortcuts / popup(), setTitleButtons,
                   Unicode: UTF8EX default, CJK typing (ht_keyText, editors, HTGet),

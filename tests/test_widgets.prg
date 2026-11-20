@@ -44,6 +44,7 @@ PROCEDURE Main()
     TestPixelFont()
     TestBig5Screen()
     TestSearchBox()
+    TestDatePicker()
     TestUnicodeInput()   /* last: HTApplication():new() switches the codepage */
 
     nTotal := nPass + nFail
@@ -965,6 +966,89 @@ STATIC PROCEDURE TestSearchBox()
 
     Assert( "ht_latinToCyrillic", ht_latinToCyrillic( "Kraljevo Džep njiva" ) == "Краљево Џеп њива" )
     Assert( "ht_looksLatin", ht_looksLatin( "čačak" ) .AND. ! ht_looksLatin( "Нова" ) .AND. ! ht_looksLatin( "123" ) )
+
+    hb_cdpSelect( cOld )
+
+RETURN
+
+/*----------------------------------------------------------------*/
+
+/* HTDatePicker: the serbian-date-picker of Digi knjigovodstvo */
+STATIC PROCEDURE TestDatePicker()
+
+    LOCAL cOld := hb_cdpSelect( "UTF8EX" ), o, aChg := {}, aGrid
+
+    o := HTDatePicker():new()
+    o:advanceOnEnter := .F.
+    o:onChanged := {| d | AAdd( aChg, d ) }
+
+    SBType( o, "20112026" )
+    Assert( "HTDatePicker: the dots come by themselves", o:text() == "20.11.2026" )
+    SBKey( o, K_ENTER )
+    Assert( "HTDatePicker: Enter takes the date", o:getValue() == 0d20261120 .AND. ATail( aChg ) == 0d20261120 )
+
+    SBKey( o, K_CTRL_Y )
+    SBType( o, "31022026" )
+    SBKey( o, K_ENTER )
+    Assert( "HTDatePicker: a wrong date goes back", o:getValue() == 0d20261120 .AND. o:text() == "20.11.2026" )
+
+    SBKey( o, K_ALT_DOWN )
+    Assert( "HTDatePicker: Alt-Down opens on the date", o:isOpen() .AND. o:marked() == 0d20261120 )
+    SBKey( o, K_RIGHT )
+    SBKey( o, K_DOWN )
+    Assert( "HTDatePicker: arrows move the day", o:marked() == 0d20261128 )
+    SBKey( o, K_PGDN )
+    Assert( "HTDatePicker: PgDn = next month", o:marked() == 0d20261228 )
+    SBKey( o, K_CTRL_PGUP )
+    Assert( "HTDatePicker: Ctrl-PgUp = a year back", o:marked() == 0d20251228 )
+    SBKey( o, K_END )
+    Assert( "HTDatePicker: End = the last day", o:marked() == 0d20251231 )
+    SBKey( o, K_ENTER )
+    Assert( "HTDatePicker: Enter takes the day", ! o:isOpen() .AND. o:getValue() == 0d20251231 .AND. o:text() == "31.12.2025" )
+
+    SBKey( o, K_F4 )
+    SBKey( o, K_LEFT )
+    SBKey( o, K_ESC )
+    Assert( "HTDatePicker: Esc closes, the value stays", ! o:isOpen() .AND. o:getValue() == 0d20251231 )
+
+    SBKey( o, K_CTRL_Y )
+    SBKey( o, K_ENTER )
+    Assert( "HTDatePicker: empty field = empty date", Empty( o:getValue() ) )
+
+    o:setValue( "2026-01-05" )
+    Assert( "HTDatePicker: setValue yyyy-mm-dd", o:getValue() == 0d20260105 .AND. o:text() == "05.01.2026" )
+    SBKey( o, K_CTRL_Y )
+    SBType( o, "1.3.2026" )
+    o:focusOutEvent( HTFocusEvent():new( HT_EVENT_TYPE_FOCUSOUT ) )
+    Assert( "HTDatePicker: leaving takes d.m.yyyy", o:getValue() == 0d20260301 .AND. o:text() == "01.03.2026" )
+
+    aGrid := ht_monthGrid( 2026, 11 )
+    Assert( "ht_monthGrid: 1.11.2026 is a Sunday", aGrid[ 7 ] == 1 .AND. aGrid[ 6 ] == 0 .AND. aGrid[ 36 ] == 30 )
+    Assert( "ht_addMonths: 31.01. + 1 = 28.02.", ht_addMonths( 0d20260131, 1 ) == 0d20260228 )
+    Assert( "ht_daysInMonth: leap years", ht_daysInMonth( 2024, 2 ) == 29 .AND. ht_daysInMonth( 1900, 2 ) == 28 .AND. ht_daysInMonth( 2000, 2 ) == 29 )
+    Assert( "ht_dateParse: 31.02. is not a date", ht_dateParse( "31.02.2026" ) == NIL )
+
+    /* other languages: the format, the names, the first day of the week */
+    o := HTDatePicker():new()
+    o:advanceOnEnter := .F.
+    Assert( "HTDatePicker: en-us", o:setLang( "en-us" ) .AND. o:dateFormat == "mm/dd/yyyy" .AND. o:weekStart == 7 )
+    SBType( o, "11202026" )
+    Assert( "HTDatePicker: en-us types mm/dd/yyyy", o:text() == "11/20/2026" )
+    SBKey( o, K_ENTER )
+    Assert( "HTDatePicker: en-us takes it", o:getValue() == 0d20261120 )
+    o:setLang( "de" )
+    Assert( "HTDatePicker: another language shows the date again", o:text() == "20.11.2026" .AND. o:monthNames[ 3 ] == "März" )
+    o:setLang( "zh" )
+    Assert( "HTDatePicker: zh yyyy-mm-dd", o:text() == "2026-11-20" .AND. o:todayText == "今天" )
+    SBKey( o, K_CTRL_Y )
+    SBType( o, "20260301" )
+    Assert( "HTDatePicker: yyyy-mm-dd typing", o:text() == "2026-03-01" )
+    Assert( "HTDatePicker: an unknown language changes nothing", ! o:setLang( "xx" ) .AND. o:lang() == "zh" )
+    aGrid := ht_monthGrid( 2026, 11, 7 )
+    Assert( "ht_monthGrid: the week from Sunday", aGrid[ 1 ] == 1 .AND. aGrid[ 30 ] == 30 )
+    Assert( "ht_dateText / ht_dateParse in a format", ht_dateText( 0d20260305, "mm/dd/yyyy" ) == "03/05/2026" .AND. ;
+            ht_dateParse( "03/05/2026", "mm/dd/yyyy" ) == 0d20260305 .AND. ht_dateParse( "2026-03-05", "dd.mm.yyyy" ) == 0d20260305 )
+    Assert( "ht_dateDefaultLang", ht_dateDefaultLang() == "sr" .AND. Len( ht_dateLangs() ) == 16 )
 
     hb_cdpSelect( cOld )
 

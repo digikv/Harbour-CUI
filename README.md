@@ -26,7 +26,7 @@ Older standalone CUI helpers (`win.prg`, `cui.ch`) are kept under [`legacy/`](le
 | Windows | HTMainWindow, HTDesktop, HTDialog (modal + button bar + draggable), HTMessageBox |
 | Input | HTLineEdit (selection + clipboard), HTGet (full PICTURE/VALID/WHEN, Shift+arrow selection), HTTextEdit (multi-line, selection + clipboard), HTSpinner, HTCheckList |
 | Buttons | HTPushButton, HTCheckBox, HTRadioButton |
-| Lists | HTListBox, HTComboBox (type-to-filter), HTSearchBox (search as you type: the matches in a list under the field with their details, arrows / Enter / Esc, x clears, + adds; Serbian Latin finds Cyrillic - after the searchbox of Digi knjigovodstvo), HTBrowse (TBrowse wrapper, inline cell editing: F2 / typing / double-click, typed values via the column PICTURE) |
+| Lists | HTListBox, HTComboBox (type-to-filter), HTSearchBox (search as you type: the matches in a list under the field with their details, arrows / Enter / Esc, x clears, + adds; Serbian Latin finds Cyrillic - after the searchbox of Digi knjigovodstvo), HTDatePicker (a date field that puts the separators in as you type, with a calendar: the week from Monday or Sunday, today, the keys or the mouse; 16 languages built in - names, format, first day - `setLang()` / `ht_dateDefaultLang()`), HTBrowse (TBrowse wrapper, inline cell editing: F2 / typing / double-click, typed values via the column PICTURE) |
 | Menus | HTMenuBar (`&` hot keys, Alt+letter, action shortcuts), HTMenu, HTContextMenu, HTAction |
 | Layout | HTVBoxLayout, HTHBoxLayout, HTGridLayout |
 | Display | HTLabel, HTFrame, HTProgressBar, HTStatusBar, HTSeparator, HTScrollBar, HTTabWidget, HTToolBar |
@@ -121,6 +121,7 @@ cd samples/hello && hbmk2 hello.prg hbmk.hbm && ./hello
 | `browse` | HTBrowse data grid with inline editing |
 | `controls` | Buttons, checkboxes, spinner, combo, list |
 | `searchbox` | HTSearchBox: firms and accounts found by name, code or tax number (Latin finds Cyrillic) |
+| `datepicker` | HTDatePicker: Serbian, US English and Chinese date fields with their calendars |
 | `get` | HTGet with PICTURE / VALID / WHEN |
 | `layout` / `hbox_layout` / `grid_layout` | Layout managers |
 | `editor` | HTLineEdit + HTTextEdit |
