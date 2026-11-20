@@ -453,8 +453,13 @@ samples/          Demo applications (human-facing, require a display)
                   module, DOCXClass / XLSXClass ([REPORTS] of cuibuild.ini) and hbziparc.hbc to the project.
                   cbformdes.prg = dialog designer: .cuiform (JSON; positions numbers, the rest text),
                   canvas = the widgets of cbf_Build (as F5) painted in viewports under a dialog's chrome,
-                  the selection recolored with hb_ClrArea (CBFormCanvas, mouse drag); properties = an HTBrowse
-                  on the right (Property | Value, inline edit -> propSet()), F5 = the real dialog
+                  the selection recolored with hb_ClrArea (CBFormCanvas, mouse drag), palette on canvas row 0
+                  (click, then click on the dialog). Object inspector like HwGUI's designer: CBCombo of the
+                  objects, CBTabBar Properties/Events, HTBrowse Name | Value (onBeginEdit -> beginProp():
+                  choices() list / editEvent() = cbf_EditCode, HTCodeEdit + CEBuffer; else inline -> propSet()).
+                  Events cbf_Events(): 1 line = block, more = STATIC FUNCTION (cbf_EventBlock). Right button /
+                  Shift-F10 = HTContextMenu (copy/paste, pattern + align, Tab order); Ctrl-C/V = K_PGDN/K_INS +
+                  HB_GTI_KBD_CTRL. F5 = the real dialog
                   (cbf_Build), F9 = dlg_<name>.prg with Dlg_<Name>( hValues ) -> hValues / NIL built of
                   HTDialog/HTGet/HTLineEdit/... (cbf_Code; keep both in step). Screen size: [VIEW] rows/cols,
                   -size=RxC, Options - Screen size (ht_cuiSetupDisplay + screenResized at run time).

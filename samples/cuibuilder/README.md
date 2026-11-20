@@ -257,23 +257,35 @@ again, as the objects were made with the old ones.
 
 ## Dialogs of Harbour-CUI
 
-`Design - New dialog` (or Enter on a `.cuiform` in the list of files) opens the dialog designer:
-the dialog is drawn as it will look - its widgets are the ones F5 shows, painting themselves
-under the title bar of a dialog (shadow, buttons at the bottom) - the selected control in the color
-of a selection. On the
-right: the properties of the selected control (or of the dialog) in a browse - Enter, F2 or typing
-edits a value in place, Enter saves it and the dialog is drawn again; Esc / Tab go back to the
-dialog - and the keys.
+`Design - New dialog` (or Enter on a `.cuiform` in the list of files) opens the dialog designer,
+made the way of the designer of HwGUI (Kresin):
+
+- **the palette** on the top row: click a control, then click on the dialog where it goes (Esc: no);
+- **the dialog** drawn as it will look - its widgets are the ones F5 shows, painting themselves
+  under the title bar of a dialog (shadow, buttons at the bottom) - the selected control in the
+  color of a selection;
+- **the object inspector** on the right: the objects (the dialog and its controls) in a combo box,
+  the tabs **Properties** / **Events** and a browse of their values. Enter, F2 or typing edits a
+  value in place, Enter saves it and the dialog is drawn again. A property with only some values
+  (Type C/N/D/L, Value .T./.F., the item of a combo box / list, the buttons of the dialog) is chosen
+  from a list. An event (onClicked, VALID, WHEN, onChanged, onToggled, onInit / onAccept of the
+  dialog) opens an editor of its code (Harbour colors, F2 = OK). Left / Right switch the tab,
+  Esc / Tab go back to the dialog, Shift-Tab to the combo box;
+- **the menu** of the right button (or Shift-F10): properties, events, copy / paste / delete,
+  *Set as pattern* and align to it (left edge, row, width; without a pattern: to the control before
+  it), center in the dialog, earlier / later in the Tab order.
 
 | Key | Command |
 |---|---|
-| Ins | add a control: label, text field (HTLineEdit), GET with PICTURE (HTGet), button, check box, radio button, combo box, list, text of several lines (HTTextEdit), number with arrows (HTSpinner), progress bar, frame, line (HTSeparator) |
+| Ins, the palette | add a control: label, text field (HTLineEdit), GET with PICTURE (HTGet), button, check box, radio button, combo box, list, text of several lines (HTTextEdit), number with arrows (HTSpinner), progress bar, frame, line (HTSeparator) |
 | arrows / Ctrl + arrows | move / size the selected control (no selection: Ctrl + arrows size the dialog) |
 | Tab / Shift-Tab | the next / previous control |
-| Enter, double click | to the properties on the right: position, size, name (the variable), text, PICTURE, type and length of a GET, VALID / WHEN, items, start value, the action of a button (`ok`, `cancel` or a function) |
+| Enter, double click | to the properties on the right: position, size, name (the variable), text, PICTURE, type and length of a GET, items, start value; the events: VALID / WHEN, the action of a button (`ok`, `cancel`, a function or code), onChanged / onToggled |
+| Ctrl-C / Ctrl-V | copy the control / paste a copy (a name of its own) |
+| right button, Shift-F10 | the menu of the control (or of the dialog) |
 | Del | delete the control |
 | Ctrl-PgUp / Ctrl-PgDn | earlier / later in the Tab order |
-| mouse | click selects, drag moves |
+| mouse | click selects, drag moves, double click: the properties |
 | Esc | no selection (the dialog); again: close |
 | F3 | the properties of the dialog: name, title, size, the buttons at the bottom (`OK,Cancel`) |
 | F5 | the dialog itself, made of the widgets, and the values it returns |
@@ -284,7 +296,10 @@ F9 writes `dlg_<name>.prg` and adds it to the project. It has the function
 HTLineEdit, HTCheckBox ... (the code you would write by hand), takes the start values of the
 fields from `hValues` by their names, shows the dialog and returns the values of the fields
 (`NIL` = cancelled). A button with a function as its action calls `Func( dlg, hCtl )`
-(`hCtl`: the widgets by their names).
+(`hCtl`: the widgets by their names). The code of an event of one line becomes the code block
+(`{|lChecked| ... }`), of more lines a `STATIC FUNCTION Dlg_<Name>_<control>_<event>( dlg, hCtl, ... )`
+at the end of the file (it reaches the fields through `hCtl`); onInit / onAccept of the dialog are
+statements before `exec()` / after OK.
 
 ```
 hVal := Dlg_Kupac( { "cNaziv" => KUPCI->NAZIV, "nRok" => KUPCI->ROK } )
