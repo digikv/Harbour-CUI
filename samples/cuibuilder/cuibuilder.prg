@@ -464,7 +464,7 @@ RETURN
 
 STATIC PROCEDURE cb_New()
 
-    LOCAL a, cFile
+    LOCAL a, cFile, nKind
 
     IF ! cb_CanClose()
         RETURN
@@ -481,7 +481,17 @@ STATIC PROCEDURE cb_New()
         cb_Open( cFile )
         RETURN
     ENDIF
+    nKind := cb_List( "New project " + hb_FNameNameExt( cFile ), ;
+                      { "Harbour-CUI application: a skeleton (main window, menu, status bar)", ;
+                        "Harbour-CUI program: no files yet", ;
+                        "Another program (console, a GUI of its own): no files yet", ;
+                        "Library" }, 1 )
+    IF nKind == 0
+        RETURN
+    ENDIF
     s_oPF := cb_ProjNew( cFile )
+    s_oPF:aProjects[ 1 ]:lGuiLib := ( nKind != 3 )
+    s_oPF:aProjects[ 1 ]:lLib := ( nKind == 4 )
     s_oPF:aHeader := { "# " + hb_FNameName( cFile ) + " - a CuiBuilder / HwBuilder project" }
     s_nPart := 1
     hb_cwd( hb_FNameDir( s_oPF:cFile ) )
@@ -489,6 +499,9 @@ STATIC PROCEDURE cb_New()
     cb_AddMsg( "New project " + s_oPF:cFile + ": Ins adds the source files, F2 saves.", CB_MSG_INFO )
     cb_SetChanged( .T. )
     cb_ShowProject()
+    IF nKind == 1 .AND. cb_MakeSkeleton()
+        cb_Save( .F. )
+    ENDIF
     cb_Focus( s_oFiles )
 
 RETURN
@@ -857,6 +870,135 @@ STATIC PROCEDURE cb_ScreenSize()
 
 RETURN
 
+/* the source file of the part that has PROCEDURE / FUNCTION Main, "" = none */
+STATIC FUNCTION cb_FindMain( oP )
+
+    LOCAL cF
+
+    FOR EACH cF IN oP:aFiles
+        IF Lower( hb_FNameExt( cF ) ) == ".prg" .AND. ;
+           hb_RegExHas( "(?im)^[ \t]*(PROC|PROCEDURE|FUNC|FUNCTION)[ \t]+MAIN[ \t]*(\(|$)", hb_MemoRead( oP:srcFile( cF ) ) )
+            RETURN cF
+        ENDIF
+    NEXT
+
+RETURN ""
+
+/* Project - Application skeleton: <name>.prg with Main (a main window, a menu, a status bar)
+   first in the files; a menu entry calls each dialog (.cuiform) of the project, whose
+   dlg_<name>.prg is made again and added. The project links Harbour-CUI. */
+STATIC FUNCTION cb_MakeSkeleton()
+
+    LOCAL oP := cb_Part(), cName, cFile, aDlg := {}, aPrg := {}, a, cF, cErr := ""
+
+    IF oP == NIL .OR. s_oPF:cType == "hbp"
+        HTMessageBox():information( "CuiBuilder", "The skeleton goes into a .hwprj project (Project - New)." )
+        RETURN .F.
+    ENDIF
+    cF := cb_FindMain( oP )
+    IF ! Empty( cF )
+        HTMessageBox():information( "CuiBuilder", "The project has its Main already: " + cF )
+        RETURN .F.
+    ENDIF
+    cName := hb_FNameName( IIF( Empty( oP:cOutName ), s_oPF:cFile, oP:cOutName ) )
+    cFile := oP:cDir + Lower( cName ) + ".prg"
+    IF hb_FileExists( cFile )
+        cFile := oP:cDir + Lower( cName ) + "_main.prg"
+    ENDIF
+    FOR EACH cF IN oP:aFiles
+        IF Lower( hb_FNameExt( cF ) ) == ".cuiform"
+            a := cb_FormGenerate( oP:srcFile( cF ), @cErr )
+            IF a == NIL
+                cb_AddMsg( cErr, CB_MSG_ERROR )
+            ELSE
+                AAdd( aDlg, a )
+                AAdd( aPrg, a[ 1 ] )
+            ENDIF
+        ENDIF
+    NEXT
+    IF ! hb_MemoWrit( cFile, cb_Skeleton( cName, aDlg ) )
+        HTMessageBox():error( "CuiBuilder", "Cannot write " + cFile )
+        RETURN .F.
+    ENDIF
+    hb_AIns( oP:aFiles, 1, cb_Rel( cFile, oP:cDir ), .T. )       /* first: its Main starts the program */
+    oP:lGuiLib := .T.
+    cb_AddToProject( aPrg )
+    cb_SetChanged( .T. )
+    cb_ShowProject()
+    cb_AddMsg( "Made " + cFile + ": PROCEDURE Main, a main window, a menu, a status bar" + ;
+               IIF( Empty( aDlg ), "", ", a menu entry for each dialog" ) + ". Ctrl-F9 builds and runs it.", CB_MSG_INFO )
+
+RETURN .T.
+
+/* the text of the skeleton; aDlg: { prg, function, title } of the dialogs */
+STATIC FUNCTION cb_Skeleton( cName, aDlg )
+
+    LOCAL c := "", cEol := hb_eol(), cTitle := Upper( Left( cName, 1 ) ) + SubStr( cName, 2 ), a
+
+    c += "/*" + cEol
+    c += " * " + Lower( cName ) + ".prg - " + cTitle + ", a Harbour-CUI application" + cEol
+    c += " *" + cEol
+    c += " * The skeleton made by CuiBuilder: a main window with a menu and a status bar." + cEol
+    IF ! Empty( aDlg )
+        c += " * The menu Dialogs calls the dialogs of the designer (dlg_*.prg, F9 in the designer)." + cEol
+    ENDIF
+    c += " */" + cEol + cEol
+    c += '#include "hbtui.ch"' + cEol
+    c += '#include "inkey.ch"' + cEol + cEol
+    c += "STATIC s_oMain" + cEol
+    c += "STATIC s_oStatus" + cEol + cEol
+    c += "PROCEDURE Main()" + cEol + cEol
+    c += "    LOCAL oApp, oBar, oMenu, oAct, oLbl" + cEol + cEol
+    c += "    oApp := HTApplication():new()" + cEol
+    c += "    ht_cuiSetupDisplay( oApp:rows(), oApp:cols() )" + cEol + cEol
+    c += "    s_oMain := HTMainWindow():new()" + cEol
+    c += "    s_oMain:setWindowTitle( " + hb_ValToExp( cTitle ) + " )" + cEol
+    c += "    s_oMain:show()" + cEol + cEol
+    c += "    /* the menu: F10, or Alt and the letter of a title */" + cEol
+    c += "    oBar := s_oMain:menuBar()" + cEol
+    c += '    oMenu := oBar:addMenu( "&File" )' + cEol
+    c += '    oAct := oMenu:addAction( "E&xit       Alt-X" )' + cEol
+    c += "    oAct:setShortcut( K_ALT_X )" + cEol
+    c += "    oAct:onTriggered := {|| HTApplication():quit() }" + cEol
+    IF ! Empty( aDlg )
+        c += '    oMenu := oBar:addMenu( "&Dialogs" )' + cEol
+        FOR EACH a IN aDlg
+            c += "    oAct := oMenu:addAction( " + hb_ValToExp( IIF( Empty( a[ 3 ] ), a[ 2 ], a[ 3 ] ) + " ..." ) + " )" + cEol
+            c += "    oAct:onTriggered := {|| ShowValues( " + a[ 2 ] + "() ) }" + cEol
+        NEXT
+    ENDIF
+    c += '    oMenu := oBar:addMenu( "&Help" )' + cEol
+    c += '    oAct := oMenu:addAction( "&About" )' + cEol
+    c += "    oAct:onTriggered := {|| HTMessageBox():information( " + hb_ValToExp( cTitle ) + ", " + ;
+         hb_ValToExp( cTitle + " 1.0" ) + " + Chr( 10 ) + " + hb_ValToExp( "made with Harbour-CUI" ) + " ) }" + cEol + cEol
+    c += "    /* the window: put the widgets of the program here */" + cEol
+    c += "    oLbl := HTLabel():new( " + hb_ValToExp( cTitle + " - F10 opens the menu" ) + ", s_oMain )" + cEol
+    c += "    oLbl:setGeometry( 0, Int( s_oMain:height / 2 ) - 1, s_oMain:width, 1 )" + cEol
+    c += "    oLbl:alignment := HT_ALIGN_CENTER" + cEol + cEol
+    c += "    /* the status bar on the last row */" + cEol
+    c += "    s_oStatus := HTStatusBar():new( s_oMain )" + cEol
+    c += "    s_oStatus:setGeometry( 0, s_oMain:height - 2, s_oMain:width, 1 )" + cEol
+    c += '    s_oStatus:addSection( " F10 menu   Alt-X exit" )' + cEol + cEol
+    c += "    oApp:exec()" + cEol + cEol
+    c += "RETURN" + cEol
+    IF ! Empty( aDlg )
+        c += cEol + "/* the values a dialog returned (NIL = cancelled) */" + cEol
+        c += "STATIC PROCEDURE ShowValues( hVal )" + cEol + cEol
+        c += '    LOCAL c := "", k' + cEol + cEol
+        c += "    IF hVal == NIL" + cEol
+        c += '        s_oStatus:setSection( 1, " Cancelled" )' + cEol
+        c += "        s_oMain:repaintChild( s_oStatus )" + cEol
+        c += "        RETURN" + cEol
+        c += "    ENDIF" + cEol
+        c += "    FOR EACH k IN hb_HKeys( hVal )" + cEol
+        c += "        c += k + " + '" = "' + " + hb_ValToExp( hVal[ k ] ) + Chr( 10 )" + cEol
+        c += "    NEXT" + cEol
+        c += '    HTMessageBox():information( "The values", IIF( Empty( c ), "(no fields)", c ) )' + cEol + cEol
+        c += "RETURN" + cEol
+    ENDIF
+
+RETURN c
+
 /* files into the shown part of the project (what a generated report needs) */
 STATIC PROCEDURE cb_AddToProject( aFiles )
 
@@ -897,6 +1039,17 @@ STATIC PROCEDURE cb_DoBuild( nMode )
     ENDIF
     IF s_lChanged .AND. ! cb_Save( .F. )
         RETURN
+    ENDIF
+    /* a program without Main does not start ("Can't locate the starting procedure") */
+    oP := cb_Part()
+    IF nMode != 3 .AND. s_oPF:cType == "hwprj" .AND. oP != NIL .AND. ! oP:lLib .AND. Empty( oP:cMain ) .AND. ;
+       Empty( cb_FindMain( oP ) )
+        n := HTMessageBox():choose( "CuiBuilder", "No source file of the project has PROCEDURE Main:" + Chr( 10 ) + ;
+                                    "the program would not start. Make the skeleton of an application?", ;
+                                    { "&Make it", "&Build anyway", "&Cancel" }, HT_MSG_QUESTION )
+        IF n == 0 .OR. n == 3 .OR. ( n == 1 .AND. ! cb_MakeSkeleton() ) .OR. ( s_lChanged .AND. ! cb_Save( .F. ) )
+            RETURN
+        ENDIF
     ENDIF
     oB := cb_ProjOpen( s_oPF:cFile, s_hSet )            /* filters and macros applied */
     cb_ClearMsg()
@@ -1066,6 +1219,7 @@ STATIC PROCEDURE cb_BuildMenu()
     oMenu:addSeparator()
     cb_Item( oMenu, "Edit project file", "", NIL, {|| cb_EditProjectFile() } )
     cb_Item( oMenu, "New part (:project) ...", "", NIL, {|| cb_NewPart() } )
+    cb_Item( oMenu, "Application skeleton (Main)", "", NIL, {|| cb_MakeSkeleton() } )
     cb_Item( oMenu, "Delete part", "", NIL, {|| cb_DelPart() } )
     oMenu:addSeparator()
     cb_Item( oMenu, "Exit", "Alt-X", NIL, {|| cb_Quit() } )

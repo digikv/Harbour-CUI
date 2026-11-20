@@ -568,6 +568,24 @@ STATIC FUNCTION cbf_NameList( hForm )
 
 RETURN IIF( Empty( c ), "(none)", c )
 
+/* dlg_<name>.prg of a .cuiform (made again), for the skeleton of an application:
+   { prg file, function, title of the dialog }; NIL = an error (cErr) */
+FUNCTION cb_FormGenerate( cFile, cErr )
+
+    LOCAL hForm := cbf_Load( cFile, @cErr ), cFunc, cPrg
+
+    IF hForm == NIL
+        RETURN NIL
+    ENDIF
+    cFunc := "Dlg_" + hForm[ "name" ]
+    cPrg := hb_FNameDir( cFile ) + "dlg_" + Lower( hForm[ "name" ] ) + ".prg"
+    IF ! hb_MemoWrit( cPrg, cbf_Code( hForm, hb_FNameNameExt( cFile ), cFunc ) )
+        cErr := "Cannot write " + cPrg
+        RETURN NIL
+    ENDIF
+
+RETURN { cPrg, cFunc, hForm[ "title" ] }
+
 /*----------------------------------------------------------- the designer */
 
 /* TBrowse skip over an array; aRec[ 1 ] is the current row */

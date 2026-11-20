@@ -463,6 +463,9 @@ samples/          Demo applications (human-facing, require a display)
                   (cbf_Build), F9 = dlg_<name>.prg with Dlg_<Name>( hValues ) -> hValues / NIL built of
                   HTDialog/HTGet/HTLineEdit/... (cbf_Code; keep both in step). Screen size: [VIEW] rows/cols,
                   -size=RxC, Options - Screen size (ht_cuiSetupDisplay + screenResized at run time).
+                  New project: kind list (Harbour-CUI app = cb_MakeSkeleton(): <name>.prg with Main first in
+                  the files, menu Dialogs calls Dlg_* of the .cuiform files via cb_FormGenerate()); F9 on a
+                  program without Main (cb_FindMain regex) offers the skeleton.
                   cbgit.prg = Git menu: cb_Git( cDir, hSet, cArgs, @cOut ) = git -C <dir> through cb_Run
                   (GIT_TERMINAL_PROMPT=0), status dialog (porcelain -b; Space add -A / reset), commit
                   (-F temp file), log (git show), diff viewer CBDiffList (colors by + - @@), pull/push, init.

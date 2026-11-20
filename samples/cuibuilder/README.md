@@ -91,6 +91,14 @@ are there (`family=msvc` / `bcc`), not tried yet.
 | F10 | the menu (also Alt + the underlined letter, the mouse) |
 | Alt-X | exit |
 
+`Project - New` asks what the project is: a **Harbour-CUI application** gets its skeleton at once -
+`<name>.prg` with `PROCEDURE Main`, a main window, a menu (File, Help) and a status bar, first in
+the files and ready for Ctrl-F9 - or a Harbour-CUI program, another program, a library without
+files. `Project - Application skeleton (Main)` makes the skeleton for a project that has none; a
+menu `Dialogs` in it calls each dialog of the project (its `dlg_<name>.prg` is made from the
+`.cuiform` and added). A program without `PROCEDURE Main` would not start ("Can't locate the
+starting procedure: 'MAIN'"): F9 offers the skeleton first.
+
 A changed project is saved before it is built. An `.hbp` is shown read only: `Project - Edit
 project file` opens it in the editor, `Save as` makes a `.hwprj` of it.
 
