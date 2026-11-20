@@ -20,12 +20,19 @@ And **Git**: status, stage, diff, commit, log, pull and push of the project's fo
 
 ## Download
 
-Ready-to-run programs: **[CuiBuilder 1.0.1 release](https://github.com/digikv/Harbour-CUI/releases/tag/cuibuilder-1.0.1)**
+Ready-to-run programs: **[CuiBuilder 1.0.2 release](https://github.com/digikv/Harbour-CUI/releases/tag/cuibuilder-1.0.2)**
 
 | File | Platform |
 |---|---|
-| `cuibuilder-1.0.1-win32.zip` | Windows 7 and newer (32-bit, runs on 64-bit Windows too) |
-| `cuibuilder-1.0.1-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6` and `libgpm2` |
+| `cuibuilder-1.0.2-win32.zip` | Windows 7 and newer (32-bit, runs on 64-bit Windows too) |
+| `cuibuilder-1.0.2-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6` and `libgpm2` |
+
+New in 1.0.2: the dialog designer draws the real widgets and has the object inspector
+(properties and events, a palette, copy / paste, align); a new Harbour-CUI project gets the
+skeleton of an application, and F9 offers it when the project has no `PROCEDURE Main`; a dialog
+can be written as Big5 or GBK (`CpText()`), and the editor reads and writes those files; changed
+compiler flags compile every source again; an output file that is in use gets a clear error.
+Ctrl+Left / Ctrl+Right in the editor stay fast on a very long line.
 
 New in 1.0.1: no error at the exit and in Options - Theme (1.0 stopped with "Message not
 found: HTTHEME:CURRENTNAME"); filters at the end of a word and with a value in .hbp / .hbc
