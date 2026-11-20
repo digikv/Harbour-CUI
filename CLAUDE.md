@@ -57,6 +57,13 @@ HTBase
     HTWidget (rendering, events, focus, viewport, context menu, size policies)
       HTMainWindow, HTDesktop (singleton), HTDialog (modal + button bar)
       HTLabel, HTLineEdit (selection + clipboard), HTListBox, HTComboBox (type-to-filter)
+      HTSearchBox (after digi-angular's searchbox: typing filters items into a list window
+                   under the field - label + details on the right; Down/Up mark, Enter takes
+                   and moves on, Esc closes only the list, x clears, + = onAdd, blur with one
+                   match takes it; blocks label/value/display/details/filter; Latin finds
+                   Cyrillic: ht_latinToCyrillic(), ht_looksLatin(); ht_sameValue() 7 = "7".
+                   Logic in handleKey() (testable headless, no window without a parent);
+                   the open list runs a modal listLoop() like HTComboBox)
       HTBrowse (TBrowse wrapper, inline editing), HTEditor (legacy, deprecated)
       HTTextEdit (modern multi-line editor, clipboard)
       HTGet (TGet-backed: full PICTURE, numeric/date/logical, undo, validation rejection)
@@ -376,6 +383,7 @@ samples/          Demo applications (human-facing, require a display)
   dialog/         Modal HTDialog + HTMessageBox (info/question/custom)
   browse/         HTBrowse data grid with inline editing and context menu
   controls/       PushButton, CheckBox, RadioButton, Spinner, ComboBox, ListBox
+  searchbox/      HTSearchBox: firms (Šifra, PIB) and accounts, Cyrillic names found in Latin
   get/            HTGet demo (string, numeric, date PICTURE, validation)
   grid_layout/    HTGridLayout 2D form arrangement
   hbox_layout/    HTHBoxLayout horizontal button bar
@@ -484,7 +492,7 @@ tests/            Automated test suite (headless, -gtnul, exit code 0/1)
   test_theme      HTTheme singleton, all built-in themes and palettes, own themes (save/add/
                   replace/remove, built-ins protected), category names, invalid index fallback
   test_widgets    HTLabel, HTLineEdit, HTCheckBox, HTPushButton, HTListBox, HTSparkline, HTBarChart, HTPixelFont (.glyphs, TTF checksum, BDF),
-                  HTComboBox, HTCheckList, HTSpinner, HTProgressBar, HTScrollBar,
+                  HTComboBox, HTSearchBox, HTCheckList, HTSpinner, HTProgressBar, HTScrollBar,
  HTTextEdit, HTContextMenu, HTMenu:items() (submenu order),
  HTMenuBar hot keys / Alt / shortcuts / popup(), setTitleButtons,
                   Unicode: UTF8EX default, CJK typing (ht_keyText, editors, HTGet),

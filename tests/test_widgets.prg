@@ -43,6 +43,7 @@ PROCEDURE Main()
     TestMessageWrap()
     TestPixelFont()
     TestBig5Screen()
+    TestSearchBox()
     TestUnicodeInput()   /* last: HTApplication():new() switches the codepage */
 
     nTotal := nPass + nFail
@@ -885,5 +886,86 @@ STATIC PROCEDURE TestTitleButtons()
 
     o:resize( 30, 6 )
     Assert( "HTDialog:resize at once",    o:width == 30 .AND. o:height == 6 )
+
+RETURN
+
+/*----------------------------------------------------------------*/
+
+STATIC PROCEDURE SBType( o, cText )
+
+    LOCAL c
+
+    FOR EACH c IN cText
+        o:keyEvent( HTKeyEvent():new( Asc( c ) ) )
+    NEXT
+
+RETURN
+
+STATIC PROCEDURE SBKey( o, nKey, nTimes )
+
+    LOCAL i
+
+    FOR i := 1 TO hb_defaultValue( nTimes, 1 )
+        o:keyEvent( HTKeyEvent():new( nKey ) )
+    NEXT
+
+RETURN
+
+/* HTSearchBox: the searchbox of Digi knjigovodstvo (filter, mark, Enter, Esc, blur) */
+STATIC PROCEDURE TestSearchBox()
+
+    LOCAL cOld := hb_cdpSelect( "UTF8EX" ), o, aSel := {}, nCleared := 0
+
+    o := HTSearchBox():new()
+    o:advanceOnEnter := .F.
+    o:setItems( { { 1, "Нова доо" }, { 2, "Нови Пут доо" }, { 3, "Новитет доо" }, { 4, "Kraljevo promet" } } )
+    o:detailsBlock := {| x | { { "Šifra", x[ 1 ] } } }
+    o:onSelected := {| x, v | HB_SYMBOL_UNUSED( x ), AAdd( aSel, v ) }
+    o:onCleared := {|| nCleared++ }
+
+    SBType( o, "nov" )
+    Assert( "HTSearchBox: Latin finds Cyrillic", Len( o:results() ) == 3 )
+    Assert( "HTSearchBox: a new search marks the first", o:marked() == 1 .AND. o:isOpen() )
+    SBKey( o, K_DOWN )
+    SBKey( o, K_ENTER )
+    Assert( "HTSearchBox: Down + Enter takes the second", ht_sameValue( o:getValue(), 2 ) .AND. ATail( aSel ) == 2 .AND. ! o:isOpen() )
+    Assert( "HTSearchBox: the text of the taken item", o:text() == "2 - Нови Пут доо" )
+    SBKey( o, K_BS )
+    Assert( "HTSearchBox: typing over drops the item", o:getValue() == NIL )
+
+    o:clear()
+    Assert( "HTSearchBox: clear fires onCleared", nCleared >= 1 .AND. o:text() == "" )
+    SBType( o, "nov" )
+    SBKey( o, K_DOWN, 5 )
+    Assert( "HTSearchBox: Down stops at the last", o:marked() == 3 )
+    SBKey( o, K_UP, 5 )
+    Assert( "HTSearchBox: Up stops at the first", o:marked() == 1 )
+    SBKey( o, K_ESC )
+    Assert( "HTSearchBox: Esc closes only the list", ! o:isOpen() .AND. o:text() == "nov" )
+    SBKey( o, K_DOWN )
+    Assert( "HTSearchBox: Down opens it again", o:isOpen() .AND. o:marked() == 1 )
+
+    o:clear()
+    SBType( o, "zzz" )
+    SBKey( o, K_ENTER )
+    Assert( "HTSearchBox: nothing found, Enter stays", o:getValue() == NIL .AND. o:text() == "zzz" )
+
+    o:clear()
+    SBType( o, "kralj" )
+    o:focusOutEvent( HTFocusEvent():new( HT_EVENT_TYPE_FOCUSOUT ) )
+    Assert( "HTSearchBox: leaving with one match takes it", ht_sameValue( o:getValue(), 4 ) )
+
+    o:setValue( "3" )
+    Assert( "HTSearchBox: setValue by text", ht_sameValue( o:getValue(), 3 ) .AND. o:text() == "3 - Новитет доо" )
+    o:setValue( 99 )
+    Assert( "HTSearchBox: setValue not found clears", o:getValue() == NIL .AND. o:text() == "" )
+
+    SBType( o, "1" )
+    Assert( "HTSearchBox: the details are searched (Šifra)", Len( o:results() ) == 1 )
+
+    Assert( "ht_latinToCyrillic", ht_latinToCyrillic( "Kraljevo Džep njiva" ) == "Краљево Џеп њива" )
+    Assert( "ht_looksLatin", ht_looksLatin( "čačak" ) .AND. ! ht_looksLatin( "Нова" ) .AND. ! ht_looksLatin( "123" ) )
+
+    hb_cdpSelect( cOld )
 
 RETURN
