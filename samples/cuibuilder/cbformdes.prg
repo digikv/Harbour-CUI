@@ -7,7 +7,7 @@
  * F9 generates dlg_<name>.prg from it: the function Dlg_<Name>( hValues ),
  * which builds the dialog with the classes of Harbour-CUI (HTDialog, HTLabel,
  * HTLineEdit, HTGet, HTPushButton, HTCheckBox, HTRadioButton, HTComboBox,
- * HTListBox, HTFrame, HTSeparator, HTSpinner, HTProgressBar, HTTextEdit), shows it and
+ * HTListBox, HTSearchBox, HTFrame, HTSeparator, HTSpinner, HTProgressBar, HTTextEdit), shows it and
  * returns the values of the fields in a hash (NIL = cancelled). F5 shows the
  * dialog itself, made of the same classes. (The way of the dialog designer of
  * HbIde: a design file and the code generated from it.)
@@ -47,6 +47,7 @@ RETURN { { "label",    "Label (HTLabel)",                 10, 1, "Label" }, ;
          { "radio",    "Radio button (HTRadioButton)",    16, 1, "Radio" }, ;
          { "combo",    "Combo box (HTComboBox)",          20, 1, "Combo" }, ;
          { "list",     "List (HTListBox)",                20, 5, "List" }, ;
+         { "searchbox", "Search box (HTSearchBox)",       30, 1, "Search" }, ;
          { "memo",     "Text, several lines (HTTextEdit)", 30, 5, "Memo" }, ;
          { "spinner",  "Number with arrows (HTSpinner)",  20, 1, "Spinner" }, ;
          { "progress", "Progress bar (HTProgressBar)",    20, 1, "Progress" }, ;
@@ -68,6 +69,7 @@ STATIC FUNCTION cbf_Props( cType )
     CASE "memo"     ; RETURN { "name", "text" }
     CASE "spinner"  ; RETURN { "name", "text", "min", "max", "step", "value" }
     CASE "progress" ; RETURN { "name", "value" }
+    CASE "searchbox" ; RETURN { "name", "placeholder", "source", "details", "value" }
     CASE "frame"    ; RETURN { "text" }
     ENDSWITCH
 
@@ -88,6 +90,8 @@ STATIC FUNCTION cbf_Events( cType )
     CASE "combo"
     CASE "list"     ; RETURN { { "onchanged", "onChanged", "nIndex" } }
     CASE "spinner"  ; RETURN { { "onchanged", "onChanged", "nValue" } }
+    CASE "searchbox" ; RETURN { { "onselected", "onSelected", "xItem, xValue" }, { "oncleared", "onCleared", "" }, ;
+                                { "onadd", "onAdd", "" } }
     ENDSWITCH
 
 RETURN {}
@@ -108,6 +112,9 @@ STATIC FUNCTION cbf_PropLabel( cProp )
     CASE "min"     ; RETURN "Minimum"
     CASE "max"     ; RETURN "Maximum"
     CASE "step"    ; RETURN "Step"
+    CASE "placeholder" ; RETURN "Placeholder"
+    CASE "source"  ; RETURN "Items (expr)"
+    CASE "details" ; RETURN "Details (x)"
     ENDSWITCH
 
 RETURN cProp
@@ -190,6 +197,7 @@ STATIC FUNCTION cbf_Control( cType, nX, nY, aForm )
     CASE "memo"     ; h[ "text" ] := "" ; EXIT
     CASE "spinner"  ; h[ "text" ] := "" ; h[ "min" ] := "0" ; h[ "max" ] := "100" ; h[ "step" ] := "1" ; h[ "value" ] := "0" ; EXIT
     CASE "progress" ; h[ "value" ] := "0" ; EXIT
+    CASE "searchbox" ; h[ "placeholder" ] := "Search ..." ; h[ "source" ] := "" ; h[ "details" ] := "" ; h[ "value" ] := "" ; EXIT
     CASE "frame"    ; h[ "text" ] := "Group" ; EXIT
     ENDSWITCH
 
@@ -218,6 +226,7 @@ STATIC FUNCTION cbf_Prefix( cType )
     CASE "combo"
     CASE "list"
     CASE "spinner"
+    CASE "searchbox"
     CASE "progress" ; RETURN "n"
     CASE "button"   ; RETURN "btn"
     ENDSWITCH
@@ -297,6 +306,18 @@ STATIC FUNCTION cbf_Build( hForm, hCtl, hVar, aObj )
             EXIT
         CASE "separator"
             o := HTSeparator():new( dlg )
+            EXIT
+        CASE "searchbox"
+            o := HTSearchBox():new( dlg )
+            o:placeholder := hb_HGetDef( h, "placeholder", "" )
+            o:setItems( cbf_PreviewItems( hb_HGetDef( h, "source", "" ) ) )
+            IF ! Empty( hb_HGetDef( h, "details", "" ) )
+                o:detailsBlock := cbf_PreviewDetails( h[ "details" ] )
+            ENDIF
+            o:setValue( cbf_SBValue( hb_HGetDef( h, "value", "" ) ) )
+            IF ! Empty( cbf_Lines( hb_HGetDef( h, "onadd", "" ) ) )
+                o:onAdd := {|| HTToast():show( "onAdd   (runs in the program)", 2000, HT_CLR_TOAST_INFO ) }
+            ENDIF
             EXIT
         ENDSWITCH
         IF aObj != NIL
@@ -486,9 +507,23 @@ STATIC FUNCTION cbf_Code( hForm, cFrom, cFunc )
             c += "    " + cO + " := HTProgressBar():new( dlg )" + cEol
             c += "    " + cO + ":setValue( hb_HGetDef( hValues, " + x + ", " + hb_ntos( cbf_Num( h[ "value" ] ) ) + " ) )" + cEol
             EXIT
+        CASE "searchbox"
+            /* the items: the expression of Items, else hValues[ "<name>_items" ] */
+            c += "    " + cO + " := HTSearchBox():new( dlg )" + cEol
+            IF ! Empty( hb_HGetDef( h, "placeholder", "" ) )
+                c += "    " + cO + ":placeholder := " + cbf_Lit( h[ "placeholder" ] ) + cEol
+            ENDIF
+            c += "    " + cO + ":setItems( " + IIF( Empty( hb_HGetDef( h, "source", "" ) ), ;
+                 "hb_HGetDef( hValues, " + hb_ValToExp( cName + "_items" ) + ", {} )", AllTrim( h[ "source" ] ) ) + " )" + cEol
+            IF ! Empty( hb_HGetDef( h, "details", "" ) )
+                c += "    " + cO + ":detailsBlock := {| x | " + AllTrim( h[ "details" ] ) + " }" + cEol
+            ENDIF
+            c += "    " + cO + ":setValue( hb_HGetDef( hValues, " + x + ", " + cbf_SBValueExp( hb_HGetDef( h, "value", "" ) ) + " ) )" + cEol
+            AAdd( aRet, x + " => " + cO + ":getValue()" )
+            EXIT
         ENDSWITCH
         FOR EACH e IN cbf_Events( h[ "type" ] )
-            IF ( e[ 1 ] == "onchanged" .OR. e[ 1 ] == "ontoggled" ) .AND. ! Empty( cO ) .AND. ;
+            IF hb_AScan( { "onchanged", "ontoggled", "onselected", "oncleared", "onadd" }, e[ 1 ],,, .T. ) > 0 .AND. ! Empty( cO ) .AND. ;
                ! Empty( cbf_Lines( hb_HGetDef( h, e[ 1 ], "" ) ) )
                 c += "    " + cO + ":" + e[ 2 ] + " := " + cbf_EventBlock( h[ e[ 1 ] ], e[ 3 ], cN + e[ 2 ], aFunc, .F. ) + cEol
             ENDIF
@@ -558,7 +593,13 @@ STATIC FUNCTION cbf_EventBlock( cCode, cParams, cFunc, aFunc, lRet )
     LOCAL a := cbf_Lines( cCode ), c, x, lHasRet := .F., cArgs := "dlg, hCtl" + IIF( Empty( cParams ), "", ", " + cParams )
 
     IF Len( a ) == 1
-        RETURN "{|" + cParams + "| " + IIF( Empty( cParams ), "", "HB_SYMBOL_UNUSED( " + cParams + " ), " ) + AllTrim( a[ 1 ] ) + " }"
+        c := ""
+        FOR EACH x IN hb_ATokens( cParams, "," )
+            IF ! Empty( x )
+                c += "HB_SYMBOL_UNUSED( " + AllTrim( x ) + " ), "
+            ENDIF
+        NEXT
+        RETURN "{|" + cParams + "| " + c + AllTrim( a[ 1 ] ) + " }"
     ENDIF
     c := "STATIC FUNCTION " + cFunc + "( " + cArgs + " )" + hb_eol() + hb_eol()
     FOR EACH x IN hb_ATokens( cArgs, "," )
@@ -576,6 +617,75 @@ STATIC FUNCTION cbf_EventBlock( cCode, cParams, cFunc, aFunc, lRet )
     AAdd( aFunc, c )
 
 RETURN "{|" + cParams + "| " + cFunc + "( " + cArgs + " ) }"
+
+/* the start value of a search box: a number when it looks so, else text; "" = none */
+STATIC FUNCTION cbf_SBValue( c )
+
+    c := AllTrim( hb_CStr( c ) )
+    IF Empty( c )
+        RETURN NIL
+    ENDIF
+
+RETURN IIF( hb_RegExLike( "-?[0-9]+(\.[0-9]+)?", c ), Val( c ), c )
+
+STATIC FUNCTION cbf_SBValueExp( c )
+
+    LOCAL x := cbf_SBValue( c )
+
+RETURN IIF( x == NIL, "NIL", IIF( HB_ISNUMERIC( x ), AllTrim( c ), cbf_Lit( x ) ) )
+
+/* F5 and the canvas: the items of Items when it is an array written out ({ ... }),
+   else three sample items (the program's functions are not here) */
+STATIC FUNCTION cbf_PreviewItems( cSource )
+
+    LOCAL a, oErr
+
+    cSource := AllTrim( cSource )
+    IF Left( cSource, 1 ) == "{"
+        oErr := ErrorBlock( {| e | Break( e ) } )
+        BEGIN SEQUENCE
+            a := &( cSource )
+        RECOVER
+            a := NIL
+        END SEQUENCE
+        ErrorBlock( oErr )
+        IF HB_ISARRAY( a )
+            RETURN a
+        ENDIF
+    ENDIF
+
+RETURN { { 1, "Sample one", "100000001" }, { 2, "Sample two", "100000002" }, { 3, "Sample three", "100000003" } }
+
+/* the details of the designer's text, made safe: an error (x[ 3 ] of a short item ...) = none */
+STATIC FUNCTION cbf_PreviewDetails( cDetails )
+
+    LOCAL b, oErr := ErrorBlock( {| e | Break( e ) } )
+
+    BEGIN SEQUENCE
+        b := &( "{| x | " + AllTrim( cDetails ) + " }" )
+    RECOVER
+        b := NIL
+    END SEQUENCE
+    ErrorBlock( oErr )
+
+RETURN {| x | cbf_SafeEval( b, x ) }
+
+STATIC FUNCTION cbf_SafeEval( b, x )
+
+    LOCAL xRet, oErr
+
+    IF b == NIL
+        RETURN {}
+    ENDIF
+    oErr := ErrorBlock( {| e | Break( e ) } )
+    BEGIN SEQUENCE
+        xRet := Eval( b, x )
+    RECOVER
+        xRet := {}
+    END SEQUENCE
+    ErrorBlock( oErr )
+
+RETURN xRet
 
 STATIC FUNCTION cbf_Geo( h )
 RETURN hb_ntos( h[ "x" ] ) + ", " + hb_ntos( h[ "y" ] ) + ", " + hb_ntos( h[ "w" ] ) + ", " + hb_ntos( h[ "h" ] )
@@ -1408,6 +1518,8 @@ METHOD preview() CLASS CBFormDlg
                 c += k + " = " + hb_ntos( hCtl[ k ]:currentIndex() ) + Chr( 10 )
             ELSEIF hCtl[ k ]:isDerivedFrom( "HTSpinner" )
                 c += k + " = " + hb_ntos( hCtl[ k ]:value ) + Chr( 10 )
+            ELSEIF hCtl[ k ]:isDerivedFrom( "HTSearchBox" )
+                c += k + " = " + hb_ValToExp( hCtl[ k ]:getValue() ) + Chr( 10 )
             ENDIF
         NEXT
         HTMessageBox():information( "The values", IIF( Empty( c ), "(no fields)", c ) )

@@ -292,7 +292,7 @@ made the way of the designer of HwGUI (Kresin):
 
 | Key | Command |
 |---|---|
-| Ins, the palette | add a control: label, text field (HTLineEdit), GET with PICTURE (HTGet), button, check box, radio button, combo box, list, text of several lines (HTTextEdit), number with arrows (HTSpinner), progress bar, frame, line (HTSeparator) |
+| Ins, the palette | add a control: label, text field (HTLineEdit), GET with PICTURE (HTGet), button, check box, radio button, combo box, list, text of several lines (HTTextEdit), number with arrows (HTSpinner), progress bar, frame, line (HTSeparator), search box (HTSearchBox) |
 | arrows / Ctrl + arrows | move / size the selected control (no selection: Ctrl + arrows size the dialog) |
 | Tab / Shift-Tab | the next / previous control |
 | Enter, double click | to the properties on the right: position, size, name (the variable), text, PICTURE, type and length of a GET, items, start value; the events: VALID / WHEN, the action of a button (`ok`, `cancel`, a function or code), onChanged / onToggled |
@@ -315,6 +315,15 @@ fields from `hValues` by their names, shows the dialog and returns the values of
 (`{|lChecked| ... }`), of more lines a `STATIC FUNCTION Dlg_<Name>_<control>_<event>( dlg, hCtl, ... )`
 at the end of the file (it reaches the fields through `hCtl`); onInit / onAccept of the dialog are
 statements before `exec()` / after OK.
+
+**Search box** (HTSearchBox, `Search` on the palette): the searchbox of Digi knjigovodstvo -
+typing finds the items (name, code, tax number; Latin finds Cyrillic) in a list under the field.
+Its properties: *Placeholder*, *Items (expr)* - an expression of the program that gives the items
+(`Firme()`, `{ { 1, "Нова доо", "100234567" }, ... }`; empty: the caller passes them in
+`hValues[ "<name>_items" ]`), *Details (x)* - what a row shows on the right
+(`{ { "Šifra", x[ 1 ] }, { "PIB", x[ 3 ] } }`), *Value* - the start value. Events: onSelected
+(`xItem, xValue`), onCleared, onAdd (the `+` of the field). The result has its value
+(`getValue()`). F5 shows the items of an array written out in *Items*, else three samples.
 
 **Chinese (Big5 / GBK).** The texts of a dialog (title, labels, buttons, items, start values) are
 typed in the designer as any text (IME). The property *Codepage* of the dialog (F3) chooses the

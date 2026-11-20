@@ -471,6 +471,9 @@ samples/          Demo applications (human-facing, require a display)
                   (cbf_Build), F9 = dlg_<name>.prg with Dlg_<Name>( hValues ) -> hValues / NIL built of
                   HTDialog/HTGet/HTLineEdit/... (cbf_Code; keep both in step). Screen size: [VIEW] rows/cols,
                   -size=RxC, Options - Screen size (ht_cuiSetupDisplay + screenResized at run time).
+                  searchbox type: source (items expr, empty = hValues["<name>_items"]), details (x),
+                  value (cbf_SBValue: number when it looks so), events onselected/oncleared/onadd;
+                  F5/canvas: cbf_PreviewItems (a literal array by macro, else samples), safe details.
                   Big5/GBK: form property "codepage" (UTF8/CP950/GBK): cbf_Code writes the file in it
                   (hb_UTF8ToStr), non-ASCII texts via cbf_Lit -> CpText() = hb_Translate( c, cp, hb_cdpSelect() )
                   + REQUEST HB_CODEPAGE_xxx (only when used: an unused STATIC function is W0034); the editor
