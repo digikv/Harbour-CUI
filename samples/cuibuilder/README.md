@@ -261,19 +261,21 @@ again, as the objects were made with the old ones.
 the dialog is drawn as it will look - its widgets are the ones F5 shows, painting themselves
 under the title bar of a dialog (shadow, buttons at the bottom) - the selected control in the color
 of a selection. On the
-right: the dialog or the selected control, and the keys.
+right: the properties of the selected control (or of the dialog) in a browse - Enter, F2 or typing
+edits a value in place, Enter saves it and the dialog is drawn again; Esc / Tab go back to the
+dialog - and the keys.
 
 | Key | Command |
 |---|---|
 | Ins | add a control: label, text field (HTLineEdit), GET with PICTURE (HTGet), button, check box, radio button, combo box, list, text of several lines (HTTextEdit), number with arrows (HTSpinner), progress bar, frame, line (HTSeparator) |
 | arrows / Ctrl + arrows | move / size the selected control (no selection: Ctrl + arrows size the dialog) |
 | Tab / Shift-Tab | the next / previous control |
-| Enter, double click | the properties: position, size, name (the variable), text, PICTURE, type and length of a GET, VALID / WHEN, items, start value, the action of a button (`ok`, `cancel` or a function) |
+| Enter, double click | to the properties on the right: position, size, name (the variable), text, PICTURE, type and length of a GET, VALID / WHEN, items, start value, the action of a button (`ok`, `cancel` or a function) |
 | Del | delete the control |
 | Ctrl-PgUp / Ctrl-PgDn | earlier / later in the Tab order |
 | mouse | click selects, drag moves |
 | Esc | no selection (the dialog); again: close |
-| F3 | the dialog: name, title, size, the buttons at the bottom (`OK,Cancel`) |
+| F3 | the properties of the dialog: name, title, size, the buttons at the bottom (`OK,Cancel`) |
 | F5 | the dialog itself, made of the widgets, and the values it returns |
 | F2 / F9 | save the `.cuiform` (JSON) / generate the code |
 

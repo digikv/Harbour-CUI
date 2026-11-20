@@ -65,15 +65,15 @@ RETURN {}
 STATIC FUNCTION cbf_PropLabel( cProp )
 
     SWITCH cProp
-    CASE "name"    ; RETURN "Name (variable)"
-    CASE "text"    ; RETURN "Text / label"
-    CASE "valtype" ; RETURN "Type C N D L"
+    CASE "name"    ; RETURN "Name (var)"
+    CASE "text"    ; RETURN "Text"
+    CASE "valtype" ; RETURN "Type C/N/D/L"
     CASE "len"     ; RETURN "Length (C)"
     CASE "picture" ; RETURN "PICTURE"
     CASE "value"   ; RETURN "Value"
-    CASE "valid"   ; RETURN "VALID (expression)"
-    CASE "when"    ; RETURN "WHEN (expression)"
-    CASE "action"  ; RETURN "Action: ok/cancel/Func"
+    CASE "valid"   ; RETURN "VALID (expr)"
+    CASE "when"    ; RETURN "WHEN (expr)"
+    CASE "action"  ; RETURN "Action"
     CASE "items"   ; RETURN "Items (a,b,c)"
     CASE "min"     ; RETURN "Minimum"
     CASE "max"     ; RETURN "Maximum"
@@ -482,6 +482,19 @@ RETURN IIF( Empty( c ), "(none)", c )
 
 /*----------------------------------------------------------- the designer */
 
+/* TBrowse skip over an array; aRec[ 1 ] is the current row */
+STATIC FUNCTION cbf_Skip( aRec, nLen, nRequest )
+
+    LOCAL nActual := IIF( nRequest > 0, Min( nRequest, nLen - aRec[ 1 ] ), Max( nRequest, 1 - aRec[ 1 ] ) )
+
+    aRec[ 1 ] += nActual
+
+RETURN nActual
+
+/* a value for the browse: padded, so more can be typed (it is RTrim()-ed back) */
+STATIC FUNCTION cbf_Room( c )
+RETURN PadR( c, Len( c ) + 100 )
+
 PROCEDURE cb_FormDesigner( cFile, hSet, bAdd )
 
     LOCAL dlg := CBFormDlg():create( cFile, hSet, bAdd )
@@ -501,6 +514,11 @@ CLASS CBFormDlg FROM HTDialog
     DATA nSel        INIT 0          /* the selected control, 0 = the dialog */
     DATA lChanged    INIT .F.
     DATA oCanvas
+    DATA oSelLbl                     /* the selected control (or the dialog), over the properties */
+    DATA oProps                      /* the properties: Property | Value, edited in place */
+    DATA aRows       INIT {}         /* the rows of oProps: { label, key } */
+    DATA aRec        INIT { 1 }      /* the current row of oProps */
+    DATA nPropSel    INIT -1         /* the selection the rows were made for */
     DATA oInfo
     DATA oStat
 
@@ -509,8 +527,10 @@ CLASS CBFormDlg FROM HTDialog
     METHOD refresh()
     METHOD info()
     METHOD addControl()
-    METHOD props()
-    METHOD formProps()
+    METHOD propRow( n )
+    METHOD propGet( cKey )
+    METHOD propSet( cKey, cValue )
+    METHOD focusProps( lOn )
     METHOD preview()
     METHOD save()
     METHOD generate()
@@ -521,7 +541,7 @@ ENDCLASS
 
 METHOD create( cFile, hSet, bAdd ) CLASS CBFormDlg
 
-    LOCAL nW := ht_ScreenMaxCol() + 1, nH := ht_ScreenMaxRow() + 1, nInfo := 30, cErr := ""
+    LOCAL nW := ht_ScreenMaxCol() + 1, nH := ht_ScreenMaxRow() + 1, nInfo := 36, cErr := "", nPH
 
     ::super:new()
     ::cFile := cFile
@@ -544,8 +564,46 @@ METHOD create( cFile, hSet, bAdd ) CLASS CBFormDlg
     ::oCanvas := CBFormCanvas():new( self )
     ::oCanvas:oDlg := self
     ::oCanvas:setGeometry( 0, 0, nW - nInfo - 1, nH - 3 )
+
+    /* on the right: the selection, its properties (a browse), the keys */
+    ::oSelLbl := HTLabel():new( "", self )
+    ::oSelLbl:setGeometry( nW - nInfo, 0, nInfo, 1 )
+    nPH := Max( 8, nH - 3 - 1 - 19 )         /* the keys below: 19 rows */
+    ::oProps := HTBrowse():new( self )
+    ::oProps:setGeometry( nW - nInfo, 1, nInfo, nPH )
+    ::oProps:setGoTopBlock( {|| ::aRec[ 1 ] := 1 } )
+    ::oProps:setGoBottomBlock( {|| ::aRec[ 1 ] := Len( ::aRows ) } )
+    ::oProps:setSkipBlock( {| n | cbf_Skip( ::aRec, Len( ::aRows ), n ) } )
+    ::oProps:addColumn( "Property", {|| ::propRow( 1 ) }, 13 )
+    /* a string with room to type more: the browse edits a value as long as it gets it */
+    ::oProps:addColumn( "Value", {| x | IIF( x == NIL, cbf_Room( ::propGet( ::propRow( 2 ) ) ), ;
+        ::propSet( ::propRow( 2 ), x ) ) }, nInfo - 15 )
+    ::oProps:setHeadSep( e"\xC4" )
+    ::oProps:setColSep( e"\xB3" )
+    ::oProps:editable := .T.
+    ::oProps:onBeginEdit := {| nRow, nCol | HB_SYMBOL_UNUSED( nRow ), nCol == 2 }
+    ::oProps:browse():colPos := 2
+
     ::oInfo := CBInfoPanel():new( self )
-    ::oInfo:setGeometry( nW - nInfo, 0, nInfo, nH - 3 )
+    ::oInfo:setGeometry( nW - nInfo, 1 + nPH, nInfo, nH - 3 - 1 - nPH )
+    ::oInfo:aLines := { "", ;
+         " Ins      add a control", ;
+         " Arrows   move", ;
+         " Ctrl+arrows  size", ;
+         " Tab      next control", ;
+         " Enter    its properties", ;
+         " Del      delete", ;
+         " Ctrl-PgUp/PgDn  Tab order", ;
+         " Esc      the dialog itself", ;
+         "          (Ctrl+arrows: size)", ;
+         " F3 dialog  F5 try it", ;
+         " F2 save  F9 code", ;
+         " Mouse: click, drag", ;
+         " Action of a button: ok,", ;
+         "   cancel or a function", ;
+         " Properties: typing, F2 or", ;
+         "   Enter edits, Enter saves;", ;
+         "   Esc / Tab: back" }
     ::oStat := HTLabel():new( " Ins Add  Enter Properties  Del Delete  F3 Dialog  F5 Try  F2 Save  F9 Generate code  Esc Close", self )
     ::oStat:setGeometry( 0, nH - 3, nW, 1 )
     ::setFocusChild( ::oCanvas )
@@ -558,39 +616,107 @@ METHOD refresh() CLASS CBFormDlg
     ::info()
 RETURN NIL
 
-/* the right side: the dialog / the selected control, the keys */
+/* the right side: the selected control (or the dialog) and its properties */
 METHOD info() CLASS CBFormDlg
 
-    LOCAL c := "", h, p, cEol := Chr( 10 )
+    LOCAL h, p
 
     IF ::nSel == 0
-        c += " Dialog " + ::hForm[ "name" ] + cEol
-        c += " Title   " + ::hForm[ "title" ] + cEol
-        c += " Size    " + hb_ntos( ::hForm[ "width" ] ) + " x " + hb_ntos( ::hForm[ "height" ] ) + cEol
-        c += " Buttons " + ::hForm[ "buttons" ] + cEol
-        c += " Controls " + hb_ntos( Len( ::hForm[ "controls" ] ) ) + cEol
+        ::oSelLbl:setText( " Dialog " + ::hForm[ "name" ] )
     ELSE
         h := ::hForm[ "controls" ][ ::nSel ]
-        c += " " + hb_ntos( ::nSel ) + ". " + cbf_Types()[ hb_AScan( cbf_Types(), {| x | x[ 1 ] == h[ "type" ] } ) ][ 2 ] + cEol
-        c += " Col " + hb_ntos( h[ "x" ] ) + "  Row " + hb_ntos( h[ "y" ] ) + cEol
-        c += " Width " + hb_ntos( h[ "w" ] ) + "  Height " + hb_ntos( h[ "h" ] ) + cEol
-        FOR EACH p IN cbf_Props( h[ "type" ] )
-            c += " " + PadR( p, 8 ) + Left( hb_CStr( hb_HGetDef( h, p, "" ) ), 20 ) + cEol
-        NEXT
+        ::oSelLbl:setText( " " + hb_ntos( ::nSel ) + ". " + cbf_Types()[ hb_AScan( cbf_Types(), {| x | x[ 1 ] == h[ "type" ] } ) ][ 2 ] )
     ENDIF
-    c += cEol + " Ins      add a control" + cEol + ;
-         " Arrows   move" + cEol + ;
-         " Ctrl+arrows  size" + cEol + ;
-         " Tab      next control" + cEol + ;
-         " Enter    properties" + cEol + ;
-         " Del      delete" + cEol + ;
-         " Ctrl-PgUp/PgDn  Tab order" + cEol + ;
-         " Esc on a control: the" + cEol + "   dialog (Ctrl+arrows: its size)" + cEol + ;
-         " F3 dialog  F5 try it" + cEol + ;
-         " F2 save  F9 code" + cEol + ;
-         " Mouse: click, drag"
-    ::oInfo:aLines := hb_ATokens( c, Chr( 10 ) )
-    ::repaintChild( ::oInfo )
+    ::repaintChild( ::oSelLbl )
+
+    /* other rows for another selection; the same rows show the new values */
+    IF ::nPropSel != ::nSel
+        ::nPropSel := ::nSel
+        ::aRows := {}
+        IF ::nSel == 0
+            AEval( { { "Name", "name" }, { "Title", "title" }, { "Width", "width" }, { "Height", "height" }, ;
+                     { "Buttons", "buttons" } }, {| x | AAdd( ::aRows, x ) } )
+        ELSE
+            AEval( { { "Column", "x" }, { "Row", "y" }, { "Width", "w" }, { "Height", "h" } }, {| x | AAdd( ::aRows, x ) } )
+            FOR EACH p IN cbf_Props( h[ "type" ] )
+                AAdd( ::aRows, { cbf_PropLabel( p ), p } )
+            NEXT
+        ENDIF
+        ::aRec[ 1 ] := 1
+        ::oProps:browse():goTop()
+    ENDIF
+    ::oProps:refreshAll()
+
+RETURN NIL
+
+/* the label (1) or the key (2) of the current row of the properties ("" before there are rows) */
+METHOD propRow( n ) CLASS CBFormDlg
+RETURN IIF( ::aRec[ 1 ] >= 1 .AND. ::aRec[ 1 ] <= Len( ::aRows ), ::aRows[ ::aRec[ 1 ] ][ n ], "" )
+
+/* a property of the selected control (or of the dialog), as text */
+METHOD propGet( cKey ) CLASS CBFormDlg
+
+    LOCAL x
+
+    IF Empty( cKey )
+        RETURN ""
+    ENDIF
+    x := hb_HGetDef( IIF( ::nSel == 0, ::hForm, ::hForm[ "controls" ][ ::nSel ] ), cKey, "" )
+
+RETURN IIF( HB_ISNUMERIC( x ), hb_ntos( x ), hb_CStr( x ) )
+
+/* a property typed in the browse: numbers as numbers, names checked */
+METHOD propSet( cKey, cValue ) CLASS CBFormDlg
+
+    LOCAL h, c := AllTrim( cValue )
+
+    IF Empty( cKey )
+        RETURN NIL
+    ELSEIF ::nSel == 0
+        h := ::hForm
+        SWITCH cKey
+        CASE "name"
+            IF Empty( c )
+                RETURN NIL
+            ENDIF
+            h[ cKey ] := cb_Ident( c )
+            ::oSelLbl:setText( " Dialog " + h[ cKey ] )
+            ::repaintChild( ::oSelLbl )
+            EXIT
+        CASE "width"   ; h[ cKey ] := Min( ht_ScreenMaxCol() + 1, Max( 20, Int( Val( c ) ) ) ) ; EXIT
+        CASE "height"  ; h[ cKey ] := Min( ht_ScreenMaxRow() + 1, Max( 5, Int( Val( c ) ) ) ) ; EXIT
+        CASE "buttons" ; h[ cKey ] := c ; EXIT
+        OTHERWISE      ; h[ cKey ] := cValue
+        ENDSWITCH
+    ELSE
+        h := ::hForm[ "controls" ][ ::nSel ]
+        DO CASE
+        CASE hb_AScan( { "x", "y", "w", "h", "len" }, cKey,,, .T. ) > 0
+            h[ cKey ] := Max( IIF( cKey == "x" .OR. cKey == "y", 0, 1 ), Int( Val( c ) ) )
+        CASE cKey == "name"
+            IF ! Empty( c ) .AND. ! Upper( cb_Ident( c ) ) == Upper( c )   /* cb_Ident() changes the case */
+                HTToast():show( "The name must be a Harbour name (letters, digits, _): " + c, 2500, HT_CLR_TOAST_WARNING )
+                RETURN NIL
+            ENDIF
+            h[ cKey ] := c
+        CASE cKey == "valtype"
+            h[ cKey ] := IIF( ! Empty( c ) .AND. Upper( Left( c, 1 ) ) $ "CNDL", Upper( Left( c, 1 ) ), "C" )
+        OTHERWISE
+            h[ cKey ] := cValue
+        ENDCASE
+    ENDIF
+    ::lChanged := .T.
+    ::repaintChild( ::oCanvas )
+
+RETURN NIL
+
+/* the keys to the properties (lOn) or back to the dialog */
+METHOD focusProps( lOn ) CLASS CBFormDlg
+
+    ::setFocusChild( IIF( lOn, ::oProps, ::oCanvas ) )
+    ::oProps:browse():colPos := 2
+    ::repaintChild( ::oProps )
+    ::repaintChild( ::oCanvas )
 
 RETURN NIL
 
@@ -610,90 +736,6 @@ METHOD addControl() CLASS CBFormDlg
     ENDIF
     AAdd( ::hForm[ "controls" ], cbf_Control( cbf_Types()[ n ][ 1 ], nX, Max( 0, nY ), ::hForm[ "controls" ] ) )
     ::nSel := Len( ::hForm[ "controls" ] )
-    ::lChanged := .T.
-    ::refresh()
-
-RETURN NIL
-
-/* Enter: the properties of the selected control */
-METHOD props() CLASS CBFormDlg
-
-    LOCAL h, aP, dlg, nW := Min( 72, ht_ScreenMaxCol() - 3 ), nH, aEd := {}, p, n := 0, o, cErr := ""
-
-    IF ::nSel == 0
-        RETURN ::formProps()
-    ENDIF
-    h := ::hForm[ "controls" ][ ::nSel ]
-    aP := { "x", "y", "w", "h" }
-    AEval( cbf_Props( h[ "type" ] ), {| x | AAdd( aP, x ) } )
-    nH := Len( aP ) + 5
-    dlg := HTDialog():new()
-    dlg:setWindowTitle( "Properties: " + h[ "type" ] + IIF( Empty( hb_HGetDef( h, "name", "" ) ), "", " " + h[ "name" ] ) )
-    dlg:resize( nW, nH )
-    dlg:move( Int( ( ht_ScreenMaxCol() + 1 - nW ) / 2 ), Int( ( ht_ScreenMaxRow() + 1 - nH ) / 2 ) )
-    FOR EACH p IN aP
-        HTLabel():new( IIF( p == "x", "Column", IIF( p == "y", "Row", IIF( p == "w", "Width", IIF( p == "h", "Height", cbf_PropLabel( p ) ) ) ) ), dlg ):setGeometry( 1, n + 1, 24, 1 )
-        o := CBEdit():new( dlg )
-        o:setGeometry( 26, n + 1, nW - 29, 1 )
-        o:setText( hb_CStr( hb_HGetDef( h, p, "" ) ) )
-        AAdd( aEd, o )
-        n++
-    NEXT
-    dlg:addButtonBar( "OK", "Cancel" )
-    dlg:setFocusChild( aEd[ IIF( Len( aEd ) > 4, 5, 1 ) ] )
-    IF dlg:exec() != HT_DIALOG_ACCEPTED
-        RETURN NIL
-    ENDIF
-    FOR EACH p IN aP
-        o := aEd[ p:__enumIndex() ]
-        IF p $ "x|y|w|h|len"
-            h[ p ] := Max( IIF( p $ "w|h|len", 1, 0 ), Int( Val( o:text ) ) )
-        ELSEIF p == "name"
-            IF ! Empty( o:text ) .AND. ! cb_Ident( AllTrim( o:text ) ) == AllTrim( o:text )
-                cErr := "The name must be a Harbour name (letters, digits, _): " + o:text
-            ELSE
-                h[ p ] := AllTrim( o:text )
-            ENDIF
-        ELSEIF p == "valtype"
-            h[ p ] := IIF( Upper( Left( AllTrim( o:text ), 1 ) ) $ "CNDL" .AND. ! Empty( o:text ), Upper( Left( AllTrim( o:text ), 1 ) ), "C" )
-        ELSE
-            h[ p ] := o:text
-        ENDIF
-    NEXT
-    IF ! Empty( cErr )
-        HTMessageBox():warning( "CuiBuilder", cErr )
-    ENDIF
-    ::lChanged := .T.
-    ::refresh()
-
-RETURN NIL
-
-/* F3: the name, title, size and buttons of the dialog */
-METHOD formProps() CLASS CBFormDlg
-
-    LOCAL dlg, nW := Min( 72, ht_ScreenMaxCol() - 3 ), nH := 10, aEd := {}, aP := { "name", "title", "width", "height", "buttons" }, p, o
-    LOCAL aL := { "Name (Dlg_<name>)", "Title", "Width", "Height", "Buttons (OK,Cancel)" }
-
-    dlg := HTDialog():new()
-    dlg:setWindowTitle( "Dialog" )
-    dlg:resize( nW, nH )
-    dlg:move( Int( ( ht_ScreenMaxCol() + 1 - nW ) / 2 ), Int( ( ht_ScreenMaxRow() + 1 - nH ) / 2 ) )
-    FOR EACH p IN aP
-        HTLabel():new( aL[ p:__enumIndex() ], dlg ):setGeometry( 1, p:__enumIndex(), 22, 1 )
-        o := CBEdit():new( dlg )
-        o:setGeometry( 24, p:__enumIndex(), nW - 27, 1 )
-        o:setText( hb_CStr( ::hForm[ p ] ) )
-        AAdd( aEd, o )
-    NEXT
-    dlg:addButtonBar( "OK", "Cancel" )
-    IF dlg:exec() != HT_DIALOG_ACCEPTED
-        RETURN NIL
-    ENDIF
-    ::hForm[ "name" ] := cb_Ident( AllTrim( aEd[ 1 ]:text ) )
-    ::hForm[ "title" ] := aEd[ 2 ]:text
-    ::hForm[ "width" ] := Min( ht_ScreenMaxCol() + 1, Max( 20, Int( Val( aEd[ 3 ]:text ) ) ) )
-    ::hForm[ "height" ] := Min( ht_ScreenMaxRow() + 1, Max( 5, Int( Val( aEd[ 4 ]:text ) ) ) )
-    ::hForm[ "buttons" ] := AllTrim( aEd[ 5 ]:text )
     ::lChanged := .T.
     ::refresh()
 
@@ -810,6 +852,31 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS CBFormDlg
     LOCAL nKey := keyEvent:key, n, a, nCount := Len( ::hForm[ "controls" ] )
 
     keyEvent:accept()
+
+    /* the properties: the browse edits; Esc / Tab go back to the dialog */
+    IF ::focusWidget() == ::oProps
+        IF ! ::oProps:isEditing()
+            SWITCH nKey
+            CASE K_ESC
+            CASE K_TAB
+            CASE K_SH_TAB
+                ::focusProps( .F. )
+                RETURN
+            CASE K_LEFT
+            CASE K_RIGHT
+                RETURN
+            CASE K_ENTER
+                ::oProps:browse():colPos := 2
+                ::oProps:beginEdit( 0 )
+                RETURN
+            CASE K_F5 ; ::preview() ; RETURN
+            CASE K_F9 ; ::generate() ; RETURN
+            ENDSWITCH
+        ENDIF
+        ::oProps:keyEvent( keyEvent )
+        RETURN
+    ENDIF
+
     SWITCH nKey
     CASE K_ESC
         IF ::nSel > 0
@@ -827,8 +894,12 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS CBFormDlg
         ::accept()
         RETURN
     CASE K_INS        ; ::addControl() ; RETURN
-    CASE K_ENTER      ; ::props() ; RETURN
-    CASE K_F3         ; ::formProps() ; RETURN
+    CASE K_ENTER      ; ::focusProps( .T. ) ; RETURN
+    CASE K_F3
+        ::nSel := 0
+        ::refresh()
+        ::focusProps( .T. )
+        RETURN
     CASE K_F5         ; ::preview() ; RETURN
     CASE K_F2         ; ::save() ; RETURN
     CASE K_F9         ; ::generate() ; RETURN
@@ -948,7 +1019,7 @@ METHOD PROCEDURE paintEvent( event ) CLASS CBFormCanvas
         DispOutAt( nT, nL + nRight - nBtn + 1, ht_cellPadC( g, nBtn ), cBtn )
         nRight -= nBtn
     NEXT
-    DispOutAt( nT, nL, ht_cellPadR( " " + hF[ "title" ], nRight + 1 ), IIF( d:nSel == 0 .AND. ::hasFocus(), cSel, cTitle ) )
+    DispOutAt( nT, nL, ht_cellPadR( " " + hF[ "title" ], nRight + 1 ), IIF( d:nSel == 0, cSel, cTitle ) )
     FOR n := 1 TO nH - 1
         DispOutAt( nT + n, nL, Space( nW ), cWin )
     NEXT
@@ -1009,9 +1080,7 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS CBFormCanvas
         ::lDrag := .F.
         EXIT
     CASE K_LDBLCLK
-        IF d:nSel > 0
-            d:props()
-        ENDIF
+        d:focusProps( .T. )
         EXIT
     ENDSWITCH
 

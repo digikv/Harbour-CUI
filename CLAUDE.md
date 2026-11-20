@@ -453,7 +453,8 @@ samples/          Demo applications (human-facing, require a display)
                   module, DOCXClass / XLSXClass ([REPORTS] of cuibuild.ini) and hbziparc.hbc to the project.
                   cbformdes.prg = dialog designer: .cuiform (JSON; positions numbers, the rest text),
                   canvas = the widgets of cbf_Build (as F5) painted in viewports under a dialog's chrome,
-                  the selection recolored with hb_ClrArea (CBFormCanvas, mouse drag), F5 = the real dialog
+                  the selection recolored with hb_ClrArea (CBFormCanvas, mouse drag); properties = an HTBrowse
+                  on the right (Property | Value, inline edit -> propSet()), F5 = the real dialog
                   (cbf_Build), F9 = dlg_<name>.prg with Dlg_<Name>( hValues ) -> hValues / NIL built of
                   HTDialog/HTGet/HTLineEdit/... (cbf_Code; keep both in step). Screen size: [VIEW] rows/cols,
                   -size=RxC, Options - Screen size (ht_cuiSetupDisplay + screenResized at run time).
