@@ -167,8 +167,16 @@ fonts, Linux packages — is listed in [docs/DEPENDENCIES.md](docs/DEPENDENCIES.
 - Programs that call `ht_fontLoad()` / `ht_keyDown()` on Linux link Xlib (`{unix}-lX11` in their `hbmk.hbm`).
 - Compiler flags: `-w3 -es2`
 
-## License / credits
+## License & Credits
 
-- Harbour-CUI is released under the [MIT License](LICENSE) — Copyright (c) 2021-2026 Srđan Dragojlović.
-- Widget framework foundation: [tfonrouge/HBTui](https://github.com/tfonrouge/HBTui)
-- Harbour-CUI maintenance and CUI window evolution: [digikv/Harbour-CUI](https://github.com/digikv/Harbour-CUI)
+- **Harbour-CUI library** is released under the [MIT License](LICENSE) — Copyright (c) 2021–2026 Srđan Dragojlović.
+- **Included tools** (`CBro`, `CEdit`, `CNC`, `CuiBuilder`) are open-source under the GNU GPL v3 or later.
+- **Widget framework foundation:** [tfonrouge/HBTui](https://github.com)
+- **Harbour-CUI maintenance and CUI window evolution:** [digikv/Harbour-CUI](https://github.com)
+
+## Support & Donations
+
+This project is developed and maintained in my spare time. If you find **Harbour-CUI**, **CBro**, **CEdit**, or any of the other tools helpful in your work, voluntary donations to support ongoing development are warmly appreciated:
+
+- **PayPal:** `digikv@yahoo.com`
+
