@@ -36,6 +36,9 @@ PUBLIC:
     METHOD removeTopLevelWindow( windowId )
     METHOD exec()
     METHOD getTopLevelWindowFromWindowId( windowId )
+    /* .T. while events wait in the queue (a paint, a show ...): the screen is
+       not final yet */
+    METHOD hasPendingEvents() INLINE ::FeventStackLen[ 1 ] + ::FeventStackLen[ 2 ] + ::FeventStackLen[ 3 ] > 0
     METHOD queueEvent( event, priority )
     METHOD dropEventsFor( oRoot )
     METHOD quit() INLINE ::Fexecute := .F.

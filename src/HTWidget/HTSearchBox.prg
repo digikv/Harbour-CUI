@@ -26,6 +26,9 @@
  *                                          (default: "<value> - <label>")
  *   detailsBlock {|x| { { cName, xVal } } } shown on the right of a row (optional)
  *   filterBlock  {|x, aTerms| lMatch }    aTerms: the lower-case text and its Cyrillic
+ *   exactBlock   {|x, cText| lExact }     an item the typed text names exactly (default:
+ *                                          its value, e.g. a code typed from memory);
+ *                                          exact items come first, so Enter takes them
  *
  *   onSelected {|xItem, xValue| }  onCleared {|| }  onChanged {|xValue| }
  *   onSearch {|cText| }  onEnter {|| }  onAdd {|| }
@@ -96,6 +99,7 @@ PUBLIC:
     METHOD itemValue( xItem )
     METHOD itemDisplay( xItem )
     METHOD matches( xItem, aTerms )
+    METHOD isExact( xItem, cText )
 
     PROPERTY placeholder READWRITE INIT ""
     PROPERTY minSearchLength READWRITE INIT 1
@@ -107,6 +111,7 @@ PUBLIC:
     PROPERTY displayBlock READWRITE
     PROPERTY detailsBlock READWRITE
     PROPERTY filterBlock READWRITE
+    PROPERTY exactBlock READWRITE
     PROPERTY onSelected READWRITE
     PROPERTY onCleared READWRITE
     PROPERTY onChanged READWRITE
@@ -233,6 +238,15 @@ METHOD FUNCTION matches( xItem, aTerms ) CLASS HTSearchBox
 
 RETURN .F.
 
+/* .T. when the typed text names this item exactly (exactBlock; default: the value) */
+METHOD FUNCTION isExact( xItem, cText ) CLASS HTSearchBox
+
+    IF ::FexactBlock != NIL
+        RETURN Eval( ::FexactBlock, xItem, cText )
+    ENDIF
+
+RETURN ht_sameValue( ::itemValue( xItem ), cText )
+
 /* the text to look for: lower case, and in Cyrillic when it was typed in Latin */
 METHOD FUNCTION terms( cTerm ) CLASS HTSearchBox
 
@@ -247,16 +261,26 @@ RETURN aTerms
 METHOD PROCEDURE search( cTerm ) CLASS HTSearchBox
 
     LOCAL aTerms := ::terms( cTerm ), x
+    LOCAL cText := AllTrim( cTerm ), aExact := {}
 
-    ::Fresults := {}
+    /* the items the text names exactly first (a code typed from memory: Enter
+       takes that item, not the first one that only contains the digits) */
     FOR EACH x IN ::Fitems
-        IF ::matches( x, aTerms )
-            AAdd( ::Fresults, x:__enumIndex() )
-            IF Len( ::Fresults ) >= ::FmaxResults
-                EXIT
-            ENDIF
+        IF ::isExact( x, cText )
+            AAdd( aExact, x:__enumIndex() )
         ENDIF
     NEXT
+    ::Fresults := AClone( aExact )
+    IF Len( ::Fresults ) < ::FmaxResults
+        FOR EACH x IN ::Fitems
+            IF AScan( aExact, x:__enumIndex() ) == 0 .AND. ::matches( x, aTerms )
+                AAdd( ::Fresults, x:__enumIndex() )
+                IF Len( ::Fresults ) >= ::FmaxResults
+                    EXIT
+                ENDIF
+            ENDIF
+        NEXT
+    ENDIF
     ::FnHigh := IIF( Len( ::Fresults ) > 0, 1, 0 )
     ::FnTop := 1
     ::FlOpen := Len( ::Fresults ) > 0
