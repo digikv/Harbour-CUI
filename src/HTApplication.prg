@@ -37,6 +37,7 @@ PUBLIC:
     METHOD exec()
     METHOD getTopLevelWindowFromWindowId( windowId )
     METHOD queueEvent( event, priority )
+    METHOD dropEventsFor( oRoot )
     METHOD quit() INLINE ::Fexecute := .F.
     METHOD repaintAll()
     METHOD setDebug( lEnable )
@@ -391,6 +392,45 @@ METHOD PROCEDURE queueEvent( event, priority ) CLASS HTApplication
     ELSE
         ht_debugLog( "queueEvent: event stack overflow at priority " + hb_ntos( priority ) )
     ENDIF
+
+RETURN
+
+/** Drops queued events aimed at oRoot or a widget inside it.
+ * A modal dialog runs HTEventLoop, not this queue, but move() and resize()
+ * still enqueue. Delivering those after the dialog has closed follows a
+ * parent pointer the collector already freed. Call at the end of exec().
+ */
+METHOD PROCEDURE dropEventsFor( oRoot ) CLASS HTApplication
+
+    LOCAL nPri, n, nLen, event, oW, lDrop
+
+    IF oRoot == NIL
+        RETURN
+    ENDIF
+
+    FOR nPri := HT_EVENT_PRIORITY_HIGH TO HT_EVENT_PRIORITY_LOW
+        n := 1
+        DO WHILE n <= ::FeventStackLen[ nPri ]
+            event := ::FeventStack[ nPri, n ]
+            oW := IIF( event == NIL, NIL, event:widget )
+            lDrop := .F.
+            DO WHILE oW != NIL
+                IF oW == oRoot
+                    lDrop := .T.
+                    EXIT
+                ENDIF
+                oW := oW:parent()
+            ENDDO
+            IF lDrop
+                nLen := ::FeventStackLen[ nPri ]
+                aDel( ::FeventStack[ nPri ], n )
+                ::FeventStack[ nPri, nLen ] := NIL
+                ::FeventStackLen[ nPri ] := nLen - 1
+            ELSE
+                n++
+            ENDIF
+        ENDDO
+    NEXT
 
 RETURN
 

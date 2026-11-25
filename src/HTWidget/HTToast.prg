@@ -2,12 +2,18 @@
  * Non-blocking toast notification widget (singleton).
  *
  * Shows a floating message that auto-dismisses after a configurable duration.
- * Multiple toasts stack vertically from the bottom-right corner.
+ * Multiple toasts stack vertically from the chosen corner or edge.
  * Does not steal focus or block user interaction.
+ *
+ * Where it sits: the fourth argument of show(), or setPlace() for every
+ * toast after that. HT_TOAST_TOP_LEFT, HT_TOAST_TOP, HT_TOAST_TOP_RIGHT,
+ * HT_TOAST_LEFT, HT_TOAST_CENTER, HT_TOAST_RIGHT, HT_TOAST_BOTTOM_LEFT,
+ * HT_TOAST_BOTTOM, HT_TOAST_BOTTOM_RIGHT (the default).
  *
  * @example
  *   HTToast():show( "Record saved!" )
  *   HTToast():show( "Error occurred", 5000, HT_CLR_TOAST_ERROR )
+ *   HTToast():show( "Please wait", 120000, HT_CLR_TOAST_INFO, HT_TOAST_CENTER )
  */
 
 #include "hbtui.ch"
@@ -16,13 +22,16 @@ SINGLETON CLASS HTToast
 
 PROTECTED:
 
-    DATA FaToasts INIT {}   /* { { nWinId, nCreatedSec, nDurationSec }, ... } */
+    DATA FaToasts INIT {}   /* { { nWinId, nCreatedSec, nDurationSec, nPlace }, ... } */
+    DATA nPlace INIT HT_TOAST_BOTTOM_RIGHT
 
 PUBLIC:
 
     CONSTRUCTOR new()
 
-    METHOD show( cMessage, nDurationMs, nColorCategory )
+    METHOD show( cMessage, nDurationMs, nColorCategory, nPlace )
+    METHOD setPlace( nPlace )
+    METHOD close( nWinId )
     METHOD checkExpired()
     METHOD dismissAll()
 
@@ -32,13 +41,14 @@ ENDCLASS
 METHOD new() CLASS HTToast
 RETURN self
 
-/** Shows a toast notification at the bottom-right of the screen.
- * Flat panel (no DispBox border) with drop shadow.
+/** Shows a toast. nPlace is one HT_TOAST_* constant; NIL keeps setPlace().
+ * Flat panel (no DispBox border), without a shadow.
  * @param cMessage Text to display
  * @param nDurationMs Duration in milliseconds (default 3000)
  * @param nColorCategory HT_CLR_TOAST_* constant (default HT_CLR_TOAST_INFO)
+ * @param nPlace HT_TOAST_* constant (default the place from setPlace())
  */
-METHOD PROCEDURE show( cMessage, nDurationMs, nColorCategory ) CLASS HTToast
+METHOD FUNCTION show( cMessage, nDurationMs, nColorCategory, nPlace ) CLASS HTToast
 
     LOCAL nWinId, nPrevWin
     LOCAL nToastWidth, nToastHeight
@@ -46,16 +56,18 @@ METHOD PROCEDURE show( cMessage, nDurationMs, nColorCategory ) CLASS HTToast
     LOCAL nScreenRows, nScreenCols
     LOCAL cColor
     LOCAL nOldShadow
-    LOCAL n
+    LOCAL n, nStack, aAt
 
     DEFAULT nDurationMs    := 3000
     DEFAULT nColorCategory := HT_CLR_TOAST_INFO
+    IF ! HB_ISNUMERIC( nPlace )
+        nPlace := ::nPlace
+    ENDIF
+    IF nPlace < HT_TOAST_TOP_LEFT .OR. nPlace > HT_TOAST_BOTTOM_RIGHT
+        nPlace := HT_TOAST_BOTTOM_RIGHT
+    ENDIF
 
     cColor := HTTheme():getColor( nColorCategory )
-
-    /* flat toast: padding row + text row + padding row, no box border */
-    nToastHeight := 3
-    nToastWidth  := Min( ht_strWidth( cMessage ) + 4, 60 )
 
     /* get screen dimensions from desktop window */
     nPrevWin := wSelect()
@@ -63,19 +75,24 @@ METHOD PROCEDURE show( cMessage, nDurationMs, nColorCategory ) CLASS HTToast
     nScreenRows := ht_ScreenMaxRow()
     nScreenCols := ht_ScreenMaxCol()
 
-    /* position: bottom-right, stacked upward for multiple toasts */
-    nBottom := nScreenRows - 1 - ( Len( ::FaToasts ) * ( nToastHeight + 1 ) )
-    nRight  := nScreenCols - 1
-    nTop    := nBottom - nToastHeight + 1
-    nLeft   := nRight - nToastWidth + 1
+    /* flat toast: padding row + text row + padding row, no box border */
+    nToastHeight := 3
+    nToastWidth  := Min( ht_strWidth( cMessage ) + 4, Max( 20, nScreenCols - 4 ) )
 
-    /* clamp to screen */
-    IF nTop < 1
-        nTop := 1
-        nBottom := nTop + nToastHeight - 1
-    ENDIF
+    /* same place stacks; a toast in another place does not push this one */
+    nStack := 0
+    FOR n := 1 TO Len( ::FaToasts )
+        IF Len( ::FaToasts[ n ] ) >= 4 .AND. ::FaToasts[ n ][ 4 ] == nPlace
+            nStack++
+        ENDIF
+    NEXT
+    aAt := ht_toastAt( nPlace, nScreenRows, nScreenCols, nToastWidth, nToastHeight, nStack )
+    nTop  := aAt[ 1 ]
+    nLeft := aAt[ 2 ]
+    nBottom := nTop + nToastHeight - 1
+    nRight  := nLeft + nToastWidth - 1
 
-    nOldShadow := wSetShadow( HT_SHADOW_ATTR )
+    nOldShadow := wSetShadow( -1 )
     nWinId := wOpen( nTop, nLeft, nBottom, nRight, .F. )
     wSetShadow( nOldShadow )
 
@@ -85,12 +102,39 @@ METHOD PROCEDURE show( cMessage, nDurationMs, nColorCategory ) CLASS HTToast
     DispOutAt( 1, 1, ht_cellPadR( cMessage, nToastWidth - 2 ), cColor )
 
     /* store toast info */
-    AAdd( ::FaToasts, { nWinId, Seconds(), nDurationMs / 1000 } )
+    AAdd( ::FaToasts, { nWinId, Seconds(), nDurationMs / 1000, nPlace } )
 
     /* restore previous window selection */
     IF nPrevWin > 0
         wSelect( nPrevWin, .F. )
     ENDIF
+
+RETURN nWinId
+
+/** Where every following show() sits, when that call does not pass a place. */
+METHOD FUNCTION setPlace( nPlace ) CLASS HTToast
+
+    IF HB_ISNUMERIC( nPlace ) .AND. nPlace >= HT_TOAST_TOP_LEFT .AND. nPlace <= HT_TOAST_BOTTOM_RIGHT
+        ::nPlace := nPlace
+    ENDIF
+
+RETURN self
+
+/** Closes the toast show() returned. A wait message stays until this. */
+METHOD PROCEDURE close( nWinId ) CLASS HTToast
+
+    LOCAL i
+
+    IF ! HB_ISNUMERIC( nWinId )
+        RETURN
+    ENDIF
+    FOR i := Len( ::FaToasts ) TO 1 STEP -1
+        IF ::FaToasts[ i ][ 1 ] == nWinId
+            wClose( nWinId )
+            hb_ADel( ::FaToasts, i, .T. )
+            RETURN
+        ENDIF
+    NEXT
 
 RETURN
 
@@ -128,3 +172,63 @@ METHOD PROCEDURE dismissAll() CLASS HTToast
     ::FaToasts := {}
 
 RETURN
+
+/* Top-left of the toast. A bottom place grows upward, the others downward.
+   One row and one column stay clear of the screen edge, as the old
+   bottom-right toast did. */
+STATIC FUNCTION ht_toastAt( nPlace, nRows, nCols, nW, nH, nStack )
+
+    LOCAL nTop, nLeft, nFromBottom := .F.
+
+    DO CASE
+    CASE nPlace == HT_TOAST_TOP_LEFT
+        nTop := 1
+        nLeft := 1
+    CASE nPlace == HT_TOAST_TOP
+        nTop := 1
+        nLeft := Int( ( nCols + 1 - nW ) / 2 )
+    CASE nPlace == HT_TOAST_TOP_RIGHT
+        nTop := 1
+        nLeft := nCols - nW
+    CASE nPlace == HT_TOAST_LEFT
+        nTop := Int( ( nRows + 1 - nH ) / 2 )
+        nLeft := 1
+    CASE nPlace == HT_TOAST_CENTER
+        nTop := Int( ( nRows + 1 - nH ) / 2 )
+        nLeft := Int( ( nCols + 1 - nW ) / 2 )
+    CASE nPlace == HT_TOAST_RIGHT
+        nTop := Int( ( nRows + 1 - nH ) / 2 )
+        nLeft := nCols - nW
+    CASE nPlace == HT_TOAST_BOTTOM_LEFT
+        nFromBottom := .T.
+        nTop := nRows - nH
+        nLeft := 1
+    CASE nPlace == HT_TOAST_BOTTOM
+        nFromBottom := .T.
+        nTop := nRows - nH
+        nLeft := Int( ( nCols + 1 - nW ) / 2 )
+    OTHERWISE
+        nFromBottom := .T.
+        nTop := nRows - nH
+        nLeft := nCols - nW
+    ENDCASE
+
+    IF nFromBottom
+        nTop -= nStack * ( nH + 1 )
+    ELSE
+        nTop += nStack * ( nH + 1 )
+    ENDIF
+    IF nTop < 0
+        nTop := 0
+    ENDIF
+    IF nTop + nH - 1 > nRows
+        nTop := Max( 0, nRows - nH + 1 )
+    ENDIF
+    IF nLeft < 0
+        nLeft := 0
+    ENDIF
+    IF nLeft + nW - 1 > nCols
+        nLeft := Max( 0, nCols - nW + 1 )
+    ENDIF
+
+RETURN { nTop, nLeft }

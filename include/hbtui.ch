@@ -100,6 +100,18 @@
 #define HT_CLR_TOAST_SUCCESS    52
 #define HT_CLR_TOAST_WARNING    53
 #define HT_CLR_TOAST_ERROR      54
+
+/* where HTToast sits. The default is the bottom-right corner.
+   Pass one to HTToast():show() or set it with HTToast():setPlace(). */
+#define HT_TOAST_TOP_LEFT       1
+#define HT_TOAST_TOP            2
+#define HT_TOAST_TOP_RIGHT      3
+#define HT_TOAST_LEFT           4
+#define HT_TOAST_CENTER         5
+#define HT_TOAST_RIGHT          6
+#define HT_TOAST_BOTTOM_LEFT    7
+#define HT_TOAST_BOTTOM         8
+#define HT_TOAST_BOTTOM_RIGHT   9
 #define HT_CLR_BROWSE_SELECTED  55
 #define HT_CLR_TITLEBAR         56
 #define HT_CLR_TITLEBTN         57

@@ -20,12 +20,17 @@ And **Git**: status, stage, diff, commit, log, pull and push of the project's fo
 
 ## Download
 
-Ready-to-run programs: **[CuiBuilder 1.0.2 release](https://github.com/digikv/Harbour-CUI/releases/tag/cuibuilder-1.0.2)**
+Ready-to-run programs: **[CuiBuilder 1.0.3 release](https://github.com/digikv/Harbour-CUI/releases/tag/cuibuilder-1.0.3)**
 
 | File | Platform |
 |---|---|
-| `cuibuilder-1.0.2-win32.zip` | Windows 7 and newer (32-bit, runs on 64-bit Windows too) |
-| `cuibuilder-1.0.2-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6` and `libgpm2` |
+| `cuibuilder-1.0.3-win32.zip` | Windows 7 and newer (32-bit, runs on 64-bit Windows too) |
+| `cuibuilder-1.0.3-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6` and `libgpm2` |
+
+New in 1.0.3: on Windows the sources are compiled several at the same time (as many as the
+processors, `CUIB_JOBS` sets another number): a large project builds two to three times faster;
+`headers=` of an `.hbc` file is read as hbmk2 reads it (`hbhpdf.hbc` puts `harupdf.ch` into
+every source with `-u+`; without it the `HPDF_` constants were missing).
 
 New in 1.0.2: the dialog designer draws the real widgets and has the object inspector
 (properties and events, a palette, copy / paste, align); a new Harbour-CUI project gets the
@@ -424,6 +429,11 @@ cuibc [project.hwprj | project.hbp] [-clean] [-rebuild] [-cleanonly] [-comp=<id>
 Without a project: the only `.hwprj` (else `.hbp`) of the current folder. `-v` shows the command
 lines, `-q` only errors, warnings and the result. Exit code 0 = built, 1 = errors, 2 = wrong
 parameters or settings.
+
+On Windows the sources are compiled several at the same time (Harbour, then the C compiler, for
+each file), as many as the processors (`NUMBER_OF_PROCESSORS`); the environment variable
+`CUIB_JOBS` sets another number (`CUIB_JOBS=1`: one after another). The program is linked when all
+of them are compiled. On Linux they are compiled one after another.
 
 ## Building CuiBuilder
 

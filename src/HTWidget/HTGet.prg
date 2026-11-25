@@ -247,8 +247,9 @@ METHOD PROCEDURE paintEvent( event ) CLASS HTGet
     ENDIF
 
     /* password mode: replace with asterisks */
+    /* one star per typed character: an empty password shows no stars */
     IF ::Fhide
-        cTransformed := Replicate( "*", Len( cTransformed ) )
+        cTransformed := PadR( Replicate( "*", Len( RTrim( cTransformed ) ) ), Len( cTransformed ) )
     ENDIF
 
     /* calculate visible input width */

@@ -64,6 +64,25 @@ STATIC FUNCTION ht_winShadowExtents( hWin )
     ENDIF
 RETURN NIL
 
+/* hb_Shadow's 5th argument is the color. Without it the default is 7
+   (white on black): a solid bar. The window stores HT_SHADOW_ATTR. */
+STATIC PROCEDURE ht_winPaintShadow( hWin, nTop, nLeft, nBottom, nRight )
+    LOCAL nAttr
+
+    IF hWin == NIL .OR. ! hb_hHasKey( hWin, "shadow" )
+        RETURN
+    ENDIF
+    nAttr := hWin[ "shadow" ]
+    IF ! HB_ISNUMERIC( nAttr ) .OR. nAttr < 0
+        RETURN
+    ENDIF
+    IF nTop == NIL
+        hb_Shadow( hWin[ "top" ], hWin[ "left" ], hWin[ "bottom" ], hWin[ "right" ], nAttr )
+    ELSE
+        hb_Shadow( nTop, nLeft, nBottom, nRight, nAttr )
+    ENDIF
+RETURN
+
 STATIC FUNCTION ht_winArea( hWin )
 RETURN { hWin[ "top" ], hWin[ "left" ], hWin[ "shadBottom" ], hWin[ "shadRight" ] }
 
@@ -174,8 +193,20 @@ FUNCTION ht_fullScreen( lOn )
 
 RETURN lOld
 
+/** Face used by ht_cuiSetupDisplay(). Default Consolas. Digi sets
+ * "JetBrains Mono" before the first setup; the grid is fitted to that face. */
+FUNCTION ht_cuiFont( cName )
+
+    STATIC s_cFont := "Consolas"
+
+    IF HB_ISSTRING( cName ) .AND. ! Empty( cName )
+        s_cFont := cName
+    ENDIF
+
+RETURN s_cFont
+
 /** Configures GT display like digikv awin.prg:
- * fullscreen (no OS chrome), SetMode, then scale Consolas to the desktop.
+ * fullscreen (no OS chrome), SetMode, then scale the face to the desktop.
  * A second SetMode to DESKTOPCOLS/ROWS removes the large black side margins
  * that gtwvt leaves when Consolas metrics are narrower than the requested
  * FONTWIDTH (FitSize centers the leftover as MarginLeft/Right).
@@ -221,7 +252,7 @@ FUNCTION ht_cuiSetupDisplay( nRows, nCols )
     ENDIF
     SetMode( nRows, nCols )
 #else
-    hb_gtInfo( HB_GTI_FONTNAME, "Consolas" )
+    hb_gtInfo( HB_GTI_FONTNAME, ht_cuiFont() )
     /* Consolas has no CJK glyphs. With gtwvt's default OEM charset GDI draws
        them as empty boxes; DEFAULT_CHARSET lets it fall back to a system CJK
        font (MingLiU, Microsoft JhengHei, SimSun, ...). The wide-cell
@@ -331,9 +362,7 @@ FUNCTION wOpen( nTop, nLeft, nBottom, nRight, lClear )
     aArea := ht_winArea( hWin )
     hWin[ "backImage" ] := SaveScreen( aArea[ 1 ], aArea[ 2 ], aArea[ 3 ], aArea[ 4 ] )
 
-    IF s_nShadow >= 0
-        hb_Shadow( hWin[ "top" ], hWin[ "left" ], hWin[ "bottom" ], hWin[ "right" ] )
-    ENDIF
+    ht_winPaintShadow( hWin )
 
     IF lClear
         /* full window clear — CUI chrome has no 1-char CT border ring */
@@ -516,9 +545,7 @@ STATIC PROCEDURE ht_winBlitLayer( hWin )
 
     RestScreen( hWin[ "top" ], hWin[ "left" ], ;
         hWin[ "bottom" ], hWin[ "right" ], cImg )
-    IF hb_hHasKey( hWin, "shadow" ) .AND. hWin[ "shadow" ] >= 0
-        hb_Shadow( hWin[ "top" ], hWin[ "left" ], hWin[ "bottom" ], hWin[ "right" ] )
-    ENDIF
+    ht_winPaintShadow( hWin )
 RETURN
 
 /** Recompose screen from desktop stack base + windows in z-order.
@@ -639,7 +666,7 @@ FUNCTION ht_winDrag( nId, nGrabAbsRow, nGrabAbsCol )
         RestScreen( hWin[ "top" ], hWin[ "left" ], ;
             hWin[ "bottom" ], hWin[ "right" ], cImage )
         IF lShadow
-            hb_Shadow( hWin[ "top" ], hWin[ "left" ], hWin[ "bottom" ], hWin[ "right" ] )
+            ht_winPaintShadow( hWin )
         ENDIF
         DispEnd()
     ENDDO
@@ -652,7 +679,7 @@ FUNCTION ht_winDrag( nId, nGrabAbsRow, nGrabAbsCol )
     RestScreen( hWin[ "top" ], hWin[ "left" ], ;
         hWin[ "bottom" ], hWin[ "right" ], cImage )
     IF lShadow
-        hb_Shadow( hWin[ "top" ], hWin[ "left" ], hWin[ "bottom" ], hWin[ "right" ] )
+        ht_winPaintShadow( hWin )
     ENDIF
     hWin[ "layerImage" ] := cImage
     hWin[ "winImage" ] := cImage
@@ -775,7 +802,7 @@ FUNCTION ht_winResize( nId, nMinW, nMinH, bPaint )
             hb_DispOutAt( nNewBottom, nNewRight, "/", cWin )
         ENDIF
         IF lShadow
-            hb_Shadow( nTop, nLeft, nNewBottom, nNewRight )
+            ht_winPaintShadow( hWin, nTop, nLeft, nNewBottom, nNewRight )
         ENDIF
         DispEnd()
     ENDDO
@@ -786,7 +813,7 @@ FUNCTION ht_winResize( nId, nMinW, nMinH, bPaint )
     hWin[ "backImage" ] := SaveScreen( aArea[ 1 ], aArea[ 2 ], aArea[ 3 ], aArea[ 4 ] )
     /* caller repaints only the window rect — lay the shadow down now */
     IF lShadow
-        hb_Shadow( hWin[ "top" ], hWin[ "left" ], hWin[ "bottom" ], hWin[ "right" ] )
+        ht_winPaintShadow( hWin )
     ENDIF
     ht_SyncViewport()
 
@@ -847,7 +874,7 @@ FUNCTION ht_winSetRect( nId, nTop, nLeft, nBottom, nRight )
     hWin[ "backImage" ] := SaveScreen( aArea[ 1 ], aArea[ 2 ], aArea[ 3 ], aArea[ 4 ] )
     /* caller repaints only the window rect — lay the shadow down now */
     IF hb_hHasKey( hWin, "shadow" ) .AND. hWin[ "shadow" ] >= 0
-        hb_Shadow( hWin[ "top" ], hWin[ "left" ], hWin[ "bottom" ], hWin[ "right" ] )
+        ht_winPaintShadow( hWin )
     ENDIF
     DispEnd()
     ht_SyncViewport()
@@ -994,7 +1021,7 @@ FUNCTION wMove( nRow, nCol )
     RestScreen( hWin[ "top" ], hWin[ "left" ], ;
         hWin[ "bottom" ], hWin[ "right" ], cImage )
     IF nShadH > 0
-        hb_Shadow( hWin[ "top" ], hWin[ "left" ], hWin[ "bottom" ], hWin[ "right" ] )
+        ht_winPaintShadow( hWin )
     ENDIF
     DispEnd()
 
@@ -1004,7 +1031,7 @@ FUNCTION wMove( nRow, nCol )
     RestScreen( hWin[ "top" ], hWin[ "left" ], ;
         hWin[ "bottom" ], hWin[ "right" ], cImage )
     IF nShadH > 0
-        hb_Shadow( hWin[ "top" ], hWin[ "left" ], hWin[ "bottom" ], hWin[ "right" ] )
+        ht_winPaintShadow( hWin )
     ENDIF
 
     ht_SyncViewport()

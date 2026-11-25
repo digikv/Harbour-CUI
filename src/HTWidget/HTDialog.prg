@@ -101,6 +101,10 @@ METHOD FUNCTION exec() CLASS HTDialog
 
     ::FisVisible := .F.
 
+    /* move()/resize() of the dialog and its fields queued events for the
+       main loop. The dialog is gone by the time that loop runs. */
+    HTApplication():dropEventsFor( self )
+
 RETURN ::FresultCode
 
 /** Closes the dialog with an accepted result code. */
