@@ -28,6 +28,7 @@
 
 #include "hbtui.ch"
 #include "inkey.ch"
+#include "set.ch"
 
 #define _DP_W   30      /* the calendar: 7 days of 4 cells and the frame */
 #define _DP_H   11      /* frame, header, day names, 6 weeks, today, frame */
@@ -380,7 +381,7 @@ METHOD PROCEDURE paintCalendar() CLASS HTDatePicker
     DispBox( 0, 0, _DP_H - 1, _DP_W - 1, Replicate( " ", 9 ), cN )
     DispBox( 0, 0, _DP_H - 1, _DP_W - 1, , cN )
 
-    cTitle := ::FmonthNames[ Month( ::Fcur ) ] + " " + hb_ntos( Year( ::Fcur ) )
+    cTitle := ::FmonthNames[ Month( ::Fcur ) ] + " " + ht_dateYear( Year( ::Fcur ), ::FdateFormat )
     cTitle := ht_cellLeft( cTitle, _DP_W - 12 )
     DispOutAt( 1, 1, Space( _DP_W - 2 ), cHead )
     DispOutAt( 1, 2, ht_glyph( 0x00AB, "<" ), cHead )
@@ -579,7 +580,8 @@ RETURN
 
 /*----------------------------------------------------------- dates */
 
-/* the date in a format (dd.mm.yyyy, dd/mm/yyyy, mm/dd/yyyy, yyyy-mm-dd ...); "" when empty */
+/* the date in a format (dd.mm.yyyy, dd.mm.yy, dd/mm/yyyy, mm/dd/yyyy, yyyy-mm-dd ...);
+   "" when empty. yyyy is replaced before yy. */
 FUNCTION ht_dateText( dDate, cFormat )
 
     LOCAL c
@@ -589,9 +591,17 @@ FUNCTION ht_dateText( dDate, cFormat )
     ENDIF
     c := Lower( hb_defaultValue( cFormat, "dd.mm.yyyy" ) )
     c := StrTran( c, "yyyy", StrZero( Year( dDate ), 4 ) )
+    c := StrTran( c, "yy", Right( StrZero( Year( dDate ), 4 ), 2 ) )
     c := StrTran( c, "mm", StrZero( Month( dDate ), 2 ) )
 
 RETURN StrTran( c, "dd", StrZero( Day( dDate ), 2 ) )
+
+/* the year as the format writes it: four digits, or two when the format says yy */
+FUNCTION ht_dateYear( nYear, cFormat )
+   IF "yyyy" $ Lower( hb_defaultValue( cFormat, "dd.mm.yyyy" ) )
+      RETURN hb_ntos( nYear )
+   ENDIF
+RETURN Right( StrZero( nYear, 4 ), 2 )
 
 /* a typed date -> the date; NIL = not a date. Day and month of one digit too, any of . / -
    between them; yyyy-mm-dd is always taken; mm/dd/yyyy when the format starts with mm */
@@ -606,18 +616,33 @@ FUNCTION ht_dateParse( cText, cFormat )
     DO CASE
     CASE Len( a[ 1 ] ) == 4
         nY := Val( a[ 1 ] ) ; nM := Val( a[ 2 ] ) ; nD := Val( a[ 3 ] )
-    CASE Len( a[ 3 ] ) != 4
+    CASE !( Len( a[ 3 ] ) == 4 .OR. Len( a[ 3 ] ) == 2 )
         RETURN NIL
     CASE Left( cF, 2 ) == "mm"
         nM := Val( a[ 1 ] ) ; nD := Val( a[ 2 ] ) ; nY := Val( a[ 3 ] )
     OTHERWISE
         nD := Val( a[ 1 ] ) ; nM := Val( a[ 2 ] ) ; nY := Val( a[ 3 ] )
     ENDCASE
+    IF nY < 100
+        nY := ht_dateYear4( nY )
+    ENDIF
     IF nY < 1 .OR. nM < 1 .OR. nM > 12 .OR. nD < 1 .OR. nD > ht_daysInMonth( nY, nM )
         RETURN NIL                                      /* 31.02. */
     ENDIF
 
 RETURN hb_SToD( StrZero( nY, 4 ) + StrZero( nM, 2 ) + StrZero( nD, 2 ) )
+
+/* a two-digit year in the SET EPOCH window (Digi: EPOCH 2000 → 00..99 = 2000..2099) */
+STATIC FUNCTION ht_dateYear4( nYear )
+
+   LOCAL nEpoch := Set( _SET_EPOCH )
+
+   nYear += Int( nEpoch / 100 ) * 100
+   IF nYear < nEpoch
+      nYear += 100
+   ENDIF
+
+RETURN nYear
 
 /* as the Digi field types: digits only, the separator of the format comes by itself
    after a full part (20112026 -> 20.11.2026); a typed separator ends a shorter part */
@@ -626,7 +651,16 @@ FUNCTION ht_dateAutoFormat( cText, cFormat )
     LOCAL cF := Lower( hb_defaultValue( cFormat, "dd.mm.yyyy" ) ), cSep, aLen, c := "", g := 1, n := 0, ch
 
     cSep := IIF( "/" $ cF, "/", IIF( "-" $ cF, "-", "." ) )
-    aLen := IIF( Left( cF, 4 ) == "yyyy", { 4, 2, 2 }, { 2, 2, 4 } )
+    DO CASE
+    CASE Left( cF, 4 ) == "yyyy"
+        aLen := { 4, 2, 2 }
+    CASE Left( cF, 2 ) == "yy"
+        aLen := { 2, 2, 2 }
+    CASE "yyyy" $ cF
+        aLen := { 2, 2, 4 }
+    OTHERWISE
+        aLen := { 2, 2, 2 }
+    ENDCASE
     FOR EACH ch IN cText
         IF ch == "." .OR. ch == "/" .OR. ch == "-"
             IF n > 0 .AND. g < 3

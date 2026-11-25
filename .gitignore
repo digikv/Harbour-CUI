@@ -26,3 +26,5 @@ samples/cbro/cbro.ini
 !COPYING
 samples/cbro/*.db
 samples/*/obj/
+samples/cedit/test_2gb_lines.txt
+samples/cedit/hb_out.log

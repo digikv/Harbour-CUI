@@ -1062,6 +1062,11 @@ STATIC PROCEDURE cb_HbcRead( oPF, oP, cFile, hSet, nDepth )
             CASE "prgflags"
                 oP:cFlagsPrg := cb_Join( oP:cFlagsPrg, cW )
                 EXIT
+            CASE "headers"      /* hbhpdf.hbc: harupdf.ch in every .prg, as hbmk2 (-u+) */
+                IF hb_AScan( cb_Words( oP:cFlagsPrg ), "-u+" + cW,,, .T. ) == 0
+                    oP:cFlagsPrg := cb_Join( oP:cFlagsPrg, "-u+" + cW )
+                ENDIF
+                EXIT
             CASE "cflags"
                 oP:cFlagsC := cb_Join( oP:cFlagsC, cW )
                 EXIT
@@ -1307,6 +1312,7 @@ STATIC FUNCTION cb_BuildOne( oP, hSet, lClean, bOut, bStop )
     LOCAL cErr, cObjDir, cFile, cSrc, cExt, cObj, cC, aObjs := {}, aRes := {}, aLibFiles := {}
     LOCAL lRelink := .F., cOut, tOut, cCmd, cIncs, cHbIncs, cFlags, cLibs, cLibPaths, cGt, cStub
     LOCAL nComp := 0, nSkip := 0, nRes, cP, cFam, cHbBin, aHw := {}, cRes, cName, l, cLibF, aIncDirs, lAll, cSig
+    LOCAL aJobs := {}, aJob
 
     IF hComp == NIL
         Eval( bOut, "Unknown compiler: " + oP:cComp + " (cuibuild.ini [C_COMPILER] id=)", CB_MSG_ERROR )
@@ -1423,27 +1429,29 @@ STATIC FUNCTION cb_BuildOne( oP, hSet, lClean, bOut, bStop )
             AAdd( aObjs, cObj )
             LOOP
         ENDIF
+        /* a job: its steps run one after another (Harbour, then C); the jobs
+           of several files run at the same time (cb_RunJobs) */
+        aJob := {}
         IF cExt == ".prg"
             cC := cObjDir + cName + ".c"
-            FErase( cC )
             cCmd := cb_Quote( cHbBin ) + " " + cb_Quote( cSrc ) + " " + hHb[ "def_flags" ] + ;
                     IIF( Empty( oP:cFlagsPrg ), "", " " + oP:cFlagsPrg ) + cHbIncs + " -o" + cb_Quote( cObjDir + cName + ".c" )
-            IF ! cb_Step( cCmd, cC, bOut, "Harbour: " + hb_FNameNameExt( cSrc ) )
-                RETURN .F.
-            ENDIF
+            AAdd( aJob, { cCmd, cC, "Harbour: " + hb_FNameNameExt( cSrc ) } )
         ELSE
             cC := cSrc
         ENDIF
         cCmd := cb_Fill( cb_Tmpl( hComp, "comp" ), hComp, hSet, ;
             { "src" => cb_Quote( cC ), "obj" => cb_Quote( cObj ), "incs" => cIncs, "f" => cFlags } )
-        FErase( cObj )
-        IF ! cb_Step( cCmd, cObj, bOut, "C: " + hb_FNameNameExt( cC ) )
-            RETURN .F.
-        ENDIF
+        AAdd( aJob, { cCmd, cObj, "C: " + hb_FNameNameExt( cC ) } )
+        AAdd( aJobs, aJob )
         nComp++
         lRelink := .T.
         AAdd( aObjs, cObj )
     NEXT
+
+    IF ! cb_RunJobs( aJobs, cObjDir, bOut, bStop )
+        RETURN .F.
+    ENDIF
 
     hb_MemoWrit( cObjDir + "_cbflags.txt", cSig )
 
@@ -1691,11 +1699,19 @@ RETURN
 /* runs one command; .T. when it ended well and made cResult */
 STATIC FUNCTION cb_Step( cCmd, cResult, bOut, cTitle )
 
-    LOCAL cOut := "", nExit, cLine, a, lErr := .F.
+    LOCAL cOut := "", nExit
 
     Eval( bOut, cTitle, CB_MSG_STEP )
     Eval( bOut, cCmd, CB_MSG_CMD )
     nExit := cb_Run( cCmd, @cOut )
+
+RETURN cb_StepEnd( cCmd, cResult, bOut, nExit, cOut )
+
+/* what a compiler wrote, its errors; .F. when the step failed */
+STATIC FUNCTION cb_StepEnd( cCmd, cResult, bOut, nExit, cOut )
+
+    LOCAL cLine, a, lErr := .F.
+
     IF nExit == -1
         Eval( bOut, "Cannot start: " + cCmd, CB_MSG_ERROR )
         RETURN .F.
@@ -1719,6 +1735,110 @@ STATIC FUNCTION cb_Step( cCmd, cResult, bOut, cTitle )
     ENDIF
 
 RETURN .T.
+
+/* the compile jobs ( { { cCmd, cResult, cTitle }, ... } each, the steps of one
+   file ): on Windows up to cb_Jobs() files at the same time, the steps of a
+   file one after another; elsewhere (or one job) one after another. After a
+   failed step no new job starts, the running ones are waited for. */
+STATIC FUNCTION cb_RunJobs( aJobs, cDir, bOut, bStop )
+
+    LOCAL aStep, a
+#ifdef __PLATFORM__WINDOWS
+    LOCAL nMax := cb_Jobs(), aRun := {}, nNext := 1, lOk := .T., n, nExit, cOut
+
+    IF nMax > 1 .AND. Len( aJobs ) > 1
+        DO WHILE ( lOk .AND. nNext <= Len( aJobs ) ) .OR. Len( aRun ) > 0
+            DO WHILE lOk .AND. nNext <= Len( aJobs ) .AND. Len( aRun ) < nMax
+                IF bStop != NIL .AND. Eval( bStop )
+                    Eval( bOut, "Stopped", CB_MSG_ERROR )
+                    lOk := .F.
+                    EXIT
+                ENDIF
+                /* { steps, the step now, the process, its output file } */
+                a := { aJobs[ nNext ], 1, 0, cDir + "_cbjob" + hb_ntos( nNext ) + ".txt" }
+                nNext++
+                IF ! cb_JobStart( a, bOut )
+                    lOk := .F.
+                    EXIT
+                ENDIF
+                AAdd( aRun, a )
+            ENDDO
+            n := 1
+            DO WHILE n <= Len( aRun )
+                a := aRun[ n ]
+                IF ( nExit := CB_PROCPOLL( a[ 3 ] ) ) == -2
+                    n++
+                    LOOP
+                ENDIF
+                cOut := hb_MemoRead( a[ 4 ] )
+                FErase( a[ 4 ] )
+                IF ! hb_StrIsUTF8( cOut )
+                    cOut := cb_AsciiOnly( cOut )
+                ENDIF
+                aStep := a[ 1 ][ a[ 2 ] ]
+                Eval( bOut, aStep[ 3 ], CB_MSG_STEP )
+                Eval( bOut, aStep[ 1 ], CB_MSG_CMD )
+                IF ! cb_StepEnd( aStep[ 1 ], aStep[ 2 ], bOut, nExit, cOut )
+                    lOk := .F.
+                ELSEIF lOk .AND. a[ 2 ] < Len( a[ 1 ] )
+                    a[ 2 ]++                    /* the next step of this file: C after Harbour */
+                    IF cb_JobStart( a, bOut )
+                        n++
+                        LOOP
+                    ENDIF
+                    lOk := .F.
+                ENDIF
+                hb_ADel( aRun, n, .T. )
+            ENDDO
+            IF Len( aRun ) > 0
+                hb_idleSleep( 0.01 )
+            ENDIF
+        ENDDO
+        RETURN lOk
+    ENDIF
+#endif
+    HB_SYMBOL_UNUSED( cDir )
+    FOR EACH a IN aJobs
+        FOR EACH aStep IN a
+            IF bStop != NIL .AND. Eval( bStop )
+                Eval( bOut, "Stopped", CB_MSG_ERROR )
+                RETURN .F.
+            ENDIF
+            FErase( aStep[ 2 ] )
+            IF ! cb_Step( aStep[ 1 ], aStep[ 2 ], bOut, aStep[ 3 ] )
+                RETURN .F.
+            ENDIF
+        NEXT
+    NEXT
+
+RETURN .T.
+
+#ifdef __PLATFORM__WINDOWS
+/* the step a[ 2 ] of job a, started without waiting */
+STATIC FUNCTION cb_JobStart( a, bOut )
+
+    LOCAL aStep := a[ 1 ][ a[ 2 ] ]
+
+    FErase( aStep[ 2 ] )
+    a[ 3 ] := CB_PROCSTART( aStep[ 1 ], a[ 4 ] )
+    IF a[ 3 ] == 0
+        Eval( bOut, "Cannot start: " + aStep[ 1 ], CB_MSG_ERROR )
+        RETURN .F.
+    ENDIF
+
+RETURN .T.
+#endif
+
+/* how many files are compiled at the same time: CUIB_JOBS, else the processors */
+FUNCTION cb_Jobs()
+
+    LOCAL n := Val( GetEnv( "CUIB_JOBS" ) )
+
+    IF n < 1
+        n := Val( GetEnv( "NUMBER_OF_PROCESSORS" ) )
+    ENDIF
+
+RETURN Max( 1, Min( n, 32 ) )
 
 /* runs a command and returns its exit code (-1 = not started); stdout + stderr in cOut */
 FUNCTION cb_Run( cCmd, cOut )

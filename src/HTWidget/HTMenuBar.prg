@@ -552,6 +552,18 @@ METHOD PROCEDURE openMenu( nIndex ) CLASS HTMenuBar
     nDropBottom := nDropTop + Len( aItems ) + 1
     nDropRight  := nDropLeft + nMaxWidth
 
+    /* keep the box and its shadow (1 row, 2 cols) on screen — same as openSubMenu */
+    IF nDropRight + 2 > ht_ScreenMaxCol()
+        nDropRight := ht_ScreenMaxCol() - 2
+        nDropLeft  := nDropRight - nMaxWidth
+    ENDIF
+    IF nDropBottom + 1 > ht_ScreenMaxRow()
+        nDropTop    -= nDropBottom + 1 - ht_ScreenMaxRow()
+        nDropBottom := nDropTop + Len( aItems ) + 1
+    ENDIF
+    nDropTop  := Max( nDropTop, 0 )
+    nDropLeft := Max( nDropLeft, 0 )
+
     nOldShadow := wSetShadow( HT_SHADOW_ATTR )
     ::FdropWinId := wOpen( nDropTop, nDropLeft, nDropBottom, nDropRight, .T. )
     wSetShadow( nOldShadow )
@@ -559,6 +571,8 @@ METHOD PROCEDURE openMenu( nIndex ) CLASS HTMenuBar
     wFormat()
     ::FdropRect := { nDropTop, nDropLeft, nDropBottom, nDropRight }
 
+    /* every way in (Down, Enter, click, Left/Right) starts on the first entry */
+    ::FactiveItem := ht_menuStep( aItems, 0, 1 )
     ::paintDropdown( oMenu )
 
 RETURN
@@ -834,7 +848,7 @@ METHOD FUNCTION handleMouseClick( nAbsRow, nAbsCol ) CLASS HTMenuBar
                 ELSE
                     ::FactiveItem := nItemIdx
                     ::paintDropdown( aMenus[ ::FactiveMenu ] )
-                    ::openSubMenu( .F. )
+                    ::openSubMenu( .T. )
                 ENDIF
                 ::reselectParent()
                 RETURN .T.
