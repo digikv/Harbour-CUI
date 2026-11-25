@@ -194,6 +194,10 @@ STATIC FUNCTION CBR_Unquote( c )
     ENDIF
 RETURN c
 
+/* the helpers of the Word and Excel output: without both classes (CBRO_NO_DOCX and
+   CBRO_NO_XLSX, as CuiBuilder builds it) nothing calls them - not compiled (W0034) */
+#if ! defined( CBRO_NO_DOCX ) .OR. ! defined( CBRO_NO_XLSX )
+
 /* the heading of a column: its lines joined */
 STATIC FUNCTION CBR_ColHead( aCol )
 
@@ -241,6 +245,8 @@ STATIC FUNCTION CBR_Type( aCol, aRows, nCol )
     NEXT
 
 RETURN "C"
+
+#endif
 
 #ifndef CBRO_NO_DOCX
 
