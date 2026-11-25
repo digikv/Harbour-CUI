@@ -23,6 +23,9 @@
 #include "inkey.ch"
 #include "hbgtinfo.ch"
 #include "cedit.ch"
+#ifdef __PLATFORM__WINDOWS
+#include "hbwin.ch"
+#endif
 
 REQUEST HB_CODEPAGE_UTF8EX
 REQUEST HB_CODEPAGE_SL852
@@ -69,6 +72,7 @@ STATIC s_aRecent := {}               /* { { cFile, nRow, nCol }, ... } the newes
 STATIC s_hSet                        /* settings (cedit.ini [OPTIONS]) */
 STATIC s_cIni := ""
 STATIC s_cLang := ""                  /* keyboard language / IME mode (ht_inputLanguage) */
+STATIC s_nIdxTask := 0                /* HTEventLoop id: keep indexing large files */
 
 /* search */
 STATIC s_cFind := ""
@@ -131,6 +135,8 @@ PROCEDURE Main( ... )
     IF ! Empty( s_cLang )
         HTEventLoop():scheduleRepeat( {|| ce_InputLang() }, 300 )
     ENDIF
+    /* large files: first chunk is already indexed in load(); the rest here */
+    s_nIdxTask := HTEventLoop():scheduleRepeat( {|| ce_IndexIdle() }, 50 )
     ce_Status()
     s_oApp:exec()
 
@@ -231,7 +237,7 @@ STATIC PROCEDURE ce_BuildMenu()
     oMenu := s_oBar:addMenu( "&File" )
     ce_Item( oMenu, "&New", "Shift-F4", K_SH_F4, {|| ce_NewBuffer() } )
     ce_Item( oMenu, "&Open...", "F4", K_F4, {|| ce_CmdOpenRecent() } )
-    ce_Item( oMenu, "Open &file...", "Ctrl-F4", K_CTRL_F4, {|| ce_CmdOpen() } )
+    ce_Item( oMenu, "Open &file...", "Ctrl-O", K_CTRL_O, {|| ce_CmdOpen() } )
     oMenu:addSeparator()
     ce_Item( oMenu, "&Save", "F2", K_F2, {|| ce_SaveBuffer( ce_Cur(), .F. ) } )
     ce_Item( oMenu, "Save &as...", "Shift-F2", K_SH_F2, {|| ce_SaveBuffer( ce_Cur(), .T. ) } )
@@ -342,6 +348,10 @@ STATIC PROCEDURE ce_Status()
         s_oTabs:refresh()
     ENDIF
     DO CASE
+    CASE oB:lPaged .AND. ! oB:lIndexed
+        cMode := "Idx " + hb_ntos( Int( 100 * oB:nIdxPos / Max( 1, oB:nDocLen ) ) ) + "%"
+    CASE oB:lPaged
+        cMode := IIF( oB:isModified(), "Swap", "Edit" )
     CASE oB:lReadOnly
         cMode := "View"
     CASE oB:lMarking
@@ -352,6 +362,7 @@ STATIC PROCEDURE ce_Status()
     cLeft := " " + oB:title() + IIF( oB:isModified(), " *", "" ) + ;
              IIF( Len( s_aBufs ) > 1, "  [" + hb_ntos( s_nBuf ) + "/" + hb_ntos( Len( s_aBufs ) ) + "]", "" )
     cRight := "Ln " + hb_ntos( oB:nRow ) + "/" + hb_ntos( oB:lineCount() ) + ;
+              IIF( oB:lPaged .AND. ! oB:lIndexed, "+", "" ) + ;
               "  Col " + hb_ntos( s_oEdit:cursorCell() + 1 ) + "  " + ;
               IIF( Empty( oB:cSyntax ) .OR. ! oB:lHilite, "", oB:cSyntax + "  " ) + ;
               ce_CPName( oB:cCP ) + IIF( oB:cEol == Chr( 10 ), " LF", "" ) + "  " + ;
@@ -359,6 +370,108 @@ STATIC PROCEDURE ce_Status()
               IIF( Empty( s_cLang ), "", " " + s_cLang + " " )
     s_oStat:setSection( 1, ht_cellPadR( cLeft, Max( 1, s_oMain:width - ht_strWidth( cRight ) ) ) + cRight )
     s_oMain:repaintChild( s_oStat )
+
+RETURN
+
+/* keep indexing every open paged buffer; also finishes a reindex after edits */
+STATIC PROCEDURE ce_IndexIdle()
+
+    LOCAL oB, lPaint := .F., lDone := .F., nPos0, nEnd, oCur := ce_Cur()
+
+    nEnd := hb_MilliSeconds() + CE_IDLE_MS
+    FOR EACH oB IN s_aBufs
+        IF ! oB:lPaged
+            LOOP
+        ENDIF
+        IF oB:lIndexed
+            IF oB:follow()
+                oB:indexStep( CE_IDLE_STEP )
+                lPaint := .T.
+            ENDIF
+        ELSE
+            nPos0 := oB:nIdxPos
+            DO WHILE ! oB:lIndexed .AND. hb_MilliSeconds() < nEnd
+                oB:indexStep( CE_IDLE_STEP )
+                IF ! Empty( oB:cError )
+                    HTMessageBox():error( "CEdit", oB:cError )
+                    EXIT
+                ENDIF
+            ENDDO
+            IF oB:nIdxPos != nPos0 .OR. oB:lIndexed
+                lPaint := .T.
+            ENDIF
+            IF oB:lIndexed
+                lDone := .T.
+                oCur := oB
+            ENDIF
+        ENDIF
+    NEXT
+    IF lPaint
+        IF lDone
+            ce_RevealPaged( oCur )
+        ELSE
+            ce_Status()
+            IF s_oEdit != NIL .AND. oCur != NIL .AND. oCur:lPaged .AND. ! oCur:lIndexed
+                s_oEdit:refresh( .T. )
+            ENDIF
+        ENDIF
+    ENDIF
+
+RETURN
+
+/* after Idx 100%: put the caret on line 1 and force a real paint of the text */
+STATIC FUNCTION ce_FmtSize( n )
+    IF n >= 1024 * 1024 * 1024
+        RETURN hb_ntos( Int( n / ( 1024 * 1024 * 1024 ) ) ) + "GB"
+    ELSEIF n >= 1024 * 1024
+        RETURN hb_ntos( Int( n / ( 1024 * 1024 ) ) ) + "MB"
+    ELSEIF n >= 1024
+        RETURN hb_ntos( Int( n / 1024 ) ) + "KB"
+    ENDIF
+RETURN hb_ntos( Int( n ) ) + "B"
+
+STATIC PROCEDURE ce_RevealPaged( oB )
+
+    LOCAL c1, nH, nW
+
+    IF oB == NIL .OR. ! oB:lPaged
+        RETURN
+    ENDIF
+    oB:hCache := { => }
+    oB:aCache := {}
+    oB:nRow := 1
+    oB:nCol := 1
+    oB:nTop := 1
+    oB:nLeft := 0
+    IF s_oApp != NIL
+        ht_cuiSetupDisplay( s_oApp:rows(), s_oApp:cols() )
+    ENDIF
+    IF s_oMain != NIL
+        s_oMain:fitToScreen()
+        s_oMain:show()
+    ENDIF
+    ce_Arrange()
+    IF s_oEdit != NIL
+        s_oEdit:setBuffer( oB )
+        s_oEdit:refresh( .F. )
+        s_oEdit:setFocus()
+    ENDIF
+    IF s_oMain != NIL
+        s_oMain:repaint()
+    ENDIF
+    ce_Status()
+    c1 := oB:line( 1 )
+    /* NULs / controls are invisible in the GT — show a readable preview */
+    c1 := StrTran( StrTran( c1, Chr( 0 ), "." ), Chr( 9 ), " " )
+    nH := IIF( s_oEdit != NIL, s_oEdit:height, 0 )
+    nW := IIF( s_oEdit != NIL, s_oEdit:width, 0 )
+    HTToast():show( ;
+       "Idx OK Ln " + hb_ntos( oB:lineCount() ) + ;
+       " br " + hb_ntos( oB:nBreaks ) + ;
+       " sz " + ce_FmtSize( oB:nDocLen ) + ;
+       " " + hb_ntos( nW ) + "x" + hb_ntos( nH ) + ;
+       " [" + Left( c1, 40 ) + "]", ;
+       6000, HT_CLR_TOAST_INFO )
 
 RETURN
 
@@ -483,20 +596,30 @@ STATIC FUNCTION ce_OpenFile( cFile )
         RETURN .T.
     ENDIF
     oB := ce_Buffer()
+    IF hb_FileExists( cFile ) .AND. hb_FSize( cFile ) > CE_MEM_LIMIT
+        HTToast():show( "Opening large file...", 2000, HT_CLR_TOAST_INFO )
+    ENDIF
     IF ! oB:load( cFile, ce_DefCP() )
-        HTMessageBox():error( "CEdit", oB:cError )
+        HTMessageBox():error( "CEdit", IIF( Empty( oB:cError ), "Cannot open " + cFile, oB:cError ) )
         RETURN .F.
     ENDIF
-    oB:cSyntax := ce_SyntaxFor( cFile )
+    IF oB:lPaged
+        oB:lHilite := .F.
+        oB:cSyntax := ""
+    ELSE
+        oB:cSyntax := ce_SyntaxFor( cFile )
+    ENDIF
     n := AScan( s_aRecent, {| a | ce_SameFile( a[ 1 ], cFile ) } )
     IF n > 0
         oB:nRow := Max( 1, Min( s_aRecent[ n ][ 2 ], oB:lineCount() ) )
         oB:nCol := Max( 1, Min( s_aRecent[ n ][ 3 ], Len( oB:line( oB:nRow ) ) + 1 ) )
         oB:nTop := Max( 1, oB:nRow - 5 )
     ENDIF
-    /* an untouched empty "Untitled" gives its place */
-    IF oCur != NIL .AND. Empty( oCur:cFile ) .AND. Empty( oCur:cName ) .AND. ! oCur:isModified() .AND. ;
-       oCur:lineCount() == 1 .AND. oCur:aLines[ 1 ] == ""
+    /* empty Untitled (not a paged buffer) gives its place */
+    IF oCur != NIL .AND. Empty( oCur:cFile ) .AND. Empty( oCur:cName ) .AND. ;
+       ! oCur:isModified() .AND. ! oCur:lPaged .AND. ;
+       oCur:lineCount() == 1 .AND. Len( oCur:aLines ) >= 1 .AND. oCur:aLines[ 1 ] == ""
+        s_aBufs[ s_nBuf ]:closeFile()
         s_aBufs[ s_nBuf ] := oB
     ELSE
         AAdd( s_aBufs, oB )
@@ -504,6 +627,7 @@ STATIC FUNCTION ce_OpenFile( cFile )
     ENDIF
     ce_AddRecent( oB )
     ce_SwitchTo( s_nBuf )
+    ce_Status()
 
 RETURN .T.
 
@@ -560,7 +684,7 @@ STATIC FUNCTION ce_SaveBuffer( oB, lAs )
     ENDIF
     cFile := oB:cFile
     IF lAs .OR. Empty( cFile )
-        cFile := ce_FileDialog( "Save as", IIF( Empty( cFile ), "", cFile ) )
+        cFile := ce_FileDialog( "Save as", IIF( Empty( cFile ), "", cFile ), .T. )
         IF Empty( cFile )
             RETURN .F.
         ENDIF
@@ -624,22 +748,40 @@ STATIC PROCEDURE ce_CmdExit()
     ENDIF
 RETURN
 
-/* Ctrl-F4 */
+/* Ctrl-O / Ctrl-F4 */
 STATIC PROCEDURE ce_CmdOpen()
 
-    LOCAL oB := ce_Cur(), cFile
+    LOCAL oB := ce_Cur(), cFile, cStart
 
-    cFile := ce_FileDialog( "Open file", IIF( oB != NIL .AND. ! Empty( oB:cFile ), hb_FNameDir( oB:cFile ), "" ) )
-    IF ! Empty( cFile )
-        ce_OpenFile( cFile )
+    cStart := IIF( oB != NIL .AND. ! Empty( oB:cFile ), hb_FNameDir( oB:cFile ), hb_cwd() )
+    cFile := ce_FileDialog( "Open file", cStart, .F. )
+    IF Empty( cFile )
+        RETURN
     ENDIF
+    /* native GetOpenFileName can leave the GT viewport wrong */
+    IF s_oMain != NIL
+        s_oMain:fitToScreen()
+    ENDIF
+    ce_Arrange()
+    IF ! ce_OpenFile( cFile )
+        RETURN
+    ENDIF
+    oB := ce_Cur()
+    IF oB != NIL .AND. oB:lPaged .AND. oB:lIndexed
+        ce_RevealPaged( oB )
+    ELSE
+        ce_Status()
+        s_oEdit:refresh( .F. )
+        s_oEdit:setFocus()
+    ENDIF
+    HTToast():show( "Opened " + hb_FNameNameExt( cFile ), 1500, HT_CLR_TOAST_INFO )
 
 RETURN
 
 /* F4: the files opened lately, and "Open file..." */
 STATIC PROCEDURE ce_CmdOpenRecent()
 
-    LOCAL aItems := { "Open file...                Ctrl-F4" }, n
+    LOCAL aItems := { "Open file...                  Ctrl-O" }, n
 
     IF Empty( s_aRecent )
         ce_CmdOpen()
@@ -1353,7 +1495,7 @@ RETURN ce_Join( { ;
     "", ;
     "FILES", ;
     "  F2           save                    Shift-F2       save as", ;
-    "  F4           open: recent files      Ctrl-F4        open: choose a file", ;
+    "  F4           open: recent files      Ctrl-O         open: choose a file", ;
     "  Shift-F4     new file                F12            list of open files", ;
     "  Ctrl-Tab     next open file          Shift-Tab      previous open file", ;
     "  F10, Esc     close the file          Alt-X          exit (asks for changes)", ;
@@ -1468,8 +1610,10 @@ STATIC FUNCTION ce_ListDialog( cTitle, aItems, nCurrent )
     NEXT
     oList:setCurrentIndex( Max( 1, Min( nCurrent, Len( aItems ) ) ) )
     oList:onActivated := {| n | nResult := n, dlg:accept() }
-
-    dlg:exec()
+    dlg:addButtonBar( "OK", "Cancel" )
+    IF dlg:exec() == HT_DIALOG_ACCEPTED .AND. nResult == 0
+        nResult := oList:currentIndex()
+    ENDIF
 
 RETURN nResult
 
@@ -1491,19 +1635,49 @@ STATIC FUNCTION ce_InputDialog( cTitle, cLabel, cInit )
 
 RETURN IIF( dlg:exec() == HT_DIALOG_ACCEPTED, AllTrim( oEdit:text ), "" )
 
-/* file name: a list of the folder (Enter on a folder goes into it, on a file
-   takes it) and an input line (a name, a path, or a folder + Enter);
-   returns the full path, "" = cancelled */
-STATIC FUNCTION ce_FileDialog( cTitle, cStart )
+/* returns full path, "" = cancelled; lSave=.T. for Save as */
+STATIC FUNCTION ce_FileDialog( cTitle, cStart, lSave )
 
-    LOCAL dlg, oLbl, oName, oList, nW, nH, cResult := ""
-    LOCAL cDir := hb_FNameDir( cStart ), cName := hb_FNameNameExt( cStart )
-    LOCAL bTake
+    LOCAL cDir := hb_FNameDir( cStart ), cName := hb_FNameNameExt( cStart ), cFile
+#ifdef __PLATFORM__WINDOWS
+    LOCAL nFlags, aFilter
+#endif
 
+    lSave := hb_defaultValue( lSave, .F. )
     IF Empty( cDir ) .OR. ! hb_DirExists( cDir )
         cDir := hb_cwd()
     ENDIF
-    cDir := hb_DirSepAdd( cDir )
+    cDir := hb_DirSepAdd( hb_DirSepToOS( cDir ) )
+
+#ifdef __PLATFORM__WINDOWS
+    /* native Windows dialog — the CUI list dialog was returning "" for users */
+    nFlags := hb_bitOr( WIN_OFN_EXPLORER, WIN_OFN_HIDEREADONLY, WIN_OFN_NOCHANGEDIR )
+    aFilter := { { "All files", "*.*" }, { "Text", "*.txt;*.prg;*.ch;*.c;*.h;*.md;*.log" } }
+    IF lSave
+        nFlags := hb_bitOr( nFlags, WIN_OFN_OVERWRITEPROMPT, WIN_OFN_PATHMUSTEXIST )
+        cFile := win_GetSaveFileName( @nFlags, cTitle, cDir, NIL, aFilter, NIL, NIL, cName )
+    ELSE
+        nFlags := hb_bitOr( nFlags, WIN_OFN_FILEMUSTEXIST, WIN_OFN_PATHMUSTEXIST )
+        cFile := win_GetOpenFileName( @nFlags, cTitle, cDir, NIL, aFilter, NIL, NIL, cName )
+    ENDIF
+    IF ! Empty( cFile )
+        RETURN hb_DirSepToOS( cFile )
+    ENDIF
+    RETURN ""
+#else
+    RETURN ce_FileDialogCui( cTitle, cDir, cName, lSave )
+#endif
+
+#ifndef __PLATFORM__WINDOWS
+/* CUI fallback (Linux) */
+STATIC FUNCTION ce_FileDialogCui( cTitle, cDir, cName, lSave )
+
+    LOCAL dlg, oLbl, oName, oList, aBtn, nW, nH, cResult := ""
+    LOCAL aState, bTake, bOk
+
+    HB_SYMBOL_UNUSED( lSave )
+    cDir := hb_DirSepAdd( hb_DirSepToOS( cDir ) )
+    aState := { cDir, "", "" }   /* dir, pick, result — avoid codeblock capture quirks */
 
     nW := Min( 76, ht_ScreenMaxCol() - 3 )
     nH := Min( 22, ht_ScreenMaxRow() - 2 )
@@ -1521,44 +1695,83 @@ STATIC FUNCTION ce_FileDialog( cTitle, cStart )
     oList := HTListBox():new( dlg )
     oList:setGeometry( 1, 3, nW - 4, nH - 7 )
 
-    /* a name: a folder -> into it; else the file -> done */
     bTake := {| cTxt, cPath |
-        cTxt := AllTrim( cTxt )
+        cTxt := AllTrim( IIF( HB_ISSTRING( cTxt ), cTxt, "" ) )
         IF Empty( cTxt )
             RETURN NIL
         ENDIF
-        cPath := IIF( ce_IsAbsolute( cTxt ), cTxt, cDir + cTxt )
-        IF hb_DirExists( cPath )
-            cDir := IIF( cTxt == "..", ce_ParentDir( cDir ), hb_DirSepAdd( hb_DirSepToOS( cPath ) ) )
-            ce_FillDir( oList, oLbl, cDir )
-            oName:setText( "" )
+        cPath := IIF( ce_IsAbsolute( cTxt ), hb_DirSepToOS( cTxt ), aState[ 1 ] + cTxt )
+        IF cTxt == ".." .OR. hb_DirExists( cPath )
+            aState[ 1 ] := IIF( cTxt == "..", ce_ParentDir( aState[ 1 ] ), hb_DirSepAdd( hb_DirSepToOS( cPath ) ) )
+            aState[ 2 ] := ce_FillDir( oList, oLbl, oName, aState[ 1 ] )
             dlg:repaint()
         ELSE
-            cResult := cPath
+            aState[ 3 ] := cPath
+            dlg:accept()
+        ENDIF
+        RETURN NIL
+    }
+    bOk := {||
+        aState[ 3 ] := ce_DialogChoice( aState[ 1 ], oName:text, oList, aState[ 2 ] )
+        IF Empty( aState[ 3 ] )
+            HTMessageBox():information( cTitle, "Select a file, or type its name." )
+        ELSEIF hb_DirExists( aState[ 3 ] )
+            HTMessageBox():information( cTitle, "That is a folder. Select a file, or type its name." )
+            aState[ 3 ] := ""
+        ELSE
             dlg:accept()
         ENDIF
         RETURN NIL
     }
     oName:bEnter := {|| Eval( bTake, oName:text ) }
     oList:onActivated := {|| Eval( bTake, oList:currentData() ) }
-    oList:onChanged := {|| IIF( HB_ISSTRING( oList:currentData() ) .AND. ! hb_DirExists( cDir + oList:currentData() ), ;
-                                ( oName:setText( oList:currentData() ), dlg:repaintChild( oName ) ), NIL ) }
-
-    ce_FillDir( oList, oLbl, cDir )
-    dlg:addButtonBar( "OK", "Cancel" )
-
-    IF dlg:exec() == HT_DIALOG_ACCEPTED .AND. Empty( cResult ) .AND. ! Empty( oName:text )
-        cResult := IIF( ce_IsAbsolute( AllTrim( oName:text ) ), AllTrim( oName:text ), cDir + AllTrim( oName:text ) )
-        IF hb_DirExists( cResult )
-            cResult := ""
+    oList:onChanged := {||
+        aState[ 2 ] := IIF( HB_ISSTRING( oList:currentData() ), oList:currentData(), "" )
+        IF ! Empty( aState[ 2 ] ) .AND. !( aState[ 2 ] == ".." ) .AND. ! hb_DirExists( aState[ 1 ] + aState[ 2 ] )
+            oName:setText( aState[ 2 ] )
+        ELSE
+            oName:setText( "" )
+            aState[ 2 ] := ""
         ENDIF
+        dlg:repaintChild( oName )
+        RETURN NIL
+    }
+
+    aState[ 2 ] := ce_FillDir( oList, oLbl, oName, aState[ 1 ] )
+    IF ! Empty( cName )
+        oName:setText( cName )
+        aState[ 2 ] := cName
+    ENDIF
+    aBtn := dlg:addButtonBar( "OK", "Cancel" )
+    aBtn[ 1 ]:onClicked := bOk
+
+    IF dlg:exec() == HT_DIALOG_ACCEPTED
+        cResult := aState[ 3 ]
     ENDIF
 
 RETURN cResult
 
-STATIC PROCEDURE ce_FillDir( oList, oLbl, cDir )
+STATIC FUNCTION ce_DialogChoice( cDir, cName, oList, cPick )
 
-    LOCAL aDirs := {}, aFiles := {}, a
+    LOCAL cTxt := AllTrim( IIF( HB_ISSTRING( cName ), cName, "" ) ), cData, cPath
+
+    IF ! Empty( cTxt )
+        cPath := IIF( ce_IsAbsolute( cTxt ), hb_DirSepToOS( cTxt ), cDir + cTxt )
+        IF ! hb_DirExists( cPath )
+            RETURN cPath
+        ENDIF
+    ENDIF
+    cData := IIF( ! Empty( cPick ), cPick, oList:currentData() )
+    cData := IIF( HB_ISSTRING( cData ), cData, "" )
+    IF ! Empty( cData ) .AND. !( cData == ".." ) .AND. ! hb_DirExists( cDir + cData )
+        RETURN cDir + cData
+    ENDIF
+
+RETURN ""
+
+STATIC FUNCTION ce_FillDir( oList, oLbl, oName, cDir )
+
+    LOCAL aDirs := {}, aFiles := {}, a, nFirstFile := 0, cPick := ""
 
     FOR EACH a IN Directory( cDir + hb_osFileMask(), "D" )
         IF a[ 1 ] == "." .OR. a[ 1 ] == ".."
@@ -1581,12 +1794,33 @@ STATIC PROCEDURE ce_FillDir( oList, oLbl, cDir )
         oList:addItem( "[" + a + "]", a )
     NEXT
     FOR EACH a IN aFiles
+        IF nFirstFile == 0
+            nFirstFile := oList:count() + 1
+        ENDIF
         oList:addItem( ht_cellPadR( a[ 1 ], Max( 10, oList:width - 14 ) ) + Str( a[ 2 ], 12 ), a[ 1 ] )
     NEXT
-    oList:setCurrentIndex( 1 )
+    oList:setCurrentIndex( IIF( nFirstFile > 0, nFirstFile, 1 ) )
+    IF nFirstFile > 0
+        cPick := aFiles[ 1 ][ 1 ]
+        IF oName != NIL
+            oName:setText( cPick )
+        ENDIF
+    ELSEIF oName != NIL
+        oName:setText( "" )
+    ENDIF
     oLbl:setText( cDir )
 
-RETURN
+RETURN cPick
+
+STATIC FUNCTION ce_ParentDir( cDir )
+
+    LOCAL cUp := hb_FNameDir( Left( cDir, Len( cDir ) - 1 ) )
+
+RETURN IIF( Empty( cUp ), cDir, cUp )
+
+STATIC FUNCTION ce_IsRoot( cDir )
+RETURN Len( cDir ) <= 3 .AND. ( SubStr( cDir, 2, 1 ) == ":" .OR. cDir == hb_ps() )
+#endif /* ! Windows — CUI file dialog */
 
 /* input line of a dialog: Enter runs bEnter (not the next field) */
 CLASS CEPathEdit FROM HTLineEdit
@@ -1615,16 +1849,6 @@ STATIC FUNCTION ce_FullPath( cFile )
         cFile := hb_cwd() + cFile
     ENDIF
 RETURN cFile
-
-/* "C:\a\b\" -> "C:\a\" */
-STATIC FUNCTION ce_ParentDir( cDir )
-
-    LOCAL cUp := hb_FNameDir( Left( cDir, Len( cDir ) - 1 ) )
-
-RETURN IIF( Empty( cUp ), cDir, cUp )
-
-STATIC FUNCTION ce_IsRoot( cDir )
-RETURN Len( cDir ) <= 3 .AND. ( SubStr( cDir, 2, 1 ) == ":" .OR. cDir == hb_ps() )
 
 STATIC FUNCTION ce_SameFile( c1, c2 )
 #ifdef __PLATFORM__WINDOWS

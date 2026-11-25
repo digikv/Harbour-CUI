@@ -105,17 +105,23 @@ RETURN NIL
 
 METHOD PROCEDURE paintEvent( event ) CLASS HTCodeEdit
 
-    LOCAL nRows := MaxRow() + 1, nCols := MaxCol() + 1, nRow, nLine
+    LOCAL nRows, nCols, nRow, nLine
     LOCAL cBase := IIF( Empty( ::cColor ), HTTheme():getColor( HT_CLR_LINEEDIT_FOCUSED ), ::cColor )
     LOCAL cSel := IIF( Empty( ::cSelColor ), HTTheme():getColor( HT_CLR_LINEEDIT_SELECTED ), ::cSelColor )
     LOCAL oB := ::oBuf, aSel, hDef, aClr, aCh, aColors
 
     HB_SYMBOL_UNUSED( event )
 
+    /* widget geometry only — MaxRow() after GetOpenFileName is unreliable */
+    nRows := Max( 1, ::Fheight )
+    nCols := Max( 1, ::Fwidth )
+
+    /* always clear the viewport first so a failed paint is not "stale blank" */
+    FOR nRow := 0 TO nRows - 1
+        DispOutAt( nRow, 0, Space( nCols ), cBase )
+    NEXT
+
     IF oB == NIL
-        FOR nRow := 0 TO nRows - 1
-            DispOutAt( nRow, 0, Space( nCols ), cBase )
-        NEXT
         RETURN
     ENDIF
 
@@ -140,11 +146,9 @@ METHOD PROCEDURE paintEvent( event ) CLASS HTCodeEdit
     FOR nRow := 0 TO nRows - 1
         nLine := oB:nTop + nRow
         IF nLine <= oB:lineCount()
-            aCh := ce_Chars( oB:aLines[ nLine ] )
+            aCh := ce_Chars( oB:line( nLine ) )
             aColors := IIF( hDef == NIL, NIL, ce_Colorize( aCh, ::lineState( nLine, hDef, aClr ), hDef, aClr )[ 1 ] )
             ce_PaintLine( nRow, aCh, aColors, nLine, oB:nLeft, nCols, oB:nTab, cBase, cSel, aSel )
-        ELSE
-            DispOutAt( nRow, 0, Space( nCols ), cBase )
         ENDIF
     NEXT
 
@@ -896,7 +900,7 @@ METHOD matchBracket() CLASS HTCodeEdit
         IF nRow < 1 .OR. nRow > oB:lineCount()
             EXIT
         ENDIF
-        aCh := ce_Chars( oB:aLines[ nRow ] )
+        aCh := ce_Chars( oB:line( nRow ) )
         i := IIF( nDir > 0, 1, Len( aCh ) )
         nLines++
     ENDDO
@@ -909,12 +913,17 @@ METHOD lineState( nLine, hDef, aClr ) CLASS HTCodeEdit
 
     LOCAL oB := ::oBuf, n
 
+    /* a paged file is not walked from line 1: that would read the whole file */
+    IF oB:lPaged
+        RETURN 0
+    ENDIF
+
     DO WHILE oB:nStateValid < nLine
         n := oB:nStateValid
         IF Len( oB:aStates ) <= n
             ASize( oB:aStates, n + 64 )
         ENDIF
-        oB:aStates[ n + 1 ] := ce_Colorize( ce_Chars( oB:aLines[ n ] ), oB:aStates[ n ], hDef, aClr )[ 2 ]
+        oB:aStates[ n + 1 ] := ce_Colorize( ce_Chars( oB:line( n ) ), oB:aStates[ n ], hDef, aClr )[ 2 ]
         oB:nStateValid++
     ENDDO
 

@@ -8,6 +8,7 @@
 {win}cedit.rc
 
 ../../hbtui.hbc
+{win}hbwin.hbc
 
 cedit.prg
 htcodeedit.prg

@@ -19,6 +19,12 @@ Ready-to-run programs, no build needed: **[CEdit 1.0.3 release](https://github.c
 Unpack and run `cedit` or `cedit file.txt`. To build CEdit yourself, see
 [Building CEdit, step by step](#building-cedit-step-by-step).
 
+New in 1.0.5: large files use a **disk line index**, an LRU **page cache** and a
+**piece table** with an append-only `.add` swap — editable, without holding the
+whole file in RAM. See [Large files](#large-files).
+
+New in 1.0.4: first large-file support (paged view).
+
 New in 1.0.3: Chinese files in Big5 (Traditional) and GBK (Simplified); the codepage AUTO
 (the default): Big5 / GBK on a Chinese Windows, else CP852; all the codepages of Harbour's
 character tables (Latin 1/2/9, Cyrillic, Greek, Turkish, Baltic, Hebrew ...), YUSCII last.
@@ -36,7 +42,7 @@ command. F1 shows the keys in the editor.
 | Key | Command |
 |---|---|
 | F2 / Shift-F2 | save / save as |
-| F4 / Ctrl-F4 | open (recent files) / open file |
+| F4 / Ctrl-O | open (recent files) / open file (Windows dialog) |
 | Shift-F4 | new file |
 | F12, Ctrl-Tab, Shift-Tab | list of open files, next, previous (also the tabs under the menu) |
 | F10, Esc | close the file (the last one ends CEdit); Esc first cancels a selection |
@@ -83,6 +89,39 @@ visible. View - Tabs hides / shows them (kept in `cedit.ini`).
 - Line ends (CRLF or LF), the final line end and a UTF-8 BOM are kept as they were.
 - Tabs are kept and shown up to the next tab stop; wide (CJK) characters take two cells.
 - A file given on the command line that does not exist is made by the first save.
+
+## Large files
+
+A 32-bit Harbour process cannot hold a multi-gigabyte string. Above about **32 MB**
+(`CE_MEM_LIMIT`), CEdit keeps the text on disk instead of in `aLines`.
+
+Architecture (ideas from [klogg](https://github.com/variar/klogg) and CudaText’s
+open-then-index habit — not their code):
+
+1. **Line index on disk** (`.idx` in the temp folder): every line start is an 8-byte
+   offset, written in buffered chunks. Growing a Harbour string for millions of lines
+   was the main reason the first paged attempt felt slow.
+2. **LRU page cache** (~16 MB of `CE_PAGE_SIZE` pages) so scrolling does not `FSeek` for
+   every single line from cold storage.
+3. **Piece table** over the original file plus an append-only **`.add` swap**: inserts go
+   to `.add`; deletes shrink pieces. The file is **editable** (undo/redo/save). Save
+   streams the pieces in order to the destination.
+4. Only a small first chunk (`CE_FIRST_STEP`, default 256 KB) is indexed before the editor
+   appears; the rest and any reindex after an edit continue in the idle loop in small steps
+   (`CE_IDLE_STEP`) so the UI stays responsive. Paint never runs a full `indexAll()`.
+5. Status: `Idx n%` while indexing, then `Edit` / `Swap` when the buffer has unsaved
+   piece-table changes. A `+` after the line count means the index is still growing.
+
+| Limit / knob | Meaning |
+|---|---|
+| `CE_MEM_LIMIT` | above this size → disk-backed buffer (default 32 MB) |
+| `CE_FIRST_STEP` | bytes indexed before the editor is shown |
+| `CE_IDLE_STEP` | bytes indexed per idle tick |
+| `CE_PAGE_SIZE` / `CE_CACHE_PAGES` | page cache size |
+| `CE_IDX_BUF` | index write buffer |
+| `CE_LINE_CAP` | max characters kept for one very long line |
+
+Temp files (`cedit-*.idx`, `cedit-*.add`) are removed when the buffer is closed.
 
 ## Syntax highlighting
 

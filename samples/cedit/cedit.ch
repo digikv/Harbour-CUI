@@ -6,7 +6,52 @@
 #ifndef CEDIT_CH_
 #define CEDIT_CH_
 
-#define CE_VERSION      "1.0.3"
+#define CE_VERSION      "1.0.8"
+
+/* a file bigger than this is not loaded into memory (a 32-bit process cannot
+   hold a 2 GB string). It is kept on disk: line index + optional .add swap. */
+#ifndef CE_MEM_LIMIT
+#define CE_MEM_LIMIT    ( 32 * 1024 * 1024 )
+#endif
+#ifndef CE_BLOCK
+#define CE_BLOCK        ( 1024 * 1024 )  /* save / bulk I/O */
+#endif
+#ifndef CE_INDEX_BLOCK
+#define CE_INDEX_BLOCK  ( 64 * 1024 )    /* one read while indexing (keep UI alive) */
+#endif
+#ifndef CE_LINE_CAP
+#define CE_LINE_CAP     262144
+#endif
+/* line-start index on disk (8 bytes each). load() indexes CE_FIRST_STEP bytes
+   first; the rest continues while the file is shown. */
+#ifndef CE_LINE_STEP
+#define CE_LINE_STEP    1
+#endif
+#ifndef CE_FIRST_STEP
+#define CE_FIRST_STEP   ( 128 * 1024 )   /* first screen; rest in idle */
+#endif
+#ifndef CE_IDLE_STEP
+#define CE_IDLE_STEP    ( 64 * 1024 )    /* per idle tick; many ticks via time budget */
+#endif
+#ifndef CE_IDLE_MS
+#define CE_IDLE_MS      40              /* spend up to this many ms indexing per tick */
+#endif
+#ifndef CE_IDX_BUF
+#define CE_IDX_BUF      ( 32 * 1024 )   /* flush .idx every 4k line starts */
+#endif
+#ifndef CE_IDX_MAX_BREAKS
+#define CE_IDX_MAX_BREAKS  8000         /* cap lines scanned per indexStep */
+#endif
+#ifndef CE_PAGE_SIZE
+#define CE_PAGE_SIZE    65536
+#endif
+#ifndef CE_CACHE_PAGES
+#define CE_CACHE_PAGES  256
+#endif
+
+/* piece table: bytes from the original file or from the append-only .add swap */
+#define CE_SRC_ORIG     0
+#define CE_SRC_ADD      1
 
 /* selection: none, stream (Shift + arrows, F3), vertical block (Ctrl-F3) */
 #define CE_SEL_NONE     0
