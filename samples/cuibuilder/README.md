@@ -25,7 +25,7 @@ Ready-to-run programs: **[CuiBuilder 1.0.3 release](https://github.com/digikv/Ha
 | File | Platform |
 |---|---|
 | `cuibuilder-1.0.3-win32.zip` | Windows 7 and newer (32-bit, runs on 64-bit Windows too) |
-| `cuibuilder-1.0.2-linux-x86_64.tar.gz` | Linux x86_64 (X11), [release 1.0.2](https://github.com/digikv/Harbour-CUI/releases/tag/cuibuilder-1.0.2) (1.0.3 compiles in parallel only on Windows); needs `libx11-6` and `libgpm2` |
+| `cuibuilder-1.0.3-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6` and `libgpm2` (sources compiled one after another) |
 
 New in 1.0.3: on Windows the sources are compiled several at the same time (as many as the
 processors, `CUIB_JOBS` sets another number): a large project builds two to three times faster;

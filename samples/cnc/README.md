@@ -40,7 +40,7 @@ Ready-to-run programs, no build needed: **[CNC 1.0.4 release](https://github.com
 | File | Platform |
 |---|---|
 | `cnc-1.0.4-win32.zip` | Windows 7 and newer (32-bit, runs on 64-bit Windows too) |
-| `cnc-1.0.3-linux-x86_64.tar.gz` | Linux x86_64 (X11), [release 1.0.3](https://github.com/digikv/Harbour-CUI/releases/tag/cnc-1.0.3) (without the tree); needs `libx11-6` and `libgpm2` |
+| `cnc-1.0.4-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6` and `libgpm2` |
 
 Unpack and run `cnc` (or `cnc left-folder right-folder`).
 

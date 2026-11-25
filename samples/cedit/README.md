@@ -14,7 +14,7 @@ Ready-to-run programs, no build needed: **[CEdit 1.0.4 release](https://github.c
 | File | Platform |
 |---|---|
 | `cedit-1.0.4-win32.zip` | Windows 7 and newer (32-bit, runs on 64-bit Windows too) |
-| `cedit-1.0.3-linux-x86_64.tar.gz` | Linux x86_64 (X11), [release 1.0.3](https://github.com/digikv/Harbour-CUI/releases/tag/cedit-1.0.3) (without large files); needs `libx11-6` and `libgpm2` |
+| `cedit-1.0.4-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6` and `libgpm2` |
 
 Unpack and run `cedit` or `cedit file.txt`. To build CEdit yourself, see
 [Building CEdit, step by step](#building-cedit-step-by-step).
