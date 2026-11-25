@@ -1439,7 +1439,7 @@ RETURN ce_Join( { ;
     "  End          end of the line", ;
     "  Ctrl-Left / Ctrl-Right    word left / right", ;
     "  Ctrl-Home / Ctrl-End      start / end of the text", ;
-    "  Ctrl-PgUp / Ctrl-PgDn     top / bottom of the screen", ;
+    "  Ctrl-PgUp / Ctrl-PgDn     start / end of the text", ;
     "  Ctrl-Up / Ctrl-Down       scroll one line, the cursor stays", ;
     [  Alt-F8       go to a line: "120", or line and column: "120,15"], ;
     "  Ctrl-B       the matching bracket of ( [ { at the cursor", ;

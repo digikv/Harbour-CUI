@@ -9,19 +9,20 @@ feel at home — but written from scratch on Harbour-CUI: no HbEdit source code 
 
 ## Download
 
-Ready-to-run programs, no build needed: **[CEdit 1.0.3 release](https://github.com/digikv/Harbour-CUI/releases/tag/cedit-1.0.3)**
+Ready-to-run programs, no build needed: **[CEdit 1.0.4 release](https://github.com/digikv/Harbour-CUI/releases/tag/cedit-1.0.4)**
 
 | File | Platform |
 |---|---|
-| `cedit-1.0.3-win32.zip` | Windows 7 and newer (32-bit, runs on 64-bit Windows too) |
-| `cedit-1.0.3-linux-x86_64.tar.gz` | Linux x86_64 (X11); needs `libx11-6` and `libgpm2` |
+| `cedit-1.0.4-win32.zip` | Windows 7 and newer (32-bit, runs on 64-bit Windows too) |
+| `cedit-1.0.3-linux-x86_64.tar.gz` | Linux x86_64 (X11), [release 1.0.3](https://github.com/digikv/Harbour-CUI/releases/tag/cedit-1.0.3) (without large files); needs `libx11-6` and `libgpm2` |
 
 Unpack and run `cedit` or `cedit file.txt`. To build CEdit yourself, see
 [Building CEdit, step by step](#building-cedit-step-by-step).
 
 New in 1.0.4: files of any size ([Large files](#large-files)). A file bigger than 32 MB opens
 at once, read-only, and is read from the disk as it is shown; before, a 2 GB file closed CEdit
-without a word.
+without a word. Ctrl-PgUp / Ctrl-PgDn go to the start / end of the text (as Ctrl-Home /
+Ctrl-End, as in MemoEdit).
 
 New in 1.0.3: Chinese files in Big5 (Traditional) and GBK (Simplified); the codepage AUTO
 (the default): Big5 / GBK on a Chinese Windows, else CP852; all the codepages of Harbour's
@@ -63,7 +64,7 @@ command. F1 shows the keys in the editor.
 | Shift-F8 | codepage: an unchanged file is read again in it, a changed one is saved in it |
 | Home | first text of the line, again: line start |
 | Ctrl-Left / Ctrl-Right | word left / right |
-| Ctrl-Home / Ctrl-End, Ctrl-PgUp / Ctrl-PgDn | start / end of the text, top / bottom of the screen |
+| Ctrl-Home / Ctrl-End, Ctrl-PgUp / Ctrl-PgDn | start / end of the text |
 | Ctrl-Up / Ctrl-Down | scroll a line |
 
 The menu View also has Theme, Editor colors (theme colors, Turbo Pascal - yellow on blue with the

@@ -399,14 +399,6 @@ METHOD navigate( nKey, lExtend ) CLASS HTCodeEdit
         oB:nTop := Min( Max( 1, oB:lineCount() - nRows + 1 ), oB:nTop + nRows - 1 )
         lKeepCell := .T.
         EXIT
-    CASE K_CTRL_PGUP
-        oB:nRow := oB:nTop
-        lKeepCell := .T.
-        EXIT
-    CASE K_CTRL_PGDN
-        oB:nRow := Min( oB:lineCount(), oB:nTop + nRows - 1 )
-        lKeepCell := .T.
-        EXIT
     CASE K_LEFT
         IF oB:nCol > 1
             oB:nCol--
@@ -430,11 +422,13 @@ METHOD navigate( nKey, lExtend ) CLASS HTCodeEdit
     CASE K_END
         oB:nCol := Len( cLine ) + 1
         EXIT
-    CASE K_CTRL_HOME
+    CASE K_CTRL_HOME                   /* start / end of the text (Ctrl-PgUp / Ctrl-PgDn as MemoEdit) */
+    CASE K_CTRL_PGUP
         oB:nRow := 1
         oB:nCol := 1
         EXIT
     CASE K_CTRL_END
+    CASE K_CTRL_PGDN
         oB:nRow := oB:lineCount()
         oB:nCol := Len( oB:line( oB:nRow ) ) + 1
         EXIT
