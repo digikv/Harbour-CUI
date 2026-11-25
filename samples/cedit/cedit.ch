@@ -6,7 +6,13 @@
 #ifndef CEDIT_CH_
 #define CEDIT_CH_
 
-#define CE_VERSION      "1.0.3"
+#define CE_VERSION      "1.0.4"
+
+/* a file bigger than this is opened read-only without reading it into memory
+   (CELargeBuffer, celarge.prg) */
+#define CE_LARGE_FILE   ( 32 * 1024 * 1024 )
+#define CE_INDEX_STEP   ( 4 * 1024 * 1024 )    /* bytes indexed in one step */
+#define CE_INDEX_MS     80                     /* steps per event loop turn: at most this long */
 
 /* selection: none, stream (Shift + arrows, F3), vertical block (Ctrl-F3) */
 #define CE_SEL_NONE     0

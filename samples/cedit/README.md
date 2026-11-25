@@ -19,6 +19,10 @@ Ready-to-run programs, no build needed: **[CEdit 1.0.3 release](https://github.c
 Unpack and run `cedit` or `cedit file.txt`. To build CEdit yourself, see
 [Building CEdit, step by step](#building-cedit-step-by-step).
 
+New in 1.0.4: files of any size ([Large files](#large-files)). A file bigger than 32 MB opens
+at once, read-only, and is read from the disk as it is shown; before, a 2 GB file closed CEdit
+without a word.
+
 New in 1.0.3: Chinese files in Big5 (Traditional) and GBK (Simplified); the codepage AUTO
 (the default): Big5 / GBK on a Chinese Windows, else CP852; all the codepages of Harbour's
 character tables (Latin 1/2/9, Cyrillic, Greek, Turkish, Baltic, Hebrew ...), YUSCII last.
@@ -83,6 +87,24 @@ visible. View - Tabs hides / shows them (kept in `cedit.ini`).
 - Line ends (CRLF or LF), the final line end and a UTF-8 BOM are kept as they were.
 - Tabs are kept and shown up to the next tab stop; wide (CJK) characters take two cells.
 - A file given on the command line that does not exist is made by the first save.
+
+## Large files
+
+A file bigger than 32 MB (`CE_LARGE_FILE` in `cedit.ch`) is not read into memory - a 32-bit
+program cannot hold a 2 GB file. It is opened read-only (`celarge.prg`):
+
+- the first lines are on the screen at once; the rest of the file is indexed while CEdit is
+  used (`Idx n%` in the status line, a `+` after the line count until the end is known). A 2 GB
+  file with 40 million lines takes about 15 seconds on an SSD;
+- only an index stays in memory: the place in the file of every 1024th line (40 million lines:
+  about 40 000 numbers); the lines are read from the disk when they are shown, 1024 at a time,
+  the last 8 such blocks are kept;
+- a line longer than 2048 bytes is shown in pieces of 2048 bytes (never in the middle of a
+  UTF-8 character), so a file without line breaks can be read too;
+- Find (F7, Shift-F7 / Alt-F7) and Go to line (Alt-F8) work over the whole file; without "Case" only the
+  ASCII letters A-Z match either case;
+- nothing can be changed or saved; Copy takes at most 16 MB. No temporary files are made, and
+  the file is open only while a block of lines is read.
 
 ## Syntax highlighting
 

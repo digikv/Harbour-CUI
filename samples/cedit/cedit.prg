@@ -69,6 +69,7 @@ STATIC s_aRecent := {}               /* { { cFile, nRow, nCol }, ... } the newes
 STATIC s_hSet                        /* settings (cedit.ini [OPTIONS]) */
 STATIC s_cIni := ""
 STATIC s_cLang := ""                  /* keyboard language / IME mode (ht_inputLanguage) */
+STATIC s_nIdxTask := 0                 /* HTEventLoop task indexing large files, 0 = none */
 
 /* search */
 STATIC s_cFind := ""
@@ -342,6 +343,8 @@ STATIC PROCEDURE ce_Status()
         s_oTabs:refresh()
     ENDIF
     DO CASE
+    CASE oB:isDerivedFrom( "CELargeBuffer" ) .AND. ! oB:lIndexed
+        cMode := "Idx " + hb_ntos( oB:percent() ) + "%"
     CASE oB:lReadOnly
         cMode := "View"
     CASE oB:lMarking
@@ -352,6 +355,7 @@ STATIC PROCEDURE ce_Status()
     cLeft := " " + oB:title() + IIF( oB:isModified(), " *", "" ) + ;
              IIF( Len( s_aBufs ) > 1, "  [" + hb_ntos( s_nBuf ) + "/" + hb_ntos( Len( s_aBufs ) ) + "]", "" )
     cRight := "Ln " + hb_ntos( oB:nRow ) + "/" + hb_ntos( oB:lineCount() ) + ;
+              IIF( oB:isDerivedFrom( "CELargeBuffer" ) .AND. ! oB:lIndexed, "+", "" ) + ;
               "  Col " + hb_ntos( s_oEdit:cursorCell() + 1 ) + "  " + ;
               IIF( Empty( oB:cSyntax ) .OR. ! oB:lHilite, "", oB:cSyntax + "  " ) + ;
               ce_CPName( oB:cCP ) + IIF( oB:cEol == Chr( 10 ), " LF", "" ) + "  " + ;
@@ -458,12 +462,70 @@ STATIC PROCEDURE ce_SwitchTo( n )
     ENDIF
 RETURN
 
-/* a buffer with the settings */
-STATIC FUNCTION ce_Buffer()
-    LOCAL oB := CEBuffer():new()
+/* a buffer with the settings; lLarge: a file too big for memory (read-only) */
+STATIC FUNCTION ce_Buffer( lLarge )
+    LOCAL oB := IIF( hb_defaultValue( lLarge, .F. ), CELargeBuffer():new(), CEBuffer():new() )
     oB:nTab := s_hSet[ "tab" ]
-    oB:lHilite := s_hSet[ "hilite" ]
+    oB:lHilite := s_hSet[ "hilite" ] .AND. ! hb_defaultValue( lLarge, .F. )
 RETURN oB
+
+/* a large file is open: say how it is shown, index the rest in the event loop */
+STATIC PROCEDURE ce_LargeOpened( oB )
+
+    HTToast():show( hb_FNameNameExt( oB:cFile ) + ": " + ce_SizeText( oB:nSize ) + ;
+                    " - read-only, read from the disk as it is shown", 4000 )
+    ce_IndexStart( oB )
+
+RETURN
+
+/* the indexing task runs while a large file is not indexed yet */
+STATIC PROCEDURE ce_IndexStart( oB )
+
+    IF oB:isDerivedFrom( "CELargeBuffer" ) .AND. ! oB:lIndexed .AND. s_nIdxTask == 0
+        s_nIdxTask := HTEventLoop():scheduleRepeat( {|| ce_IndexIdle() }, 20 )
+    ENDIF
+
+RETURN
+
+/* one turn of the event loop: index every large file not done yet, in steps,
+   for at most CE_INDEX_MS (then the keys and the screen get their turn);
+   the task ends when all are done */
+STATIC PROCEDURE ce_IndexIdle()
+
+    LOCAL oB, lAny := .F., nLines, oCur := ce_Cur(), nStart := hb_MilliSeconds()
+
+    FOR EACH oB IN s_aBufs
+        IF oB:isDerivedFrom( "CELargeBuffer" ) .AND. ! oB:lIndexed
+            nLines := oB:nLines
+            DO WHILE ! oB:indexStep( CE_INDEX_STEP ) .AND. hb_MilliSeconds() - nStart < CE_INDEX_MS
+            ENDDO
+            IF oB == oCur .AND. s_oEdit != NIL
+                IF oB:nLines != nLines .AND. oB:nTop + s_oEdit:height > nLines
+                    s_oEdit:refresh()          /* the lines at the end of the screen came */
+                ENDIF
+                ce_Status()
+            ENDIF
+            IF oB:lIndexed .AND. oB:lSplit
+                HTToast():show( "Lines longer than 2048 bytes are shown in pieces", 4000 )
+            ENDIF
+            lAny := lAny .OR. ! oB:lIndexed
+        ENDIF
+    NEXT
+    IF ! lAny .AND. s_nIdxTask != 0
+        HTEventLoop():cancelTask( s_nIdxTask )
+        s_nIdxTask := 0
+    ENDIF
+
+RETURN
+
+STATIC FUNCTION ce_SizeText( n )
+    DO CASE
+    CASE n >= 1024 ^ 3
+        RETURN hb_ntos( Round( n / 1024 ^ 3, 1 ) ) + " GB"
+    CASE n >= 1024 ^ 2
+        RETURN hb_ntos( Round( n / 1024 ^ 2, 1 ) ) + " MB"
+    ENDCASE
+RETURN hb_ntos( Int( n / 1024 ) ) + " KB"
 
 STATIC PROCEDURE ce_NewBuffer()
     AAdd( s_aBufs, ce_Buffer() )
@@ -474,7 +536,7 @@ RETURN
    is a new file of that name; a recent file gets its cursor back */
 STATIC FUNCTION ce_OpenFile( cFile )
 
-    LOCAL n, oB, oCur := ce_Cur()
+    LOCAL n, oB, oCur := ce_Cur(), lLarge
 
     cFile := ce_FullPath( cFile )
     n := AScan( s_aBufs, {| o | ce_SameFile( o:cFile, cFile ) } )
@@ -482,12 +544,17 @@ STATIC FUNCTION ce_OpenFile( cFile )
         ce_SwitchTo( n )
         RETURN .T.
     ENDIF
-    oB := ce_Buffer()
+    lLarge := hb_FileExists( cFile ) .AND. hb_FSize( cFile ) > CE_LARGE_FILE
+    oB := ce_Buffer( lLarge )
     IF ! oB:load( cFile, ce_DefCP() )
         HTMessageBox():error( "CEdit", oB:cError )
         RETURN .F.
     ENDIF
-    oB:cSyntax := ce_SyntaxFor( cFile )
+    IF lLarge
+        ce_LargeOpened( oB )
+    ELSE
+        oB:cSyntax := ce_SyntaxFor( cFile )
+    ENDIF
     n := AScan( s_aRecent, {| a | ce_SameFile( a[ 1 ], cFile ) } )
     IF n > 0
         oB:nRow := Max( 1, Min( s_aRecent[ n ][ 2 ], oB:lineCount() ) )
@@ -496,7 +563,7 @@ STATIC FUNCTION ce_OpenFile( cFile )
     ENDIF
     /* an untouched empty "Untitled" gives its place */
     IF oCur != NIL .AND. Empty( oCur:cFile ) .AND. Empty( oCur:cName ) .AND. ! oCur:isModified() .AND. ;
-       oCur:lineCount() == 1 .AND. oCur:aLines[ 1 ] == ""
+       oCur:lineCount() == 1 .AND. oCur:line( 1 ) == ""
         s_aBufs[ s_nBuf ] := oB
     ELSE
         AAdd( s_aBufs, oB )
@@ -1095,6 +1162,7 @@ STATIC PROCEDURE ce_CmdCodepage()
         nRow := oB:nRow
         nCol := oB:nCol
         IF oB:load( oB:cFile, aCP[ n ][ 1 ], .T. )
+            ce_IndexStart( oB )                 /* a large file is indexed again */
             oB:nRow := Min( nRow, oB:lineCount() )
             oB:nCol := Min( nCol, Len( oB:line( oB:nRow ) ) + 1 )
             HTToast():show( "Read in " + aCP[ n ][ 2 ], 1500, HT_CLR_TOAST_INFO )

@@ -140,7 +140,7 @@ METHOD PROCEDURE paintEvent( event ) CLASS HTCodeEdit
     FOR nRow := 0 TO nRows - 1
         nLine := oB:nTop + nRow
         IF nLine <= oB:lineCount()
-            aCh := ce_Chars( oB:aLines[ nLine ] )
+            aCh := ce_Chars( oB:line( nLine ) )
             aColors := IIF( hDef == NIL, NIL, ce_Colorize( aCh, ::lineState( nLine, hDef, aClr ), hDef, aClr )[ 1 ] )
             ce_PaintLine( nRow, aCh, aColors, nLine, oB:nLeft, nCols, oB:nTab, cBase, cSel, aSel )
         ELSE
@@ -896,7 +896,7 @@ METHOD matchBracket() CLASS HTCodeEdit
         IF nRow < 1 .OR. nRow > oB:lineCount()
             EXIT
         ENDIF
-        aCh := ce_Chars( oB:aLines[ nRow ] )
+        aCh := ce_Chars( oB:line( nRow ) )
         i := IIF( nDir > 0, 1, Len( aCh ) )
         nLines++
     ENDDO
@@ -914,7 +914,7 @@ METHOD lineState( nLine, hDef, aClr ) CLASS HTCodeEdit
         IF Len( oB:aStates ) <= n
             ASize( oB:aStates, n + 64 )
         ENDIF
-        oB:aStates[ n + 1 ] := ce_Colorize( ce_Chars( oB:aLines[ n ] ), oB:aStates[ n ], hDef, aClr )[ 2 ]
+        oB:aStates[ n + 1 ] := ce_Colorize( ce_Chars( oB:line( n ) ), oB:aStates[ n ], hDef, aClr )[ 2 ]
         oB:nStateValid++
     ENDDO
 
