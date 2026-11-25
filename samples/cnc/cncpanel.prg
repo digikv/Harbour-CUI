@@ -20,6 +20,11 @@
  * The panel moves the cursor, marks files (Ins, right click), goes into
  * folders (Enter, double click) and up (Backspace, Ctrl-PgUp); everything
  * else (copy, delete, view ...) is done by cnc.prg on ::marked().
+ *
+ * The tree view (CNC_VIEW_TREE, as in Norton Commander) shows the folders of
+ * the drive instead of the files: ::cDir is the folder on the cursor (the
+ * other panel shows what is in it, cnc.prg), there is no current file. Its
+ * methods are tree*(); the other methods give way to them while ::isTree().
  */
 
 #include "hbclass.ch"
@@ -45,10 +50,12 @@ CLASS CNCPanel FROM HTWidget
     DATA bActivate                        /* {| oPanel | } the panel got the focus */
     DATA bChanged                         /* {| oPanel | } another folder */
     DATA bCursor                          /* {| oPanel | } -> { nRow, nCol }: where the text cursor is shown */
+    DATA aRoot                            /* tree view: the root node (cnc.ch T_*) */
+    DATA aTree       INIT {}              /* tree view: the rows shown, { aNode, cLines } */
 
     METHOD new( parent )
     METHOD read( cDir, cSelect )
-    METHOD reread()                       INLINE ::read( ::cDir )
+    METHOD reread()                       INLINE IIF( ::isTree(), ::treeRead( ::cDir, NIL, .T. ), ::read( ::cDir ) )
     METHOD current()
     METHOD marked()
     METHOD markInfo()
@@ -59,7 +66,8 @@ CLASS CNCPanel FROM HTWidget
     METHOD invertMarks()
     METHOD sortFiles()
     METHOD sortBy( nSort )
-    METHOD isBrief()                      INLINE ::nView != CNC_VIEW_FULL .OR. ::Fwidth < 44
+    METHOD isBrief()                      INLINE ! ::isTree() .AND. ( ::nView != CNC_VIEW_FULL .OR. ::Fwidth < 44 )
+    METHOD isTree()                       INLINE ::nView == CNC_VIEW_TREE .AND. ::oNet == NIL
     METHOD isColumns()                    INLINE ::nView == CNC_VIEW_TC
     METHOD columns()
     METHOD pageSize()                     INLINE ::rows() * IIF( ::isBrief(), Len( ::columns() ), 1 )
@@ -79,6 +87,14 @@ CLASS CNCPanel FROM HTWidget
     METHOD focusInEvent( eventFocus )
     METHOD cursorPos()                    INLINE IIF( HB_ISEVALITEM( ::bCursor ) .AND. ::hasFocus(), Eval( ::bCursor, self ), NIL )
 
+    METHOD treeRead( cDir, cSelect, lAll )
+    METHOD treeBuild()
+    METHOD treeGo( n )
+    METHOD treeOpen( lOpen )
+    METHOD treeKey( nKey )
+    METHOD treePaint()
+    METHOD treeMouse( eventMouse )
+
 ENDCLASS
 
 METHOD new( parent ) CLASS CNCPanel
@@ -93,6 +109,9 @@ METHOD read( cDir, cSelect ) CLASS CNCPanel
 
     LOCAL aFiles := {}, hMarks := { => }, a, lSame, nOld := ::nCur, aDir
 
+    IF ::isTree()
+        RETURN ::treeRead( cDir, cSelect )
+    ENDIF
     IF ::oNet != NIL                              /* FTP: "/pub/" */
         cDir := cnc_FtpDir( cDir )
         IF ( aDir := ::oNet:dir( cDir ) ) == NIL
@@ -369,7 +388,7 @@ METHOD ensureVisible() CLASS CNCPanel
 
     LOCAL nPage := ::pageSize(), nRows := ::rows(), nColTop
 
-    ::nCur := Max( 1, Min( ::nCur, Len( ::aFiles ) ) )
+    ::nCur := Max( 1, Min( ::nCur, IIF( ::isTree(), Len( ::aTree ), Len( ::aFiles ) ) ) )
     IF ::isBrief() .AND. ::isColumns()   /* scrolled by whole columns */
         nColTop := Int( ( ::nCur - 1 ) / nRows ) * nRows + 1
         IF ::nCur < ::nTop
@@ -405,7 +424,11 @@ METHOD quickSearch( cText ) CLASS CNCPanel
     LOCAL n
 
     ::cQuick := cText
-    IF ! Empty( cText )
+    IF ! Empty( cText ) .AND. ::isTree()
+        IF ( n := AScan( ::aTree, {| r | Lower( Left( r[ 1 ][ T_NAME ], Len( cText ) ) ) == Lower( cText ) } ) ) > 0
+            ::treeGo( n )
+        ENDIF
+    ELSEIF ! Empty( cText )
         n := AScan( ::aFiles, {| a | Lower( Left( a[ F_NAME ], Len( cText ) ) ) == Lower( cText ) } )
         IF n > 0
             ::nCur := n
@@ -446,6 +469,10 @@ METHOD PROCEDURE paintEvent( event ) CLASS CNCPanel
     NEXT
     DispOutAt( nH - 1, 0, ht_glyph( 0x255A, "+" ) + Replicate( cH, nW - 2 ) + ht_glyph( 0x255D, "+" ), CNC_CLR_PANEL )
 
+    IF ::isTree()
+        ::treePaint()
+        RETURN
+    ENDIF
     IF lBrief
         aCol := ::columns()
         c := ht_glyph( 0x255F, "|" )
@@ -620,6 +647,13 @@ METHOD PROCEDURE keyEvent( keyEvent ) CLASS CNCPanel
         ::cQuick := NIL
     ENDIF
 
+    IF ::isTree()
+        IF ::treeKey( nKey )
+            keyEvent:accept()
+        ENDIF
+        RETURN
+    ENDIF
+
     SWITCH nKey
     CASE K_UP
         ::nCur--
@@ -689,6 +723,10 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS CNCPanel
 
     LOCAL nR := eventMouse:mouseRow, nC := eventMouse:mouseCol, nRows := ::rows(), i := 0, k
 
+    IF ::isTree()
+        ::treeMouse( eventMouse )
+        RETURN
+    ENDIF
     /* the entry under the mouse (a │ belongs to the column on its left) */
     IF nR >= 2 .AND. nR <= nRows + 1 .AND. nC >= 1 .AND. nC < ::Fwidth - 1
         i := ::nTop + nR - 2
@@ -750,6 +788,308 @@ METHOD PROCEDURE mouseEvent( eventMouse ) CLASS CNCPanel
     ENDSWITCH
 
 RETURN
+
+/*----------------------------------------------------------- the tree view */
+
+/* the tree of the drive (Norton Commander's Tree panel): the folders only,
+   the way to ::cDir open, the cursor on it. cSelect: a folder in cDir to put
+   the cursor on (F7 made it); lAll: read every open folder again (Ctrl-R).
+   A folder is read when it is opened, never before. */
+METHOD treeRead( cDir, cSelect, lAll ) CLASS CNCPanel
+
+    LOCAL cTarget, cRoot, aNode, aKid, cPart, n
+
+    cDir := hb_DirSepAdd( hb_DirSepToOS( cDir ) )
+    IF ! hb_DirExists( cDir )
+        RETURN .F.
+    ENDIF
+    cTarget := cDir
+    IF ! Empty( cSelect ) .AND. hb_DirExists( cDir + cSelect )
+        cTarget := hb_DirSepAdd( cDir + cSelect )
+    ENDIF
+    cRoot := cnc_RootOf( cTarget )
+    IF ::aRoot == NIL .OR. ! cnc_SamePath( ::aRoot[ T_PATH ], cRoot )
+        ::aRoot := { cRoot, cRoot, NIL, .T. }
+    ELSEIF hb_defaultValue( lAll, .F. )
+        cnc_TreeRefresh( ::aRoot, ::lHidden )
+    ENDIF
+
+    /* open the way from the root to the folder */
+    aNode := ::aRoot
+    FOR EACH cPart IN hb_ATokens( SubStr( cTarget, Len( cRoot ) + 1 ), hb_ps() )
+        IF Empty( cPart )
+            LOOP
+        ENDIF
+        IF aNode[ T_KIDS ] == NIL
+            aNode[ T_KIDS ] := cnc_TreeKids( aNode[ T_PATH ], ::lHidden, NIL )
+        ENDIF
+        IF ( n := cnc_TreeFind( aNode[ T_KIDS ], cPart ) ) == 0      /* a new folder: read again */
+            aNode[ T_KIDS ] := cnc_TreeKids( aNode[ T_PATH ], ::lHidden, aNode[ T_KIDS ] )
+            n := cnc_TreeFind( aNode[ T_KIDS ], cPart )
+        ENDIF
+        IF n == 0                                                     /* hidden, no rights ... */
+            EXIT
+        ENDIF
+        aNode[ T_OPEN ] := .T.
+        aKid := aNode[ T_KIDS ][ n ]
+        aNode := aKid
+    NEXT
+
+    ::treeBuild()
+    ::nCur := Max( 1, AScan( ::aTree, {| r | r[ 1 ] == aNode } ) )
+    ::cDir := aNode[ T_PATH ]
+    ::aFiles := {}
+    ::ensureVisible()
+    ::cQuick := NIL
+    IF HB_ISEVALITEM( ::bChanged )
+        Eval( ::bChanged, self )
+    ENDIF
+
+RETURN .T.
+
+/* the rows shown: { aNode, cLines } - the open folders with their subfolders */
+METHOD treeBuild() CLASS CNCPanel
+    ::aTree := {}
+    cnc_TreeRows( ::aTree, ::aRoot, "", .T., .T. )
+RETURN NIL
+
+/* the cursor on row n: that folder is the panel's folder now */
+METHOD treeGo( n ) CLASS CNCPanel
+
+    ::nCur := Max( 1, Min( n, Len( ::aTree ) ) )
+    ::ensureVisible()
+    IF ::nCur <= Len( ::aTree ) .AND. ! cnc_SamePath( ::cDir, ::aTree[ ::nCur ][ 1 ][ T_PATH ] )
+        ::cDir := ::aTree[ ::nCur ][ 1 ][ T_PATH ]
+        IF HB_ISEVALITEM( ::bChanged )
+            Eval( ::bChanged, self )
+        ENDIF
+    ENDIF
+    ::refresh()
+
+RETURN NIL
+
+/* open (lOpen .T.), close (.F.) or turn round (NIL) the folder on the cursor */
+METHOD treeOpen( lOpen ) CLASS CNCPanel
+
+    LOCAL aNode
+
+    IF ::nCur < 1 .OR. ::nCur > Len( ::aTree )
+        RETURN NIL
+    ENDIF
+    aNode := ::aTree[ ::nCur ][ 1 ]
+    IF lOpen == NIL
+        lOpen := ! aNode[ T_OPEN ]
+    ENDIF
+    IF lOpen .AND. aNode[ T_KIDS ] == NIL
+        aNode[ T_KIDS ] := cnc_TreeKids( aNode[ T_PATH ], ::lHidden, NIL )
+    ENDIF
+    aNode[ T_OPEN ] := lOpen .AND. ! Empty( aNode[ T_KIDS ] )
+    ::treeBuild()
+    ::nCur := Max( 1, AScan( ::aTree, {| r | r[ 1 ] == aNode } ) )
+    ::ensureVisible()
+    ::refresh()
+
+RETURN NIL
+
+/* keys of the tree; .F.: not a tree key (the program's) */
+METHOD treeKey( nKey ) CLASS CNCPanel
+
+    LOCAL aNode := IIF( ::nCur >= 1 .AND. ::nCur <= Len( ::aTree ), ::aTree[ ::nCur ][ 1 ], NIL ), n
+
+    SWITCH nKey
+    CASE K_UP       ; ::treeGo( ::nCur - 1 ) ; EXIT
+    CASE K_DOWN     ; ::treeGo( ::nCur + 1 ) ; EXIT
+    CASE K_PGUP     ; ::treeGo( ::nCur - ::rows() + 1 ) ; EXIT
+    CASE K_PGDN     ; ::treeGo( ::nCur + ::rows() - 1 ) ; EXIT
+    CASE K_HOME     ; ::treeGo( 1 ) ; EXIT
+    CASE K_END      ; ::treeGo( Len( ::aTree ) ) ; EXIT
+    CASE K_ENTER
+        ::treeOpen()
+        EXIT
+    CASE K_RIGHT                         /* open; open already: the first subfolder */
+    CASE K_CTRL_PGDN
+        IF aNode != NIL .AND. aNode[ T_OPEN ]
+            ::treeGo( ::nCur + 1 )
+        ELSE
+            ::treeOpen( .T. )
+        ENDIF
+        EXIT
+    CASE K_LEFT                          /* close; closed: the folder above it */
+    CASE K_BS
+    CASE K_CTRL_PGUP
+        IF aNode != NIL .AND. aNode[ T_OPEN ] .AND. nKey == K_LEFT
+            ::treeOpen( .F. )
+        ELSEIF aNode != NIL .AND. ( n := cnc_TreeParentRow( ::aTree, ::nCur ) ) > 0
+            ::treeGo( n )
+        ENDIF
+        EXIT
+    OTHERWISE
+        RETURN .F.
+    ENDSWITCH
+
+RETURN .T.
+
+METHOD PROCEDURE treePaint() CLASS CNCPanel
+
+    LOCAL nW := ::Fwidth, nH := ::Fheight, nRows := ::rows(), lFocus := ::hasFocus(), r, i, a, c, cClr
+
+    DispOutAt( 1, 1, cnc_Center( "Tree", nW - 2 ), CNC_CLR_HEAD )
+    FOR r := 1 TO nRows
+        i := ::nTop + r - 1
+        IF i <= Len( ::aTree )
+            a := ::aTree[ i ]
+            c := a[ 2 ] + cnc_TreeMark( a[ 1 ] ) + a[ 1 ][ T_NAME ]
+            DO CASE
+            CASE i == ::nCur .AND. lFocus
+                cClr := CNC_CLR_CURSOR
+            CASE i == ::nCur                       /* the folder the other panel shows */
+                cClr := CNC_CLR_MARK
+            OTHERWISE
+                cClr := CNC_CLR_DIR
+            ENDCASE
+            DispOutAt( r + 1, 1, cnc_Fit( " " + c, nW - 2 ), cClr )
+        ELSE
+            DispOutAt( r + 1, 1, Space( nW - 2 ), CNC_CLR_PANEL )
+        ENDIF
+    NEXT
+    DispOutAt( nH - 3, 0, ht_glyph( 0x255F, "|" ) + Replicate( ht_glyph( 0x2500, "-" ), nW - 2 ) + ht_glyph( 0x2562, "|" ), CNC_CLR_PANEL )
+    DispOutAt( nH - 2, 1, cnc_Fit( ::cDir, nW - 2 ), CNC_CLR_PANEL )
+    IF ::cQuick != NIL
+        DispOutAt( nH - 1, 2, cnc_Fit( " Search: " + ::cQuick + " ", nW - 4 ), CNC_CLR_CURSOR )
+    ENDIF
+
+RETURN
+
+METHOD PROCEDURE treeMouse( eventMouse ) CLASS CNCPanel
+
+    LOCAL nR := eventMouse:mouseRow, i := 0
+
+    IF nR >= 2 .AND. nR <= ::rows() + 1 .AND. ::nTop + nR - 2 <= Len( ::aTree )
+        i := ::nTop + nR - 2
+    ENDIF
+    SWITCH eventMouse:nKey
+    CASE K_LBUTTONDOWN
+        IF i > 0
+            ::cQuick := NIL
+            ::treeGo( i )
+        ENDIF
+        EXIT
+    CASE K_LDBLCLK
+        IF i > 0
+            ::treeGo( i )
+            ::treeOpen()
+        ENDIF
+        EXIT
+    CASE K_MWFORWARD
+        ::treeGo( ::nCur - 3 )
+        EXIT
+    CASE K_MWBACKWARD
+        ::treeGo( ::nCur + 3 )
+        EXIT
+    ENDSWITCH
+
+RETURN
+
+/* "C:\work\src\" -> "C:\", "\\pc\share\a\" -> "\\pc\share\", "/home/x/" -> "/" */
+STATIC FUNCTION cnc_RootOf( cDir )
+
+    LOCAL a
+
+    IF Left( cDir, 2 ) == "\\"
+        a := hb_ATokens( SubStr( cDir, 3 ), "\" )
+        RETURN "\\" + a[ 1 ] + "\" + IIF( Len( a ) > 1, a[ 2 ] + "\", "" )
+    ENDIF
+    IF SubStr( cDir, 2, 1 ) == ":"
+        RETURN Left( cDir, 2 ) + hb_ps()
+    ENDIF
+
+RETURN hb_ps()
+
+/* the subfolders of a folder as tree nodes, sorted by name; aOld: the nodes
+   read before - a folder that is still there keeps its node (open, its
+   subfolders) */
+STATIC FUNCTION cnc_TreeKids( cPath, lHidden, aOld )
+
+    LOCAL aKids := {}, a, n
+
+    FOR EACH a IN Directory( cPath + hb_osFileMask(), IIF( lHidden, "DHS", "D" ) )
+        IF "D" $ a[ 5 ] .AND. !( a[ 1 ] == "." .OR. a[ 1 ] == ".." )
+            IF aOld != NIL .AND. ( n := cnc_TreeFind( aOld, a[ 1 ] ) ) > 0
+                AAdd( aKids, aOld[ n ] )
+            ELSE
+                AAdd( aKids, { a[ 1 ], cPath + a[ 1 ] + hb_ps(), NIL, .F. } )
+            ENDIF
+        ENDIF
+    NEXT
+    ASort( aKids,,, {| x, y | Lower( x[ T_NAME ] ) < Lower( y[ T_NAME ] ) } )
+
+RETURN aKids
+
+/* Ctrl-R: every folder read before is read again, the open ones stay open */
+STATIC PROCEDURE cnc_TreeRefresh( aNode, lHidden )
+
+    LOCAL aKid
+
+    IF aNode[ T_KIDS ] != NIL
+        aNode[ T_KIDS ] := cnc_TreeKids( aNode[ T_PATH ], lHidden, aNode[ T_KIDS ] )
+        aNode[ T_OPEN ] := aNode[ T_OPEN ] .AND. ! Empty( aNode[ T_KIDS ] )
+        FOR EACH aKid IN aNode[ T_KIDS ]
+            cnc_TreeRefresh( aKid, lHidden )
+        NEXT
+    ENDIF
+
+RETURN
+
+STATIC FUNCTION cnc_TreeFind( aKids, cName )
+
+    LOCAL n := AScan( aKids, {| x | x[ T_NAME ] == cName } )
+
+#ifdef __PLATFORM__WINDOWS
+    IF n == 0
+        n := AScan( aKids, {| x | Lower( x[ T_NAME ] ) == Lower( cName ) } )
+    ENDIF
+#endif
+
+RETURN n
+
+/* the rows of a folder and of its open subfolders, with the tree lines:
+   cIndent the lines of the folders above it, lLast: the last in its folder */
+STATIC PROCEDURE cnc_TreeRows( aRows, aNode, cIndent, lLast, lRoot )
+
+    LOCAL aKid
+
+    AAdd( aRows, { aNode, IIF( lRoot, "", cIndent + IIF( lLast, ht_glyph( 0x2514, "`" ), ht_glyph( 0x251C, "+" ) ) + ;
+                                         ht_glyph( 0x2500, "-" ) ) } )
+    IF aNode[ T_OPEN ] .AND. aNode[ T_KIDS ] != NIL
+        FOR EACH aKid IN aNode[ T_KIDS ]
+            cnc_TreeRows( aRows, aKid, IIF( lRoot, "", cIndent + IIF( lLast, "  ", ht_glyph( 0x2502, "|" ) + " " ) ), ;
+                          aKid:__enumIsLast(), .F. )
+        NEXT
+    ENDIF
+
+RETURN
+
+/* "+" a closed folder that has (or may have) subfolders, "-" an open one */
+STATIC FUNCTION cnc_TreeMark( aNode )
+    DO CASE
+    CASE aNode[ T_OPEN ]
+        RETURN "-"
+    CASE aNode[ T_KIDS ] == NIL .OR. ! Empty( aNode[ T_KIDS ] )
+        RETURN "+"
+    ENDCASE
+RETURN " "
+
+/* the row of the folder that holds the folder on row n; 0 = n is the root */
+STATIC FUNCTION cnc_TreeParentRow( aRows, n )
+
+    LOCAL cUp
+
+    IF n <= 1
+        RETURN 0
+    ENDIF
+    cUp := cnc_ParentDir( aRows[ n ][ 1 ][ T_PATH ] )
+
+RETURN AScan( aRows, {| r | cnc_SamePath( r[ 1 ][ T_PATH ], cUp ) } )
 
 /*----------------------------------------------------------- paths */
 

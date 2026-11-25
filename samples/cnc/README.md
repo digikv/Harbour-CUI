@@ -44,6 +44,10 @@ Ready-to-run programs, no build needed: **[CNC 1.0.3 release](https://github.com
 
 Unpack and run `cnc` (or `cnc left-folder right-folder`).
 
+New in 1.0.4: the **Tree** view (Left / Right menu, Ctrl-P), as in Norton Commander: the folders
+of the drive in one panel, the other panel shows the folder on the cursor; Enter on a table
+(`.dbf`) opens it in [CBro](../cbro/README.md).
+
 New in 1.0.3: the brief view as in Total Commander (columns as wide as the longest name, folders
 in [ ], scrolled by columns); the menus show √ at the panel view, Show hidden files and Show
 command output; an open menu runs an entry by its letter (highlighted).
@@ -62,7 +66,7 @@ of every command. F1 shows all the keys.
 | Key | Command |
 |---|---|
 | Tab | the other panel |
-| Enter, double click | into a folder; a program runs, a document opens in its program |
+| Enter, double click | into a folder; a program runs, a document opens in its program, a table (`.dbf`) in CBro |
 | Backspace, Ctrl-PgUp | the parent folder |
 | Ins, right click | mark a file; F5 / F6 / F8 work on the marked files, else on the current one |
 | typing | goes to the command line, as in Norton Commander (the cursor stays there); Enter runs it, Backspace / Esc correct it - with an empty command line Enter and Backspace are the panel's |
@@ -76,7 +80,7 @@ of every command. F1 shows all the keys.
 | F7 / F8 | make a folder / delete |
 | F10 | quit |
 | Ctrl-U | swap the panels |
-| Ctrl-P | full (Name, Ext, Size, Date - as Total Commander) / brief (two columns of names, NC) / brief TC (as many columns as the longest name lets, folders in [ ], scrolled by columns); also Left / Right menu, the current one marked √ |
+| Ctrl-P | full (Name, Ext, Size, Date - as Total Commander) / brief (two columns of names, NC) / brief TC (as many columns as the longest name lets, folders in [ ], scrolled by columns) / tree (below); also Left / Right menu, the current one marked √ |
 | Options - Show hidden files | hidden and system files on / off (√ while on; kept in cnc.ini) |
 | Ctrl-F3 .. Ctrl-F6, a click on Name / Ext / Size / Date | sort by name, extension, time, size; the same again turns the order round (the arrow in the title shows it) |
 | Ctrl-R | read the folders again |
@@ -92,6 +96,32 @@ of every command. F1 shows all the keys.
 | = | the calculator (with an empty command line, as in HbCommander): a Harbour expression, `1024*16`, `Date()`; `=expr` + Enter in the command line does the same |
 
 Commands - Compare directories marks the files that are only in one panel or newer there.
+
+### Tree
+
+Left / Right menu - Tree (or Ctrl-P after brief TC) shows the folders of the drive in that panel,
+as in Norton Commander, with the way to the panel's folder open. The other panel shows what is in
+the folder on the cursor and follows it. A folder is read when it is opened: `+` before a name -
+it has (or may have) subfolders, `-` - open.
+
+| Key | In the tree |
+|---|---|
+| Up / Down, PgUp / PgDn, Home / End, the mouse | another folder (the other panel follows) |
+| Right, Ctrl-PgDn | open the folder; open already: to its first subfolder |
+| Left | close the folder; closed: to the folder above it |
+| Backspace, Ctrl-PgUp | the folder above |
+| Enter, double click | open / close |
+| F7 | a new folder in the folder on the cursor |
+| F5 / F6 in the other panel | copy / move into the folder on the cursor |
+| Ctrl-R | read the open folders again |
+
+The tree is of local folders and network shares; an FTP panel shows its files.
+
+### Tables (.dbf)
+
+Enter on a `.dbf` file opens it in CBro, the table browser of Harbour-CUI, in its own window. CBro
+is looked for at `cbro=` in `[OPTIONS]` of `cnc.ini`, next to CNC, then in `../cbro/` (the
+samples folder); without it the table opens in the program the system has for `.dbf`.
 
 ## Net (as in Total Commander)
 

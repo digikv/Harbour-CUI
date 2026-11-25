@@ -4,7 +4,7 @@
  * Copyright (c) 2026 Srđan Dragojlović - dual licensed, see LICENSE
  */
 
-#define CNC_VERSION     "1.0.3"
+#define CNC_VERSION     "1.0.4"
 
 /* a panel entry: { cName, nSize, dDate, cTime, cAttr, lDir, lMarked } */
 #define F_NAME          1
@@ -24,6 +24,13 @@
 #define CNC_VIEW_FULL   1               /* Name, Ext, Size, Date */
 #define CNC_VIEW_BRIEF  2               /* two columns of names (NC) */
 #define CNC_VIEW_TC     3               /* columns as wide as the longest name (Total Commander) */
+#define CNC_VIEW_TREE   4               /* the folder tree of the drive (Norton Commander) */
+
+/* a node of the tree view: { cName, cPath, aKids (NIL = not read yet), lOpen } */
+#define T_NAME          1
+#define T_PATH          2
+#define T_KIDS          3
+#define T_OPEN          4
 
 /* the classic colors (VGA palette of the "Norton" theme) */
 #define CNC_CLR_PANEL   "11/1"          /* files, frame: bright cyan on blue */

@@ -99,6 +99,7 @@ PROCEDURE Main( ... )
             s_aPanel[ i ]:read( hb_cwd() )
         ENDIF
     NEXT
+    AEval( s_aPanel, {| o | IIF( o:isTree(), cnc_Follow( o ), NIL ) } )
 
     cnc_Arrange()
     cnc_BuildMenu()
@@ -240,7 +241,7 @@ STATIC FUNCTION cnc_CtrlKey( c )
         s_aPanel[ s_nAct ]:quickSearch( "" )
         EXIT
     CASE "P"
-        cnc_SetMode( s_nAct, s_aPanel[ s_nAct ]:nView % 3 + 1 )    /* full, brief, brief TC */
+        cnc_SetMode( s_nAct, s_aPanel[ s_nAct ]:nView % 4 + 1 )    /* full, brief, brief TC, tree */
         EXIT
     CASE "F"                                     /* Ctrl-F FTP connect, Ctrl-Shift-F disconnect */
         IF hb_bitAnd( hb_gtInfo( HB_GTI_KBDSHIFTS ), HB_GTI_KBD_SHIFT ) != 0
@@ -384,6 +385,7 @@ STATIC PROCEDURE cnc_PanelMenu( oMenu, n )
     cnc_Item( oMenu, "Brief", "", NIL, {|| cnc_SetMode( n, CNC_VIEW_BRIEF ) }, {|| s_aPanel[ n ]:nView == CNC_VIEW_BRIEF } )
     cnc_Item( oMenu, "Brief (Total Commander)", "", NIL, {|| cnc_SetMode( n, CNC_VIEW_TC ) }, {|| s_aPanel[ n ]:nView == CNC_VIEW_TC } )
     cnc_Item( oMenu, "Full", "", NIL, {|| cnc_SetMode( n, CNC_VIEW_FULL ) }, {|| s_aPanel[ n ]:nView == CNC_VIEW_FULL } )
+    cnc_Item( oMenu, "Tree", "", NIL, {|| cnc_SetMode( n, CNC_VIEW_TREE ) }, {|| s_aPanel[ n ]:nView == CNC_VIEW_TREE } )
     oMenu:addSeparator()
     cnc_Item( oMenu, "Name", "Ctrl-F3", NIL, {|| cnc_Sort( n, CNC_SORT_NAME ) } )
     cnc_Item( oMenu, "Extension", "Ctrl-F4", NIL, {|| cnc_Sort( n, CNC_SORT_EXT ) } )
@@ -497,6 +499,9 @@ STATIC PROCEDURE cnc_Changed( oPanel )
 
     LOCAL n
 
+    IF oPanel:isTree()
+        cnc_Follow( oPanel )
+    ENDIF
     IF oPanel == s_aPanel[ s_nAct ] .AND. ! Empty( oPanel:cDir )
         IF ! oPanel:isNet()
             hb_cwd( oPanel:cDir )
@@ -529,7 +534,7 @@ STATIC PROCEDURE cnc_Swap()
 
     LOCAL o1 := s_aPanel[ 1 ], o2 := s_aPanel[ 2 ], c, x
 
-    FOR EACH c IN { "oNet", "cLocal", "cDir", "aFiles", "nCur", "nTop", "nSort", "lDesc", "nView", "nLongest" }
+    FOR EACH c IN { "oNet", "cLocal", "cDir", "aFiles", "nCur", "nTop", "nSort", "lDesc", "nView", "nLongest", "aRoot", "aTree" }
         x := __objSendMsg( o1, c )
         __objSendMsg( o1, "_" + c, __objSendMsg( o2, c ) )
         __objSendMsg( o2, "_" + c, x )
@@ -564,10 +569,45 @@ STATIC PROCEDURE cnc_Sort( n, nSort )
 RETURN
 
 STATIC PROCEDURE cnc_SetMode( n, nView )
-    s_aPanel[ n ]:nView := nView
-    s_aPanel[ n ]:ensureVisible()
-    s_aPanel[ n ]:refresh()
+
+    LOCAL o := s_aPanel[ n ], lTree := o:isTree()
+
+    IF nView == CNC_VIEW_TREE .AND. o:isNet()
+        IF o:nView == CNC_VIEW_TC                 /* Ctrl-P goes round without the tree */
+            nView := CNC_VIEW_FULL
+        ELSE
+            HTToast():show( "No tree for an FTP panel", 1500, HT_CLR_TOAST_INFO )
+            RETURN
+        ENDIF
+    ENDIF
+    o:nView := nView
+    IF o:isTree() != lTree                       /* into the tree or out of it: read again */
+        o:read( o:cDir )
+        IF o:isTree()
+            cnc_Follow( o )
+        ENDIF
+    ENDIF
+    o:ensureVisible()
+    o:refresh()
     cnc_Checks()
+
+RETURN
+
+/* the other panel shows the folder on the cursor of a tree panel (Norton Commander) */
+STATIC PROCEDURE cnc_Follow( oTree )
+
+    LOCAL n := AScan( s_aPanel, {| o | o == oTree } ), oOther
+
+    IF n == 0 .OR. Empty( oTree:cDir )
+        RETURN
+    ENDIF
+    oOther := s_aPanel[ 3 - n ]
+    IF oOther == NIL .OR. oOther:isTree() .OR. oOther:isNet() .OR. cnc_SamePath( oOther:cDir, oTree:cDir )
+        RETURN
+    ENDIF
+    oOther:read( oTree:cDir )
+    oOther:refresh()
+
 RETURN
 
 /* Options - Show command output: the output screen after a command, or only
@@ -750,13 +790,21 @@ RETURN oPanel:cDir + a[ F_NAME ]
 /* Enter on a file: a program runs, a document opens in its program */
 STATIC PROCEDURE cnc_OpenFile( oPanel, a )
 
-    LOCAL cFile := cnc_Path( oPanel, a ), cExt := Lower( hb_FNameExt( a[ F_NAME ] ) )
+    LOCAL cFile := cnc_Path( oPanel, a ), cExt := Lower( hb_FNameExt( a[ F_NAME ] ) ), cBro
 #ifndef __PLATFORM__WINDOWS
     LOCAL nAttr := 0
 #endif
 
     IF oPanel:isNet()
         cnc_View()
+        RETURN
+    ENDIF
+    IF cExt == ".dbf" .AND. ! Empty( cBro := cnc_CBroPath() )     /* a table: CBro, in its own window */
+#ifdef __PLATFORM__WINDOWS
+        wapi_ShellExecute( NIL, "open", cBro, '"' + cFile + '"', oPanel:cDir, 1 )
+#else
+        hb_processOpen( "'" + cBro + "' '" + cFile + "'", , , , .T. )
+#endif
         RETURN
     ENDIF
 #ifdef __PLATFORM__WINDOWS
@@ -774,6 +822,21 @@ STATIC PROCEDURE cnc_OpenFile( oPanel, a )
 #endif
 
 RETURN
+
+/* CBro (the table browser of Harbour-CUI, samples/cbro): cbro= in cnc.ini,
+   else next to CNC, else ../cbro/ of the samples; "" = not there (Enter on a
+   .dbf then opens it in the program the system has for it) */
+STATIC FUNCTION cnc_CBroPath()
+
+    LOCAL cExe := "cbro" + IIF( hb_ps() == "\", ".exe", "" ), c
+
+    FOR EACH c IN { s_hSet[ "cbro" ], hb_DirBase() + cExe, hb_DirBase() + ".." + hb_ps() + "cbro" + hb_ps() + cExe }
+        IF ! Empty( c ) .AND. hb_FileExists( c )
+            RETURN c
+        ENDIF
+    NEXT
+
+RETURN ""
 
 /* F3: view a file (the editor of CEdit, read only); on a folder: its size */
 STATIC PROCEDURE cnc_View()
@@ -1345,6 +1408,9 @@ STATIC PROCEDURE cnc_FtpOpen( n, h )
     cnc_Progress( "" )
     cnc_FtpClose( n )
     o:cLocal := o:cDir
+    IF o:nView == CNC_VIEW_TREE                  /* no tree of a server: the files */
+        o:nView := CNC_VIEW_FULL
+    ENDIF
     o:oNet := oNet
     IF ! o:read( h[ "dir" ] ) .AND. ! o:read( "/" )
         HTMessageBox():error( "FTP", oNet:cErr )
@@ -1963,7 +2029,7 @@ RETURN ce_Join( { ;
     "  Tab          the other panel           Ctrl-U     swap the panels", ;
     "  Cursor keys, PgUp / PgDn, Home / End, the mouse wheel", ;
     "  Enter        into a folder; a program runs, a document opens in", ;
-    "               its program; double click the same", ;
+    "               its program, a table (.dbf) in CBro; double click the same", ;
     "  Backspace, Ctrl-PgUp   the parent folder", ;
     "  Ins, right click       mark a file (the marked ones are copied,", ;
     "                         moved, deleted together)", ;
@@ -1971,7 +2037,11 @@ RETURN ce_Join( { ;
     "               command line is empty)", ;
     "  Ctrl-S, Alt + letter   quick search (Alt-L F C O R open the menus)", ;
     "  Ctrl-P       full view (Name, Ext, Size, Date), brief (2 columns),", ;
-    "               brief as Total Commander (as many columns as fit)", ;
+    "               brief as Total Commander (as many columns as fit), tree", ;
+    "  Tree (Left / Right menu, Ctrl-P): the folders of the drive; the other", ;
+    "               panel shows the folder on the cursor. Right / Enter open a", ;
+    "               folder, Left closes it (closed: up), Backspace up; F7 makes", ;
+    "               a folder in it, F5 / F6 from the other panel copy into it", ;
     "  Ctrl-R       read the folders again", ;
     "  Ctrl-F3 .. Ctrl-F6     sort by name, extension, time, size; a click", ;
     "               on Name / Ext / Size / Date sorts too; again: the other way", ;
@@ -2052,7 +2122,7 @@ STATIC PROCEDURE cnc_LoadSettings()
 
     s_hSet := { "theme" => "Norton", "dir1" => "", "dir2" => "", "active" => 1, ;
                 "sort1" => CNC_SORT_NAME, "sort2" => CNC_SORT_NAME, "view1" => CNC_VIEW_FULL, "view2" => CNC_VIEW_FULL, "hidden" => .F., ;
-                "desc1" => .F., "desc2" => .F., "output" => .T. }
+                "desc1" => .F., "desc2" => .F., "output" => .T., "cbro" => "" }
     s_cIni := cnc_IniPath()
     IF ! hb_FileExists( s_cIni )
         RETURN
@@ -2070,12 +2140,13 @@ STATIC PROCEDURE cnc_LoadSettings()
     s_hSet[ "sort1" ]  := Max( 1, Min( 4, Val( hb_HGetDef( h, "sort1", "1" ) ) ) )
     s_hSet[ "sort2" ]  := Max( 1, Min( 4, Val( hb_HGetDef( h, "sort2", "1" ) ) ) )
     FOR EACH c IN { "1", "2" }                /* full1=0 of older versions: brief */
-        s_hSet[ "view" + c ] := Max( 1, Min( 3, Val( hb_HGetDef( h, "view" + c, IIF( hb_HGetDef( h, "full" + c, "1" ) == "0", "2", "1" ) ) ) ) )
+        s_hSet[ "view" + c ] := Max( 1, Min( CNC_VIEW_TREE, Val( hb_HGetDef( h, "view" + c, IIF( hb_HGetDef( h, "full" + c, "1" ) == "0", "2", "1" ) ) ) ) )
     NEXT
     s_hSet[ "desc1" ]  := hb_HGetDef( h, "desc1", "0" ) == "1"
     s_hSet[ "desc2" ]  := hb_HGetDef( h, "desc2", "0" ) == "1"
     s_hSet[ "hidden" ] := hb_HGetDef( h, "hidden", "0" ) == "1"
     s_hSet[ "output" ] := !( hb_HGetDef( h, "output", "1" ) == "0" )
+    s_hSet[ "cbro" ]   := hb_HGetDef( h, "cbro", "" )
 
     h := hb_HGetDef( hIni, "HOTLIST", hb_HGetDef( hIni, "BOOKMARKS", { => } ) )
     FOR EACH cKey IN h
@@ -2108,6 +2179,9 @@ STATIC PROCEDURE cnc_SaveSettings()
     h[ "active" ] := hb_ntos( s_nAct )
     h[ "hidden" ] := IIF( s_hSet[ "hidden" ], "1", "0" )
     h[ "output" ] := IIF( s_hSet[ "output" ], "1", "0" )
+    IF ! Empty( s_hSet[ "cbro" ] )
+        h[ "cbro" ] := s_hSet[ "cbro" ]
+    ENDIF
     hIni[ "OPTIONS" ] := h
     h := { => }
     FOR EACH c IN s_aHot
