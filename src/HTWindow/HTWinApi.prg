@@ -210,14 +210,18 @@ RETURN s_cFont
  * A second SetMode to DESKTOPCOLS/ROWS removes the large black side margins
  * that gtwvt leaves when Consolas metrics are narrower than the requested
  * FONTWIDTH (FitSize centers the leftover as MarginLeft/Right).
+ *
+ * Called again with the same request (HTMainWindow:show(), HTApplication:exec()
+ * after a login dialog) while the screen is as the last setup left it, it does
+ * nothing: on gtwvt every SetMode() wipes the window and draws it anew - a
+ * visible flicker. Another request, face or full-screen mode, or a grid that
+ * changed since (Alt+Enter, a gtxwc window resize) sets it up again.
  * @param nRows  Preferred rows (default 40); final size may grow to fill screen
  * @param nCols  Preferred cols (default 131); final size may grow to fill screen
  */
 FUNCTION ht_cuiSetupDisplay( nRows, nCols )
-#ifdef __PLATFORM__WINDOWS
-    LOCAL nWidth, nHeight, nFontW, nFontH
-    LOCAL nDeskCols, nDeskRows
-#endif
+
+    STATIC s_cDone := ""
 
     IF nRows == NIL
         nRows := 40
@@ -225,6 +229,32 @@ FUNCTION ht_cuiSetupDisplay( nRows, nCols )
     IF nCols == NIL
         nCols := 131
     ENDIF
+
+    IF ! SetupState( nRows, nCols ) == s_cDone
+        SetupDisplay( nRows, nCols )
+        s_cDone := SetupState( nRows, nCols )
+    ENDIF
+
+RETURN NIL
+
+/* the request and what is on the screen: equal before and after a setup
+   when nothing changed in between */
+STATIC FUNCTION SetupState( nRows, nCols )
+
+    LOCAL cState := hb_ntos( nRows ) + "x" + hb_ntos( nCols ) + "|" + ht_cuiFont() + "|" + ;
+                    IIF( ht_fullScreen(), "F", "W" ) + "|" + hb_gtVersion() + "|" + ;
+                    hb_ntos( MaxRow() ) + "x" + hb_ntos( MaxCol() )
+#ifdef __PLATFORM__WINDOWS
+    cState += "|" + IIF( hb_gtInfo( HB_GTI_ISFULLSCREEN ), "F", "W" )
+#endif
+
+RETURN cState
+
+STATIC FUNCTION SetupDisplay( nRows, nCols )
+#ifdef __PLATFORM__WINDOWS
+    LOCAL nWidth, nHeight, nFontW, nFontH
+    LOCAL nDeskCols, nDeskRows
+#endif
 
 #ifndef __PLATFORM__WINDOWS
     /* gtxwc (X11) / gttrm (terminal): the fullscreen fit below depends on
