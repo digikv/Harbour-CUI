@@ -19,14 +19,15 @@ Older standalone CUI helpers (`win.prg`, `cui.ch`) are kept under [`legacy/`](le
 
 ## Features
 
-**30 widgets** covering forms, data display, navigation, charts and feedback:
+**36 widgets** covering forms, data display, navigation, charts and feedback:
 
 | Category | Widgets |
 |----------|---------|
 | Windows | HTMainWindow, HTDesktop, HTDialog (modal + button bar + draggable), HTMessageBox |
 | Input | HTLineEdit (selection + clipboard), HTGet (full PICTURE/VALID/WHEN, Shift+arrow selection), HTTextEdit (multi-line, selection + clipboard), HTSpinner, HTCheckList |
 | Buttons | HTPushButton, HTCheckBox, HTRadioButton |
-| Lists | HTListBox, HTComboBox (type-to-filter), HTSearchBox (search as you type: the matches in a list under the field with their details, arrows / Enter / Esc, x clears, + adds; Serbian Latin finds Cyrillic - after the searchbox of Digi knjigovodstvo), HTDatePicker (a date field that puts the separators in as you type, with a calendar: the week from Monday or Sunday, today, the keys or the mouse; 16 languages built in - names, format, first day - `setLang()` / `ht_dateDefaultLang()`), HTBrowse (TBrowse wrapper, inline cell editing: F2 / typing / double-click, typed values via the column PICTURE) |
+| Lists | HTListBox, HTComboBox (type-to-filter), HTSearchBox (search as you type: the matches in a list under the field with their details, arrows / Enter / Esc, x clears, + adds; Serbian Latin finds Cyrillic - after the searchbox of Digi knjigovodstvo), HTDatePicker (a date field that puts the separators in as you type, with a calendar: the week from Monday or Sunday, today, the keys or the mouse; 16 languages built in - names, format, first day - `setLang()` / `ht_dateDefaultLang()`), HTBrowse (TBrowse wrapper, inline cell editing: F2 / typing / double-click, typed values via the column PICTURE), HTTreeView (hierarchy with expand/collapse), HTTagInput (removable filter tags) |
+| Business | HTSplitter (draggable panes), HTMarkdownView (help / README preview), HTCommandPalette (type-to-run, like Ctrl+P), HTPropertyGrid (Name \| Value inspectors) |
 | Menus | HTMenuBar (`&` hot keys, Alt+letter, action shortcuts), HTMenu, HTContextMenu, HTAction |
 | Layout | HTVBoxLayout, HTHBoxLayout, HTGridLayout |
 | Display | HTLabel, HTFrame, HTProgressBar, HTStatusBar, HTSeparator, HTScrollBar, HTTabWidget, HTToolBar |
@@ -128,6 +129,7 @@ cd samples/hello && hbmk2 hello.prg hbmk.hbm && ./hello
 | `menu` | HTMenuBar + HTMenu |
 | `progress` | Animated HTProgressBar |
 | `charts` | HTSparkline (live, 4 rows) and HTBarChart, following the themes (F1–F7) |
+| `business` | HTTreeView, HTSplitter, HTTagInput, HTMarkdownView, HTCommandPalette (Ctrl+P), HTPropertyGrid |
 | `theme` | Switching among the seven built-in themes (F1–F7) |
 | `theme_editor` | Change theme colors and the palette, add own themes, save them to `themes.json` |
 | `unicode` | Chinese, Japanese, Korean, Gujarati, Hindi, Cyrillic and Greek text: IME input, two-cell characters, Indic syllables |

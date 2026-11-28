@@ -22,6 +22,7 @@ PUBLIC:
 
     METHOD addChild( child )
     METHOD removeChild( child )
+    METHOD detachParent()
 
     CONSTRUCTOR new( parent )
 
@@ -52,6 +53,23 @@ METHOD PROCEDURE addChild( child ) CLASS HTObject
     IF aScan( ::Fchildren, {|e| e == child } ) = 0
         aAdd( ::Fchildren, child )
     ENDIF
+RETURN
+
+/** Drops this object from its parent. A widget that was reparented into a
+ * temporary dialog uses this when the dialog closes, so the parent pointer
+ * does not outlive that dialog. */
+METHOD PROCEDURE detachParent() CLASS HTObject
+
+    LOCAL parent
+
+    IF ::Fparent != NIL
+        parent := ht_objectFromId( ::Fparent )
+        IF hb_isObject( parent )
+            parent:removeChild( self )
+        ENDIF
+        ::Fparent := NIL
+    ENDIF
+
 RETURN
 
 /** Removes a child object from this object's children list.

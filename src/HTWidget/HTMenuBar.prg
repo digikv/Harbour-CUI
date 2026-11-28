@@ -32,7 +32,6 @@ PROTECTED:
     METHOD paintDropdown( oMenu )
     METHOD paintMenuWindow( oMenu, nWinId, nActive )
     METHOD reselectParent()
-    METHOD getMenus()
     METHOD openAt( nIndex )
     METHOD repaintParent()
 
@@ -43,6 +42,7 @@ PUBLIC:
     METHOD addAction( ... )
     METHOD addMenu( ... )
     METHOD addSeparator()
+    METHOD getMenus()
 
     METHOD paintEvent( event )
     METHOD handleKey( nKey )

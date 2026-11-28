@@ -143,6 +143,29 @@
 #define HT_SEPARATOR_HORIZONTAL 0
 #define HT_SEPARATOR_VERTICAL   1
 
+/* HTSplitter: the bar itself. VERTICAL is │ (panes side by side),
+   HORIZONTAL is ─ (panes stacked). */
+#define HT_SPLIT_VERTICAL       0
+#define HT_SPLIT_HORIZONTAL     1
+
+/* HTMarkdownView span / line kinds */
+#define HT_MD_TEXT              0
+#define HT_MD_BOLD              1
+#define HT_MD_ITALIC            2
+#define HT_MD_CODE              3
+#define HT_MD_LINK              4
+#define HT_MD_HEADING           5
+#define HT_MD_QUOTE             6
+
+/* HTPropertyGrid value kinds (addProperty type) */
+#define HT_PROP_TEXT            "text"
+#define HT_PROP_NUMBER          "number"
+#define HT_PROP_LOGICAL         "logical"
+#define HT_PROP_LIST            "list"
+#define HT_PROP_COLOR           "color"
+#define HT_PROP_FILE            "file"
+#define HT_PROP_GROUP           "group"
+
 /* Viewport-aware GT wrappers (replace CT wFormat remapping) */
 #xtranslate DispOutAt( => ht_DispOutAt(
 #xtranslate MaxRow( => ht_MaxRow(

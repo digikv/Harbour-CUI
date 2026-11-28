@@ -81,6 +81,13 @@ HTBase
       HTMessageBox (singleton: information/warning/error/question, choose( cTitle, cMsg,
                     aButtons, nKind ) like Alert(); wrapped multi-line text, kind badge),
       HTScrollBar, HTSpinner, HTCheckList
+      HTTreeView (nodes, ├── └── │ or ASCII, [+]/[-], type-to-search)
+      HTSplitter (HT_SPLIT_VERTICAL panes side by side, HT_SPLIT_HORIZONTAL stacked;
+                  drag the bar, moveHandle(), mouseDragWanted())
+      HTMarkdownView (headings, bold, italic, code, lists, links, tables, wrap)
+      HTTagInput (chips, Enter/comma adds, Backspace/× removes, suggestions)
+      HTCommandPalette (filter, addMenus(), exec() modal; the app binds Ctrl+P)
+      HTPropertyGrid (text/number/logical/list/color/file, addGroup())
       HTTabWidget, HTToolBar
       HTTheme (singleton: named themes with palettes; Classic/Blue/Light/Dark/Amber from
                Digi knjigovodstvo, HighContrast, Mono; own themes)
@@ -236,6 +243,29 @@ HTGet wraps Harbour's core `Get` class for full Clipper-compatible input editing
 - `HTBarChart`: bars `{ cLabel, nValue [, cColor ] }`, values row (`valueText()`: 12k, 2.5M,
   or `valueBlock`) and labels row under the bars; `barWidth`, `barGap`, `maximum`.
 - `HTSparkline`: last width() values, `addValue()` (keeps `maxCount`), `minimum`/`maximum`.
+
+### Business widgets
+
+- `HTTreeView`: `addNode( cText, oParent, xUser )`. Right / `+` expands, Left / `-` collapses,
+  Space toggles, Enter toggles a branch and runs `onActivated`. Guides use `ht_glyph()`
+  (├── └── │, ASCII if the codepage lacks them). `rowText( n )` is what paint draws.
+- `HTSplitter`: `HT_SPLIT_VERTICAL` (│, panes left and right) or `HT_SPLIT_HORIZONTAL`
+  (─, panes stacked). `addWidget()`, `setSizes()`, `moveHandle( n, nDelta )`. The bar is the
+  gap between panes, so a click there hits the splitter; `mouseDragWanted()` is .T. while the
+  button is down. Focus the bar, then arrows move it.
+- `HTMarkdownView`: a subset of Markdown (headings, `**bold**`, `*italic*`, `` `code` ``,
+  links, lists, quotes, rules, fences, `| tables |`). `setMarkdown()`, `lineText( n )`,
+  `spanKind( nLine, nChar )`, `linkAt( nLine, nCell )`, `onLink`. Colors come from the
+  existing theme roles (title, label, hotkey, readonly).
+- `HTTagInput`: chips `[name ×]`. Enter or comma adds, Backspace on an empty field removes
+  the last, a click on × removes that one. `setSuggestions()`, Down/Enter takes a match;
+  Latin finds Cyrillic via `ht_latinToCyrillic()`.
+- `HTCommandPalette`: `addCommand( cTitle, bAction, xShortcut, cDetail )` or `addMenus( oBar )`.
+  `exec()` is a modal dialog; Enter runs the command after the dialog closes. Bind the key
+  in the window (`K_CTRL_P` is 16, not an alias of an arrow).
+- `HTPropertyGrid`: `addProperty( cName, cLabel, cType, xValue, aChoices )` with
+  `HT_PROP_TEXT / NUMBER / LOGICAL / LIST / COLOR / FILE`. `addGroup()` is a heading.
+  F4 or `onBrowse` replaces a file path. `onChanged( cName, xValue )`.
 
 ### Layout System
 
@@ -410,6 +440,9 @@ samples/          Demo applications (human-facing, require a display)
  played async (PlaySound from memory / aplay; Tone() blocks the frame); high
  scores in nebula.hi (git-ignored); diving mantas from wave 3
   charts/         HTSparkline (live, 4 rows; 1 row in its own color) + HTBarChart, F1-F7 themes
+  business/       HTTreeView, HTSplitter, HTTagInput, HTMarkdownView, HTCommandPalette (Ctrl+P),
+                  HTPropertyGrid — six widgets for business screens
+  docs/BUSINESS_WIDGETS.md  API notes for those six widgets
   theme/          Theme switching demo (7 built-in themes, F1-F7, theme list + buttons)
   theme_editor/   Theme editor: change category colors (Text/Back spinners or a color string) and
                   the 16-color palette (R G B), save as own themes, themes.json persistence,
@@ -507,8 +540,9 @@ tests/            Automated test suite (headless, -gtnul, exit code 0/1)
                   replace/remove, built-ins protected), category names, invalid index fallback
   test_widgets    HTLabel, HTLineEdit, HTCheckBox, HTPushButton, HTListBox, HTSparkline, HTBarChart, HTPixelFont (.glyphs, TTF checksum, BDF),
                   HTComboBox, HTSearchBox, HTDatePicker (languages), HTCheckList, HTSpinner, HTProgressBar, HTScrollBar,
- HTTextEdit, HTContextMenu, HTMenu:items() (submenu order),
- HTMenuBar hot keys / Alt / shortcuts / popup(), setTitleButtons,
+                  HTTextEdit, HTContextMenu, HTMenu:items() (submenu order),
+                  HTMenuBar hot keys / Alt / shortcuts / popup(), setTitleButtons,
+                  HTTreeView, HTSplitter, HTMarkdownView, HTTagInput, HTCommandPalette, HTPropertyGrid,
                   Unicode: UTF8EX default, CJK typing (ht_keyText, editors, HTGet),
                   wide-cell helpers, SaveScreen keeping Unicode, ht_glyph
   test_browse     HTBrowse column management, navigation blocks, callbacks,

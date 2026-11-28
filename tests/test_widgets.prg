@@ -3,6 +3,8 @@
  *
  * Tests: HTLabel, HTLineEdit, HTCheckBox, HTPushButton, HTListBox,
  *        HTComboBox, HTCheckList, HTSpinner, HTProgressBar, HTScrollBar,
+ *        HTTreeView, HTSplitter, HTMarkdownView, HTTagInput,
+ *        HTCommandPalette, HTPropertyGrid,
  *        Unicode (CJK) typing: ht_keyText(), HTLineEdit/HTTextEdit/HTGet,
  *        HTApplication's UTF8EX default codepage
  *
@@ -45,6 +47,12 @@ PROCEDURE Main()
     TestBig5Screen()
     TestSearchBox()
     TestDatePicker()
+    TestTreeView()
+    TestSplitter()
+    TestMarkdown()
+    TestTagInput()
+    TestCommandPalette()
+    TestPropertyGrid()
     TestUnicodeInput()   /* last: HTApplication():new() switches the codepage */
 
     nTotal := nPass + nFail
@@ -745,9 +753,17 @@ STATIC PROCEDURE TestUnicodeInput()
     LOCAL cOldCP := hb_cdpSelect()
     LOCAL cHan, aKeys, nKey, o, t, g, cVal, cScr
 
-    /* HTApplication picks UTF8EX when the app left Harbour's default "EN" */
+    /* HTApplication picks UTF8EX when the app left Harbour's default "EN".
+       The singleton may already exist from an earlier test that touched
+       HTApplication(); a second :new() then skips the codepage switch. */
     hb_cdpSelect( "EN" )
     HTApplication():new()
+    IF ! hb_cdpSelect() == "UTF8EX"
+        hb_cdpSelect( "UTF8EX" )
+        IF ht_cdpIsMultiByte()
+            hb_gtInfo( HB_GTI_COMPATBUFFER, .F. )
+        ENDIF
+    ENDIF
     Assert( "HTApplication:new selects UTF8EX", hb_cdpSelect() == "UTF8EX" )
 
     /* U+7E41 U+9AD4 U+4E2D U+6587 (traditional Chinese): 4 chars, 12 bytes in UTF-8 */
@@ -1051,5 +1067,369 @@ STATIC PROCEDURE TestDatePicker()
     Assert( "ht_dateDefaultLang", ht_dateDefaultLang() == "sr" .AND. Len( ht_dateLangs() ) == 16 )
 
     hb_cdpSelect( cOld )
+
+RETURN
+
+/*----------------------------------------------------------------*/
+
+STATIC PROCEDURE TestTreeView()
+
+    LOCAL o, oRoot, oChild, nAct := 0, nExp := 0
+    LOCAL oEv
+
+    o := HTTreeView():new()
+    Assert( "HTTreeView: empty", o:count() == 0 .AND. o:rowCount() == 0 )
+
+    oRoot := o:addNode( "Class", NIL, 100 )
+    oChild := o:addNode( "Group", oRoot, 110 )
+    o:addNode( "Analytic", oChild, 111 )
+    o:addNode( "Other", NIL, 200 )
+
+    Assert( "HTTreeView: count includes closed nodes", o:count() == 4 )
+    Assert( "HTTreeView: closed root hides children", o:rowCount() == 2 )
+    Assert( "HTTreeView: [+] on a closed branch", "[+]" $ o:rowText( 1 ) .AND. "Class" $ o:rowText( 1 ) )
+    Assert( "HTTreeView: current is the first node", o:currentText() == "Class" )
+    Assert( "HTTreeView: findData", o:findData( 111 ):text == "Analytic" )
+
+    o:onExpanded := {| e, l | nExp++, HB_SYMBOL_UNUSED( e ), HB_SYMBOL_UNUSED( l ) }
+    o:handleKey( K_RIGHT )
+    Assert( "HTTreeView: Right expands", o:rowCount() == 3 .AND. "[-]" $ o:rowText( 1 ) )
+    Assert( "HTTreeView: child row", "Group" $ o:rowText( 2 ) .AND. "[+]" $ o:rowText( 2 ) )
+    Assert( "HTTreeView: onExpanded", nExp == 1 )
+
+    o:handleKey( K_RIGHT )
+    Assert( "HTTreeView: Right again enters the child", o:currentText() == "Group" )
+    o:handleKey( K_LEFT )
+    Assert( "HTTreeView: Left on a leaf goes to the parent", o:currentText() == "Class" )
+    o:handleKey( K_LEFT )
+    Assert( "HTTreeView: Left collapses", o:rowCount() == 2 .AND. "[+]" $ o:rowText( 1 ) )
+
+    o:expandAll()
+    Assert( "HTTreeView: expandAll", o:rowCount() == 4 .AND. "Analytic" $ o:rowText( 3 ) )
+
+    o:onActivated := {| e | nAct := e:userData }
+    o:setCurrentIndex( 3 )
+    o:handleKey( K_ENTER )
+    Assert( "HTTreeView: Enter on a leaf runs onActivated", nAct == 111 )
+
+    o:setCurrentIndex( 1 )
+    o:handleKey( Asc( "O" ) )
+    Assert( "HTTreeView: letter jumps to Other", o:currentText() == "Other" )
+
+    o:setCurrentIndex( 1 )
+    o:collapse()
+    oEv := HTMouseEvent():new( K_LBUTTONDOWN, 0, 0 )
+    oEv:mouseRow := 0
+    oEv:mouseCol := o:markColumn( 1 )
+    o:mouseEvent( oEv )
+    Assert( "HTTreeView: click on the mark expands", o:rowCount() == 4 .AND. "[-]" $ o:rowText( 1 ) )
+
+RETURN
+
+/*----------------------------------------------------------------*/
+
+STATIC PROCEDURE TestSplitter()
+
+    LOCAL o, a, nPos
+    LOCAL oEv
+
+    o := HTSplitter():new( HT_SPLIT_VERTICAL )
+    o:addWidget( HTLabel():new( "Left" ) )
+    o:addWidget( HTLabel():new( "Right" ) )
+    o:setGeometry( 0, 0, 21, 6 )
+
+    a := o:sizes()
+    Assert( "HTSplitter: two panes fill the width", Len( a ) == 2 .AND. a[ 1 ] + a[ 2 ] + 1 == 21 )
+    Assert( "HTSplitter: equal split", a[ 1 ] == 10 .AND. a[ 2 ] == 10 )
+    Assert( "HTSplitter: bar column", o:handlePos( 1 ) == 10 )
+    Assert( "HTSplitter: pane geometry", o:widget( 1 ):x == 0 .AND. o:widget( 1 ):width == 10 .AND. ;
+            o:widget( 2 ):x == 11 .AND. o:widget( 2 ):width == 10 )
+
+    Assert( "HTSplitter: moveHandle grows the left pane", o:moveHandle( 1, 3 ) )
+    a := o:sizes()
+    Assert( "HTSplitter: 13 and 7", a[ 1 ] == 13 .AND. a[ 2 ] == 7 .AND. o:widget( 2 ):x == 14 )
+
+    o:setMinimum( 8 )
+    a := o:sizes()
+    Assert( "HTSplitter: minimum lifts the small pane", a[ 1 ] >= 8 .AND. a[ 2 ] >= 8 .AND. a[ 1 ] + a[ 2 ] == 20 )
+    Assert( "HTSplitter: cannot pass the minimum", ! o:moveHandle( 1, 50 ) )
+
+    o:setMinimum( 1 )
+    nPos := o:sizes()[ 1 ]
+    oEv := HTMouseEvent():new( K_LBUTTONDOWN, 0, o:handlePos( 1 ) )
+    oEv:mouseRow := 0
+    oEv:mouseCol := o:handlePos( 1 )
+    o:mouseEvent( oEv )
+    Assert( "HTSplitter: button down on the bar grabs", o:mouseDragWanted() )
+    oEv := HTMouseEvent():new( K_MOUSEMOVE, 0, o:handlePos( 1 ) + 2 )
+    oEv:mouseRow := 0
+    oEv:mouseCol := o:handlePos( 1 ) + 2
+    o:mouseEvent( oEv )
+    Assert( "HTSplitter: drag follows the pointer", o:sizes()[ 1 ] == nPos + 2 .AND. o:sizes()[ 1 ] == o:handlePos( 1 ) )
+    oEv := HTMouseEvent():new( K_LBUTTONUP, 0, 0 )
+    oEv:mouseRow := 0
+    oEv:mouseCol := 0
+    o:mouseEvent( oEv )
+    Assert( "HTSplitter: button up releases", ! o:mouseDragWanted() )
+
+    o:setOrientation( HT_SPLIT_HORIZONTAL )
+    o:setGeometry( 0, 0, 10, 11 )
+    a := o:sizes()
+    Assert( "HTSplitter: horizontal stacks the panes", a[ 1 ] + a[ 2 ] + 1 == 11 .AND. ;
+            o:widget( 1 ):y == 0 .AND. o:widget( 2 ):y == a[ 1 ] + 1 )
+
+    o := HTSplitter():new( HT_SPLIT_VERTICAL )
+    o:addWidget( HTLabel():new( "A" ) )
+    o:addWidget( HTLabel():new( "B" ) )
+    o:addWidget( HTLabel():new( "C" ) )
+    o:setGeometry( 0, 0, 32, 4 )
+    Assert( "HTSplitter: three equal panes", o:sizes()[ 1 ] == 10 .AND. o:sizes()[ 2 ] == 10 .AND. o:sizes()[ 3 ] == 10 )
+    o:moveHandle( 2, 4 )
+    Assert( "HTSplitter: second bar moves panes 2 and 3", o:sizes()[ 1 ] == 10 .AND. o:sizes()[ 2 ] == 14 .AND. o:sizes()[ 3 ] == 6 )
+
+RETURN
+
+/*----------------------------------------------------------------*/
+
+STATIC FUNCTION MdLine( o, cPart )
+
+    LOCAL i
+
+    FOR i := 1 TO o:lineCount()
+        IF cPart $ o:lineText( i )
+            RETURN i
+        ENDIF
+    NEXT
+
+RETURN 0
+
+STATIC PROCEDURE TestMarkdown()
+
+    LOCAL o, n, c
+    LOCAL oEv
+
+    c := "# Naslov" + Chr( 10 ) + Chr( 10 ) + ;
+         "Vidi **zuto** i *isko* i `kod`." + Chr( 10 ) + ;
+         "Link [primer](http://a) ovde." + Chr( 10 ) + ;
+         "- prva" + Chr( 10 ) + ;
+         "1. druga" + Chr( 10 ) + ;
+         "> citat" + Chr( 10 ) + ;
+         "---" + Chr( 10 ) + ;
+         "```" + Chr( 10 ) + ;
+         "x = 1" + Chr( 10 ) + ;
+         "```" + Chr( 10 ) + ;
+         "| Konto | Naziv |" + Chr( 10 ) + ;
+         "| --- | --- |" + Chr( 10 ) + ;
+         "| 100 | Kasa |" + Chr( 10 ) + ;
+         "jedan dva tri cetiri pet sest sedam osam devet deset"
+
+    o := HTMarkdownView():new()
+    o:setWrapWidth( 24 )
+    o:setMarkdown( c )
+
+    n := MdLine( o, "Naslov" )
+    Assert( "HTMarkdown: heading", n > 0 .AND. o:lineKind( n ) == HT_MD_HEADING )
+
+    n := MdLine( o, "zuto" )
+    Assert( "HTMarkdown: bold", n > 0 .AND. o:spanKind( n, At( "zuto", o:lineText( n ) ) ) == HT_MD_BOLD )
+    Assert( "HTMarkdown: italic", o:spanKind( n, At( "isko", o:lineText( n ) ) ) == HT_MD_ITALIC )
+    Assert( "HTMarkdown: code span", o:spanKind( n, At( "kod", o:lineText( n ) ) ) == HT_MD_CODE )
+
+    n := MdLine( o, "primer" )
+    Assert( "HTMarkdown: link", n > 0 .AND. o:linkAt( n, At( "primer", o:lineText( n ) ) - 1 ) == "http://a" )
+
+    Assert( "HTMarkdown: list", MdLine( o, "prva" ) > 0 .AND. MdLine( o, "druga" ) > 0 )
+    n := MdLine( o, "citat" )
+    Assert( "HTMarkdown: quote", n > 0 .AND. o:lineKind( n ) == HT_MD_QUOTE )
+    n := MdLine( o, "x = 1" )
+    Assert( "HTMarkdown: fence", n > 0 .AND. o:spanKind( n, 1 ) == HT_MD_CODE )
+    Assert( "HTMarkdown: table", MdLine( o, "Konto" ) > 0 .AND. MdLine( o, "Kasa" ) > 0 )
+    Assert( "HTMarkdown: wrap", o:lineCount() > MdLine( o, "jedan" ) .AND. MdLine( o, "jedan" ) > 0 )
+
+    o:onLink := {| cUrl | c := cUrl }
+    n := MdLine( o, "primer" )
+    oEv := HTMouseEvent():new( K_LBUTTONDOWN, 0, 0 )
+    oEv:mouseRow := n - o:topLine()
+    oEv:mouseCol := At( "primer", o:lineText( n ) ) - 1
+    o:mouseEvent( oEv )
+    Assert( "HTMarkdown: click runs onLink", c == "http://a" )
+
+    o:setMarkdown( "aaa bbb ccc ddd eee fff ggg" )
+    o:setWrapWidth( 12 )
+    o:resize( 24, 1 )   /* one visible row so Down can scroll */
+    Assert( "HTMarkdown: more than one wrapped line", o:lineCount() >= 2 )
+    Assert( "HTMarkdown: resize sets one row", o:height == 1 )
+    o:handleKey( K_DOWN )
+    Assert( "HTMarkdown: Down scrolls", o:topLine() == 2 )
+    o:handleKey( K_HOME )
+    Assert( "HTMarkdown: Home", o:topLine() == 1 )
+
+RETURN
+
+/*----------------------------------------------------------------*/
+
+STATIC PROCEDURE TestTagInput()
+
+    LOCAL o, nChg := 0, a
+    LOCAL oEv
+
+    o := HTTagInput():new()
+    o:onChanged := {| t | nChg++, HB_SYMBOL_UNUSED( t ) }
+    o:handleKey( Asc( "A" ) )
+    o:handleKey( Asc( "b" ) )
+    o:handleKey( K_ENTER )
+    Assert( "HTTagInput: Enter adds the tag", o:tagCount() == 1 .AND. o:tags()[ 1 ] == "Ab" .AND. o:text() == "" )
+
+    o:handleKey( Asc( "C" ) )
+    o:handleKey( Asc( "," ) )
+    Assert( "HTTagInput: comma adds", o:tagCount() == 2 .AND. o:tags()[ 2 ] == "C" )
+
+    o:handleKey( Asc( "A" ) )
+    o:handleKey( Asc( "b" ) )
+    o:handleKey( K_ENTER )
+    Assert( "HTTagInput: duplicate is ignored", o:tagCount() == 2 )
+
+    o:handleKey( K_BS )
+    Assert( "HTTagInput: Backspace removes the last", o:tagCount() == 1 .AND. o:tags()[ 1 ] == "Ab" )
+
+    Assert( "HTTagInput: the x column", o:chipHit( 4, 40 ) == 1 )
+    oEv := HTMouseEvent():new( K_LBUTTONDOWN, 0, 4 )
+    oEv:mouseRow := 0
+    oEv:mouseCol := 4
+    o:mouseEvent( oEv )
+    Assert( "HTTagInput: click on x removes", o:tagCount() == 0 )
+
+    o:setSuggestions( { "Placeno", "Neproknjizeno", "Storno" } )
+    o:handleKey( Asc( "p" ) )
+    o:handleKey( Asc( "l" ) )
+    a := o:filtered()
+    Assert( "HTTagInput: suggestions", Len( a ) == 1 .AND. a[ 1 ] == "Placeno" )
+    o:handleKey( K_DOWN )
+    o:handleKey( K_ENTER )
+    Assert( "HTTagInput: Down + Enter takes the suggestion", o:tagCount() == 1 .AND. o:tags()[ 1 ] == "Placeno" )
+    Assert( "HTTagInput: onChanged", nChg >= 3 )
+
+    hb_cdpSelect( "UTF8EX" )
+    o:clear()
+    o:setSuggestions( { "Плаћено", "Сторно" } )
+    o:setText( "pla" )
+    Assert( "HTTagInput: Latin finds Cyrillic", Len( o:filtered() ) == 1 )
+    hb_cdpSelect( "EN" )
+
+RETURN
+
+/*----------------------------------------------------------------*/
+
+STATIC PROCEDURE TestCommandPalette()
+
+    LOCAL o, nRun := 0, nExcel := 0
+    LOCAL oBar, oMenu, oAct
+
+    o := HTCommandPalette():new()
+    o:addCommand( "Bruto bilans", {|| nRun++ }, "Ctrl+B", "Izvestaji" )
+    o:addCommand( "Export Excel", {|| nExcel++ }, "Ctrl+E", "" )
+    o:addCommand( "Kartica konta", {|| nRun++ }, NIL, "Izvestaji" )
+
+    Assert( "HTCommandPalette: empty filter lists all", o:hitCount() == 3 .AND. o:marked() == 1 )
+    o:setText( "bilans" )
+    Assert( "HTCommandPalette: one word", o:hitCount() == 1 .AND. "bilans" $ Lower( o:hitTitle( 1 ) ) )
+    Assert( "HTCommandPalette: shortcut label", o:hitShortcut( 1 ) == "Ctrl+B" )
+    o:setText( "export excel" )
+    Assert( "HTCommandPalette: both words", o:hitCount() == 1 .AND. o:hitTitle( 1 ) == "Export Excel" )
+    o:runCurrent()
+    Assert( "HTCommandPalette: runCurrent", nExcel == 1 )
+
+    o:setText( "" )
+    /* refresh keeps the previous hit when possible; force the first row */
+    o:handleKey( K_HOME )
+    Assert( "HTCommandPalette: Home marks the first", o:marked() == 1 )
+    o:handleKey( K_DOWN )
+    Assert( "HTCommandPalette: Down moves the mark", o:marked() == 2 )
+    o:handleKey( K_UP )
+    Assert( "HTCommandPalette: Up", o:marked() == 1 )
+
+    oBar := HTMenuBar():new()
+    oMenu := oBar:addMenu( "&Reports" )
+    oAct := oMenu:addAction( "Trial &balance" )
+    oAct:setShortcut( K_CTRL_B )
+    oAct:onTriggered := {|| nRun++ }
+    o:clear()
+    o:addMenus( oBar )
+    o:setText( "balance" )
+    Assert( "HTCommandPalette: menu action", o:hitCount() == 1 .AND. o:hitTitle( 1 ) == "Trial balance" )
+    Assert( "HTCommandPalette: menu path", o:hitDetail( 1 ) == "Reports" )
+    o:runCurrent()
+    Assert( "HTCommandPalette: menu command runs", nRun == 1 )
+
+    hb_cdpSelect( "UTF8EX" )
+    o:clear()
+    o:addCommand( "Бруто биланс", {|| nRun++ }, NIL, "" )
+    o:setText( "bruto" )
+    Assert( "HTCommandPalette: Latin finds Cyrillic", o:hitCount() == 1 )
+    hb_cdpSelect( "EN" )
+
+RETURN
+
+/*----------------------------------------------------------------*/
+
+STATIC PROCEDURE TestPropertyGrid()
+
+    LOCAL o, cName := "", xVal, nChg := 0
+
+    o := HTPropertyGrid():new()
+    o:onChanged := {| c, x | nChg++, cName := c, xVal := x }
+    o:onBrowse := {| c, v | HB_SYMBOL_UNUSED( c ), HB_SYMBOL_UNUSED( v ), "b.dbf" }
+
+    o:addProperty( "name", "Name", HT_PROP_TEXT, "Ana" )
+    o:addProperty( "qty", "Qty", HT_PROP_NUMBER, 2 )
+    o:addProperty( "on", "Active", HT_PROP_LOGICAL, .F. )
+    o:addGroup( "Look" )
+    o:addProperty( "wh", "Warehouse", HT_PROP_LIST, "A", { "A", "B", "C" } )
+    o:addProperty( "color", "Color", HT_PROP_COLOR, "W/N" )
+    o:addProperty( "file", "File", HT_PROP_FILE, "a.dbf" )
+
+    Assert( "HTPropertyGrid: values", o:value( "name" ) == "Ana" .AND. o:value( "qty" ) == 2 .AND. ! o:value( "on" ) )
+    Assert( "HTPropertyGrid: starts on the first row", o:currentName() == "name" )
+
+    o:handleKey( Asc( "Q" ) )
+    o:handleKey( K_ENTER )
+    Assert( "HTPropertyGrid: typing replaces and Enter commits", o:value( "name" ) == "Q" .AND. o:currentName() == "qty" )
+    Assert( "HTPropertyGrid: onChanged", nChg >= 1 .AND. cName == "name" .AND. xVal == "Q" )
+
+    o:handleKey( K_ENTER )
+    o:handleKey( K_BS )
+    o:handleKey( Asc( "5" ) )
+    o:handleKey( K_ENTER )
+    Assert( "HTPropertyGrid: number", o:value( "qty" ) == 5 )
+
+    o:handleKey( K_SPACE )
+    Assert( "HTPropertyGrid: Space toggles logical", o:value( "on" ) )
+    o:handleKey( K_DOWN )
+    Assert( "HTPropertyGrid: Down skips the group", o:currentName() == "wh" )
+    o:handleKey( K_RIGHT )
+    Assert( "HTPropertyGrid: Right cycles the list", o:value( "wh" ) == "B" )
+    o:handleKey( K_LEFT )
+    Assert( "HTPropertyGrid: Left cycles back", o:value( "wh" ) == "A" )
+
+    o:setCurrent( "color" )
+    o:handleKey( K_RIGHT )
+    Assert( "HTPropertyGrid: color cycles", o:value( "color" ) == "N/W" )
+
+    o:setCurrent( "file" )
+    o:handleKey( K_F4 )
+    Assert( "HTPropertyGrid: F4 runs onBrowse", o:value( "file" ) == "b.dbf" )
+
+    o:setCurrent( "name" )
+    o:handleKey( Asc( "Z" ) )
+    o:handleKey( K_ESC )
+    Assert( "HTPropertyGrid: Esc cancels", o:value( "name" ) == "Q" .AND. ! o:isEditing() )
+
+    o:setReadOnly( "name", .T. )
+    o:handleKey( Asc( "Z" ) )
+    Assert( "HTPropertyGrid: read-only ignores typing", o:value( "name" ) == "Q" .AND. ! o:isEditing() )
+
+    o:setValue( "qty", 9 )
+    Assert( "HTPropertyGrid: setValue", o:value( "qty" ) == 9 )
+    Assert( "HTPropertyGrid: unknown name", o:value( "missing" ) == NIL )
 
 RETURN
